@@ -12,6 +12,8 @@ uint8_t iCursorX, iCursorY;
 uint8_t width, height;
 int iScreenOffset;
 BBI2C bbi2c;
+uint8_t com_mode; // communication mode (I2C / SPI)
+uint8_t mode; // data/command mode for 9-bit SPI
 uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin;
 uint8_t iLEDPin; // backlight
 uint8_t bBitBang;
@@ -48,6 +50,12 @@ typedef enum
  MODE_DATA = 0,
  MODE_COMMAND
 } DC_MODE;
+
+typedef enum
+{
+  COM_I2C = 0,
+  COM_SPI
+} COM_MODE;
 
 // These are defined the same in my SPI_LCD library
 #ifndef SPI_LCD_H

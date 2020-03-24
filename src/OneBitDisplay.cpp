@@ -540,14 +540,17 @@ const unsigned char oled72_initbuf[]={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x40,0xa1,0x
       0xda,0x12,0x81,0xff,0xad,0x30,0xd9,0xf1,0xa4,0xa6,0xd5,0x80,0x8d,0x14,
       0xaf,0x20,0x02};
 
-const unsigned char uc1701_initbuf[] = {0xe2, 0x40, 0xa0, 0xc8, 0xa2, 0x2c, 0x2e, 0x2f, 0xf8, 0x00, 0x23, 0x81, 0x28, 0xac, 0x00, 0xa6, 0xaf, 0xa4};
+const unsigned char uc1701_initbuf[] = {0xe2, 0x40, 0xa0, 0xc8, 0xa2, 0x2c, 0x2e, 0x2f, 0xf8, 0x00, 0x23, 0x81, 0x28, 0xac, 0x00, 0xa6};
+
+const unsigned char hx1230_initbuf[] = {0x2f, 0x90, 0xa6, 0xa4, 0xaf, 0x40, 0xb0, 0x10, 0x00};
+const unsigned char nokia5110_initbuf[] = {0x21, 0xa4, 0xb1, 0x04,0x14,0x20,0x0c};
 
 #define MAX_CACHE 32
 //static byte bCache[MAX_CACHE] = {0x40}; // for faster character drawing
 //static byte bEnd = 1;
 static void obdWriteCommand(OBDISP *pOBD, unsigned char c);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
-
+static void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin);
 // wrapper/adapter functions to make the code work on Linux
 #ifdef _LINUX_
 static uint8_t pgm_read_byte(uint8_t *ptr)
@@ -672,18 +675,47 @@ void obdBacklight(OBDISP *pOBD, int bOn)
 // Sets the D/C pin to data or command mode
 static void obdSetDCMode(OBDISP *pOBD, int iMode)
 {
-  digitalWrite(pOBD->iDCPin, (iMode == MODE_DATA));
+  if (pOBD->iDCPin == 0xff) // 9-bit SPI
+      pOBD->mode = (uint8_t)iMode;
+  else // set the GPIO line
+      digitalWrite(pOBD->iDCPin, (iMode == MODE_DATA));
 } /* obdSetDCMode() */
 
-static void uc1701PowerUp(OBDISP *pOBD)
+//
+// Send the command sequence to power up the LCDs
+static void LCDPowerUp(OBDISP *pOBD)
 {
-    int i, iLen;
-    iLen = sizeof(uc1701_initbuf);
-    for (i=0; i<iLen; i++)
+    int iLen;
+    uint8_t *s;
+    obdSetDCMode(pOBD, MODE_COMMAND);
+    digitalWrite(pOBD->iCSPin, LOW);
+    if (pOBD->type == LCD_UC1701)
     {
-        obdWriteCommand(pOBD, uc1701_initbuf[i]);
+        s = (uint8_t *)uc1701_initbuf;
+        iLen = sizeof(uc1701_initbuf);
     }
-} /* uc1701PowerUp() */
+    else if (pOBD->type == LCD_HX1230)
+    {
+        s = (uint8_t *)hx1230_initbuf;
+        iLen = sizeof(hx1230_initbuf);
+    }
+    else // Nokia 5110
+    {
+        s = (uint8_t *)nokia5110_initbuf;
+        iLen = sizeof(nokia5110_initbuf);
+    }
+    if (pOBD->iMOSIPin == 0xff)
+       SPI.transfer(s, iLen);
+    else
+       SPI_BitBang(pOBD, (uint8_t *)uc1701_initbuf, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
+    delay(100);
+    obdWriteCommand(pOBD, 0xa5);
+    delay(100);
+    obdWriteCommand(pOBD, 0xa4);
+    obdWriteCommand(pOBD, 0xaf);
+    digitalWrite(pOBD->iCSPin, HIGH);
+    obdSetDCMode(pOBD, MODE_DATA);
+} /* LCDPowerUp() */
 
 //
 // Initialize the display controller on an SPI bus
@@ -702,26 +734,24 @@ int iLen;
   pOBD->type = iType;
   pOBD->flip = bFlip;
   pOBD->wrap = 0; // default - disable text wrap
-
+  pOBD->com_mode = COM_SPI; // communication mode
   pinMode(pOBD->iDCPin, OUTPUT);
   pinMode(pOBD->iCSPin, OUTPUT);
+  digitalWrite(pOBD->iCSPin, HIGH);
   if (bBitBang)
   {
       pinMode(iMOSI, OUTPUT);
       pinMode(iCLK, OUTPUT);
   }
-  digitalWrite(pOBD->iCSPin, HIGH);
 
   // Reset it
   if (iReset != -1)
   {
     pinMode(iReset, OUTPUT);
+    digitalWrite(iReset, LOW);
+    delay(50);
     digitalWrite(iReset, HIGH);
     delay(50);
-    digitalWrite(iReset, LOW);
-    delay(5);
-    digitalWrite(iReset, HIGH);
-    delay(10);
   }
   if (iLED != -1)
   {
@@ -743,6 +773,7 @@ int iLen;
   {
       pOBD->width = 96;
       pOBD->height = 68;
+      pOBD->iDCPin = 0xff; // flag this as being 3-wire SPI
   }
   else if (iType == LCD_NOKIA5110)
   {
@@ -805,13 +836,20 @@ int iLen;
         _I2CWrite(pOBD, uc, 2);
       }
   } // OLED
-  if (iType == LCD_UC1701)
+  if (iType == LCD_UC1701 || iType == LCD_HX1230)
   {
-      uc1701PowerUp(pOBD);
+      uint8_t cCOM = 0xc0;
+      
+      LCDPowerUp(pOBD);
+      if (iType == LCD_HX1230)
+      {
+          obdSetContrast(pOBD, 0); // contrast of 0 looks good
+          cCOM = 0xc8;
+      }
       if (bFlip) // flip horizontal + vertical
       {
          obdWriteCommand(pOBD, 0xa1); // set SEG direction (A1 to flip horizontal)
-         obdWriteCommand(pOBD, 0xc0); // set COM direction (C0 to flip vert)
+         obdWriteCommand(pOBD, cCOM); // set COM direction (C0 to flip vert)
       }
       if (bInvert)
       {
@@ -829,15 +867,13 @@ unsigned char uc[4];
 int rc = OLED_NOT_FOUND;
 
   pOBD->ucScreen = NULL; // reset backbuffer; user must provide one later
-  pOBD->iDCPin = 0xff; // indicates an I2C device
   pOBD->type = iType;
   pOBD->flip = bFlip;
   pOBD->wrap = 0; // default - disable text wrap
   pOBD->bbi2c.iSDA = sda;
   pOBD->bbi2c.iSCL = scl;
   pOBD->bbi2c.bWire = bWire;
-// Disable SPI mode code
-  pOBD->iCSPin = pOBD->iDCPin = 0xff;
+  pOBD->com_mode = COM_I2C; // communication mode
 
   I2CInit(&pOBD->bbi2c, iSpeed); // on Linux, SDA = bus number, SCL = device address
 #ifdef _LINUX_
@@ -951,19 +987,27 @@ void oledPower(OBDISP *pOBD, uint8_t bOn)
 //
 // Bit Bang the data on GPIO pins
 //
-static void SPI_BitBang(uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin)
+static void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin)
 {
 int i;
 uint8_t c;
    while (iLen)
    {
       c = *pData++;
+      if (pOBD->iDCPin == 0xff) // 3-wire SPI, write D/C bit first
+      {
+          digitalWrite(iMOSIPin, (pOBD->mode == MODE_DATA));
+          digitalWrite(iSCKPin, HIGH);
+          delayMicroseconds(0);
+          digitalWrite(iSCKPin, LOW);
+      }
       if (c == 0 || c == 0xff) // quicker for all bits equal
       {
          digitalWrite(iMOSIPin, (c & 1));
          for (i=0; i<8; i++)
          {
             digitalWrite(iSCKPin, HIGH);
+            delayMicroseconds(0);
             digitalWrite(iSCKPin, LOW);
          }
       }
@@ -987,17 +1031,17 @@ static void obdWriteCommand(OBDISP *pOBD, unsigned char c)
 {
 unsigned char buf[2];
 
-  if (pOBD->iDCPin == 0xff) {// I2C device
+  if (pOBD->com_mode == COM_I2C) {// I2C device
       buf[0] = 0x00; // command introducer
       buf[1] = c;
       _I2CWrite(pOBD, buf, 2);
   } else { // must be SPI
-      digitalWrite(pOBD->iCSPin, LOW);
       obdSetDCMode(pOBD, MODE_COMMAND);
+      digitalWrite(pOBD->iCSPin, LOW);
       if (pOBD->iMOSIPin == 0xff)
          SPI.transfer(c);
       else
-         SPI_BitBang(&c, 1, pOBD->iMOSIPin, pOBD->iCLKPin);
+         SPI_BitBang(pOBD, &c, 1, pOBD->iMOSIPin, pOBD->iCLKPin);
       digitalWrite(pOBD->iCSPin, HIGH);
       obdSetDCMode(pOBD, MODE_DATA);
   }
@@ -1007,7 +1051,7 @@ static void obdWriteCommand2(OBDISP *pOBD, unsigned char c, unsigned char d)
 {
 unsigned char buf[3];
 
-    if (pOBD->iDCPin == 0xff) {// I2C device
+    if (pOBD->com_mode == COM_I2C) {// I2C device
         buf[0] = 0x00;
         buf[1] = c;
         buf[2] = d;
@@ -1023,7 +1067,19 @@ unsigned char buf[3];
 //
 void obdSetContrast(OBDISP *pOBD, unsigned char ucContrast)
 {
-  obdWriteCommand2(pOBD, 0x81, ucContrast);
+  if (pOBD->type == LCD_HX1230)
+  {
+      if (ucContrast > 31) ucContrast = 31;
+      obdWriteCommand(pOBD, 0x80 + ucContrast);
+  }
+  else if (pOBD->type == LCD_NOKIA5110)
+  {
+      obdWriteCommand(pOBD, 0x21); // set advanced command mode
+      obdWriteCommand(pOBD, 0xb0 | ucContrast);
+      obdWriteCommand(pOBD, 0x20); // set simple command mode
+  }
+  else // OLEDs + UC1701
+      obdWriteCommand2(pOBD, 0x81, ucContrast);
 } /* obdSetContrast() */
 //
 // Scroll the internal buffer by 1 scanline (up/down)
@@ -1082,6 +1138,12 @@ unsigned char buf[4];
   pOBD->iScreenOffset = (y*128)+x;
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
+  if (pOBD->type == LCD_NOKIA5110)
+  {
+      obdWriteCommand(pOBD, 0x40 | y);
+      obdWriteCommand(pOBD, 0x80 | x);
+      return;
+  }
   if (pOBD->type == OLED_64x32) // visible display starts at column 32, row 4
   {
     x += 32; // display is centered in VRAM, so this is always true
@@ -1107,7 +1169,7 @@ unsigned char buf[4];
       y += 3;
     }
   }
-    if (pOBD->iDCPin == 0xff) { // I2C device
+    if (pOBD->com_mode == COM_I2C) { // I2C device
       buf[0] = 0x00; // command introducer
       buf[1] = 0xb0 | y; // set page to Y
       buf[2] = x & 0xf; // lower column address
@@ -1143,7 +1205,7 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= 1024)
       {
           digitalWrite(pOBD->iCSPin, LOW);
           if (pOBD->iMOSIPin != 0xff) // Bit Bang
-            SPI_BitBang(ucBuf, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
+            SPI_BitBang(pOBD, ucBuf, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
           else
             SPI.transfer(ucBuf, iLen);
           digitalWrite(pOBD->iCSPin, HIGH);
@@ -1632,7 +1694,7 @@ void obdSetCursor(OBDISP *pOBD, int x, int y)
 void obdSetTextWrap(OBDISP *pOBD, int bWrap)
 {
   pOBD->wrap = bWrap;
-} /* oledSetTextWrap() */
+} /* obdSetTextWrap() */
 //
 // Draw a string of normal (8x8), small (6x8) or large (16x32) characters
 // At the given col+row
