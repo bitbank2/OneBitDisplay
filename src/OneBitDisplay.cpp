@@ -542,14 +542,6 @@ const unsigned char oled72_initbuf[]={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x40,0xa1,0x
 
 const unsigned char uc1701_initbuf[] = {0xe2, 0x40, 0xa0, 0xc8, 0xa2, 0x2c, 0x2e, 0x2f, 0xf8, 0x00, 0x23, 0x81, 0x28, 0xac, 0x00, 0xa6, 0xaf, 0xa4};
 
-// some globals
-//static int iCSPin, iDCPin, iResetPin;
-//static int iScreenOffset; // current write offset of screen data
-//static uint8_t *ucScreen; // backbuffer provided by the user
-//static int oled_wrap, oled_flip, oled_addr, oled_type;
-//static int iCursorX, iCursorY;
-//static uint8_t oled_x, oled_y; // width and height of the display
-//static int iSDAPin, iSCLPin;
 #define MAX_CACHE 32
 //static byte bCache[MAX_CACHE] = {0x40}; // for faster character drawing
 //static byte bEnd = 1;
@@ -678,21 +670,19 @@ void obdBacklight(OBDISP *pOBD, int bOn)
 } /* obdBacklight() */
 
 // Sets the D/C pin to data or command mode
-void uc1701SetMode(OBDISP *pOBD, int iMode)
+static void obdSetDCMode(OBDISP *pOBD, int iMode)
 {
   digitalWrite(pOBD->iDCPin, (iMode == MODE_DATA));
-} /* uc1701SetMode() */
+} /* obdSetDCMode() */
 
 static void uc1701PowerUp(OBDISP *pOBD)
 {
     int i, iLen;
     iLen = sizeof(uc1701_initbuf);
-    uc1701SetMode(pOBD, MODE_COMMAND);
     for (i=0; i<iLen; i++)
     {
         obdWriteCommand(pOBD, uc1701_initbuf[i]);
     }
-    uc1701SetMode(pOBD, MODE_DATA);
 } /* uc1701PowerUp() */
 
 //
@@ -709,12 +699,17 @@ int iLen;
   pOBD->iMOSIPin = iMOSI;
   pOBD->iCLKPin = iCLK;
   pOBD->iLEDPin = iLED;
-  pOBD->oled_type = iType;
-  pOBD->oled_flip = bFlip;
-  pOBD->oled_wrap = 0; // default - disable text wrap
+  pOBD->type = iType;
+  pOBD->flip = bFlip;
+  pOBD->wrap = 0; // default - disable text wrap
 
   pinMode(pOBD->iDCPin, OUTPUT);
   pinMode(pOBD->iCSPin, OUTPUT);
+  if (bBitBang)
+  {
+      pinMode(iMOSI, OUTPUT);
+      pinMode(iCLK, OUTPUT);
+  }
   digitalWrite(pOBD->iCSPin, HIGH);
 
   // Reset it
@@ -724,12 +719,17 @@ int iLen;
     digitalWrite(iReset, HIGH);
     delay(50);
     digitalWrite(iReset, LOW);
-    delay(50);
+    delay(5);
     digitalWrite(iReset, HIGH);
     delay(10);
   }
+  if (iLED != -1)
+  {
+      pinMode(iLED, OUTPUT);
+  }
 // Initialize SPI
     if (!bBitBang) {
+        pOBD->iMOSIPin = 0xff; // mark it as hardware SPI
         SPI.begin();
         SPI.beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
         //  SPI.setClockDivider(16);
@@ -737,36 +737,36 @@ int iLen;
         //  SPI.setDataMode(SPI_MODE0);
     }
 
-  pOBD->oled_x = 128; // assume 128x64
-  pOBD->oled_y = 64;
+  pOBD->width = 128; // assume 128x64
+  pOBD->height = 64;
   if (iType == LCD_HX1230)
   {
-      pOBD->oled_x = 96;
-      pOBD->oled_y = 68;
+      pOBD->width = 96;
+      pOBD->height = 68;
   }
   else if (iType == LCD_NOKIA5110)
   {
-      pOBD->oled_x = 84;
-      pOBD->oled_y = 48;
+      pOBD->width = 84;
+      pOBD->height = 48;
   }
   else if (iType == OLED_96x16)
   {
-    pOBD->oled_x = 96;
-    pOBD->oled_y = 16;
+    pOBD->width = 96;
+    pOBD->height = 16;
   }
   else if (iType == OLED_128x32)
-    pOBD->oled_y = 32;
+    pOBD->height = 32;
   else if (iType == OLED_128x128)
-    pOBD->oled_y = 128;
+    pOBD->height = 128;
   else if (iType == OLED_64x32)
   {
-    pOBD->oled_x = 64;
-    pOBD->oled_y = 32;
+    pOBD->width = 64;
+    pOBD->height = 32;
   }
   else if (iType == OLED_72x40)
   {
-    pOBD->oled_x = 72;
-    pOBD->oled_y = 40;
+    pOBD->width = 72;
+    pOBD->height = 40;
   }
   if (iType == OLED_128x32 || iType == OLED_96x16)
   {
@@ -808,7 +808,6 @@ int iLen;
   if (iType == LCD_UC1701)
   {
       uc1701PowerUp(pOBD);
-      uc1701SetMode(pOBD, MODE_COMMAND);
       if (bFlip) // flip horizontal + vertical
       {
          obdWriteCommand(pOBD, 0xa1); // set SEG direction (A1 to flip horizontal)
@@ -818,8 +817,6 @@ int iLen;
       {
          obdWriteCommand(pOBD, 0xa7); // set inverted pixel mode
       }
-      uc1701SetMode(pOBD, MODE_DATA);
-
   }
 } /* obdSPIInit() */
 #endif
@@ -833,9 +830,9 @@ int rc = OLED_NOT_FOUND;
 
   pOBD->ucScreen = NULL; // reset backbuffer; user must provide one later
   pOBD->iDCPin = 0xff; // indicates an I2C device
-  pOBD->oled_type = iType;
-  pOBD->oled_flip = bFlip;
-  pOBD->oled_wrap = 0; // default - disable text wrap
+  pOBD->type = iType;
+  pOBD->flip = bFlip;
+  pOBD->wrap = 0; // default - disable text wrap
   pOBD->bbi2c.iSDA = sda;
   pOBD->bbi2c.iSCL = scl;
   pOBD->bbi2c.bWire = bWire;
@@ -879,14 +876,14 @@ int rc = OLED_NOT_FOUND;
   u &= 0x0f; // mask off power on/off bit
   if (u == 0x7 || u == 0xf) // SH1107
   {
-    pOBD->oled_type = OLED_128x128;
+    pOBD->type = OLED_128x128;
     rc = OLED_SH1107_3C;
     bFlip = !bFlip; // SH1107 seems to have this reversed from the usual direction
   }
   else if (u == 0x8) // SH1106
   {
     rc = OLED_SH1106_3C;
-    pOBD->oled_type = OLED_132x64; // needs to be treated a little differently
+    pOBD->type = OLED_132x64; // needs to be treated a little differently
   }
   else if (u == 3 || u == 6) // 6=128x64 display, 3=smaller
   {
@@ -917,26 +914,26 @@ int rc = OLED_NOT_FOUND;
     uc[1] = 0xc0;
     _I2CWrite(pOBD,uc, 2);
   }
-  pOBD->oled_x = 128; // assume 128x64
-  pOBD->oled_y = 64;
+  pOBD->width = 128; // assume 128x64
+  pOBD->height = 64;
   if (iType == OLED_96x16)
   {
-    pOBD->oled_x = 96;
-    pOBD->oled_y = 16;
+    pOBD->width = 96;
+    pOBD->height = 16;
   }
   else if (iType == OLED_128x32)
-    pOBD->oled_y = 32;
+    pOBD->height = 32;
   else if (iType == OLED_128x128)
-    pOBD->oled_y = 128;
+    pOBD->height = 128;
   else if (iType == OLED_64x32)
   {
-    pOBD->oled_x = 64;
-    pOBD->oled_y = 32;
+    pOBD->width = 64;
+    pOBD->height = 32;
   }
   else if (iType == OLED_72x40)
   {
-    pOBD->oled_x = 72;
-    pOBD->oled_y = 40;
+    pOBD->width = 72;
+    pOBD->height = 40;
   }
   return rc;
 } /* obdInit() */
@@ -996,11 +993,13 @@ unsigned char buf[2];
       _I2CWrite(pOBD, buf, 2);
   } else { // must be SPI
       digitalWrite(pOBD->iCSPin, LOW);
+      obdSetDCMode(pOBD, MODE_COMMAND);
       if (pOBD->iMOSIPin == 0xff)
          SPI.transfer(c);
       else
          SPI_BitBang(&c, 1, pOBD->iMOSIPin, pOBD->iCLKPin);
       digitalWrite(pOBD->iCSPin, HIGH);
+      obdSetDCMode(pOBD, MODE_DATA);
   }
 } /* obdWriteCommand() */
 
@@ -1014,10 +1013,8 @@ unsigned char buf[3];
         buf[2] = d;
         _I2CWrite(pOBD, buf, 3);
     } else { // must be SPI
-        uc1701SetMode(pOBD, MODE_COMMAND);
         obdWriteCommand(pOBD, c);
         obdWriteCommand(pOBD, d);
-        uc1701SetMode(pOBD, MODE_DATA);
     }
 } /* obdWriteCommand2() */
 
@@ -1085,43 +1082,41 @@ unsigned char buf[4];
   pOBD->iScreenOffset = (y*128)+x;
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
-  if (pOBD->oled_type == OLED_64x32) // visible display starts at column 32, row 4
+  if (pOBD->type == OLED_64x32) // visible display starts at column 32, row 4
   {
     x += 32; // display is centered in VRAM, so this is always true
-    if (pOBD->oled_flip == 0) // non-flipped display starts from line 4
+    if (pOBD->flip == 0) // non-flipped display starts from line 4
        y += 4;
   }
-  else if (pOBD->oled_type == OLED_132x64) // SH1106 has 128 pixels centered in 132
+  else if (pOBD->type == OLED_132x64) // SH1106 has 128 pixels centered in 132
   {
     x += 2;
   }
-  else if (pOBD->oled_type == OLED_96x16) // visible display starts at line 2
+  else if (pOBD->type == OLED_96x16) // visible display starts at line 2
   { // mapping is a bit strange on the 96x16 OLED
-    if (pOBD->oled_flip)
+    if (pOBD->flip)
       x += 32;
     else
       y += 2;
   }
-  else if (pOBD->oled_type == OLED_72x40) // starts at x=28,y=3
+  else if (pOBD->type == OLED_72x40) // starts at x=28,y=3
   {
     x += 28;
-    if (!pOBD->oled_flip)
+    if (!pOBD->flip)
     {
       y += 3;
     }
   }
-    if (pOBD->iDCPin != 0xff) { // I2C device
-  buf[0] = 0x00; // command introducer
-  buf[1] = 0xb0 | y; // set page to Y
-  buf[2] = x & 0xf; // lower column address
-  buf[3] = 0x10 | (x >> 4); // upper column addr
-  _I2CWrite(pOBD, buf, 4);
+    if (pOBD->iDCPin == 0xff) { // I2C device
+      buf[0] = 0x00; // command introducer
+      buf[1] = 0xb0 | y; // set page to Y
+      buf[2] = x & 0xf; // lower column address
+      buf[3] = 0x10 | (x >> 4); // upper column addr
+      _I2CWrite(pOBD, buf, 4);
     } else { // SPI mode
-        uc1701SetMode(pOBD, MODE_COMMAND);
         obdWriteCommand(pOBD, 0xb0 | y); // set Y
         obdWriteCommand(pOBD, 0x10 | (x >> 4)); // set X MSB
         obdWriteCommand(pOBD, 0x00 | (x & 0xf)); // set X LSB
-        uc1701SetMode(pOBD, MODE_DATA);
     }
 } /* obdSetPosition() */
 
@@ -1144,10 +1139,10 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= 1024)
 // the original data get overwritten by the SPI.transfer() function
   if (bRender)
   {
-      if (pOBD->iCSPin != 0xff)
+      if (pOBD->iDCPin != 0xff) // SPI/Bit Bang
       {
           digitalWrite(pOBD->iCSPin, LOW);
-          if (pOBD->iMOSIPin == 0xff) // Bit Bang
+          if (pOBD->iMOSIPin != 0xff) // Bit Bang
             SPI_BitBang(ucBuf, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
           else
             SPI.transfer(ucBuf, iLen);
@@ -1175,14 +1170,14 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= 1024)
 void oledWriteFlashBlock(OBDISP *pOBD, uint8_t *s, int iLen)
 {
 int j;
-int iWidthMask = pOBD->oled_x -1;
-int iSizeMask = ((pOBD->oled_x * pOBD->oled_y)/8) - 1;
-int iWidthShift = (pOBD->oled_x == 128) ? 7:6; // assume 128 or 64 wide
+int iWidthMask = pOBD->width -1;
+int iSizeMask = ((pOBD->width * pOBD->height)/8) - 1;
+int iWidthShift = (pOBD->width == 128) ? 7:6; // assume 128 or 64 wide
 uint8_t ucTemp[128];
 
-     while (((pOBD->iScreenOffset & iWidthMask) + iLen) >= pOBD->oled_x) // if it will hit the page end
+     while (((pOBD->iScreenOffset & iWidthMask) + iLen) >= pOBD->width) // if it will hit the page end
      {
-        j = pOBD->oled_x - (pOBD->iScreenOffset & iWidthMask); // amount we can write in one shot
+        j = pOBD->width - (pOBD->iScreenOffset & iWidthMask); // amount we can write in one shot
         memcpy_P(ucTemp, s, j);
         obdWriteDataBlock(pOBD, ucTemp, j, 1);
         s += j;
@@ -1201,15 +1196,15 @@ uint8_t ucTemp[128];
 void obdRepeatByte(OBDISP *pOBD, uint8_t b, int iLen)
 {
 int j;
-int iWidthMask = pOBD->oled_x -1;
-int iWidthShift = (pOBD->oled_x == 128) ? 7:6; // assume 128 or 64 pixels wide
-int iSizeMask = ((pOBD->oled_x * pOBD->oled_y)/8) -1;
+int iWidthMask = pOBD->width -1;
+int iWidthShift = (pOBD->width == 128) ? 7:6; // assume 128 or 64 pixels wide
+int iSizeMask = ((pOBD->width * pOBD->height)/8) -1;
 uint8_t ucTemp[128];
 
      memset(ucTemp, b, (iLen > 128) ? 128:iLen);
-     while (((pOBD->iScreenOffset & iWidthMask) + iLen) >= pOBD->oled_x) // if it will hit the page end
+     while (((pOBD->iScreenOffset & iWidthMask) + iLen) >= pOBD->width) // if it will hit the page end
      {
-        j = pOBD->oled_x - (pOBD->iScreenOffset & iWidthMask); // amount we can write in one shot
+        j = pOBD->width - (pOBD->iScreenOffset & iWidthMask); // amount we can write in one shot
         obdWriteDataBlock(pOBD, ucTemp, j, 1);
         iLen -= j;
         pOBD->iScreenOffset = (pOBD->iScreenOffset + j) & iSizeMask;
@@ -1232,11 +1227,11 @@ uint8_t * obdPlayAnimFrame(OBDISP *pOBD, uint8_t *pAnimation, uint8_t *pCurrent,
 uint8_t *s;
 int i, j;
 unsigned char b, bCode;
-int iBufferSize = (pOBD->oled_x * pOBD->oled_y)/8; // size in bytes of the display devce
+int iBufferSize = (pOBD->width * pOBD->height)/8; // size in bytes of the display devce
 int iWidthMask, iWidthShift;
 
-  iWidthMask = pOBD->oled_x - 1;
-  iWidthShift = (pOBD->oled_x == 128) ? 7:6; // 128 or 64 pixels wide
+  iWidthMask = pOBD->width - 1;
+  iWidthShift = (pOBD->width == 128) ? 7:6; // 128 or 64 pixels wide
   if (pCurrent == NULL || pCurrent > pAnimation + iLen)
      return NULL; // invalid starting point
 
@@ -1332,7 +1327,7 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
     int tx, ty, dx, dy, iStartX;
     uint8_t *s, *d, uc, pix, ucSrcMask, ucDstMask;
     
-    if (x+cx < 0 || y+cy < 0 || x >= pOBD->oled_x || y >= pOBD->oled_y || pOBD->ucScreen == NULL)
+    if (x+cx < 0 || y+cy < 0 || x >= pOBD->width || y >= pOBD->height || pOBD->ucScreen == NULL)
         return; // no backbuffer or out of bounds
     dy = y; // destination y
     if (y < 0) // skip the invisible parts
@@ -1342,8 +1337,8 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
         pSprite += (y * iPitch);
         dy = 0;
     }
-    if (y + cy > pOBD->oled_y)
-        cy = pOBD->oled_y - y;
+    if (y + cy > pOBD->height)
+        cy = pOBD->height - y;
     iStartX = 0;
     dx = x;
     if (x < 0)
@@ -1353,12 +1348,12 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
         iStartX = x;
         dx = 0;
     }
-    if (x + cx > pOBD->oled_x)
-        cx = pOBD->oled_x - x;
+    if (x + cx > pOBD->width)
+        cx = pOBD->width - x;
     for (ty=0; ty<cy; ty++)
     {
         s = &pSprite[iStartX >> 3];
-        d = &pOBD->ucScreen[(dy>>3) * pOBD->oled_x + dx];
+        d = &pOBD->ucScreen[(dy>>3) * pOBD->width + dx];
         ucSrcMask = 0x80 >> (iStartX & 7);
         pix = *s++;
         ucDstMask = 1 << (dy & 7);
@@ -1500,7 +1495,7 @@ unsigned char uc, ucOld;
 
   if (pOBD->ucScreen)
     uc = ucOld = pOBD->ucScreen[i];
-  else if (pOBD->oled_type == OLED_132x64 || pOBD->oled_type == OLED_128x128) // SH1106/SH1107 can read data
+  else if (pOBD->type == OLED_132x64 || pOBD->type == OLED_128x128) // SH1106/SH1107 can read data
   {
     uint8_t ucTemp[3];
      ucTemp[0] = 0x80; // one command
@@ -1528,7 +1523,7 @@ unsigned char uc, ucOld;
       obdWriteDataBlock(pOBD, &uc, 1, bRender);
       pOBD->ucScreen[i] = uc;
     }
-    else if (pOBD->oled_type == OLED_132x64 || pOBD->oled_type == OLED_128x128) // end the read_modify_write operation
+    else if (pOBD->type == OLED_132x64 || pOBD->type == OLED_128x128) // end the read_modify_write operation
     {
       uint8_t ucTemp[4];
       ucTemp[0] = 0xc0; // one data
@@ -1636,7 +1631,7 @@ void obdSetCursor(OBDISP *pOBD, int x, int y)
 //
 void obdSetTextWrap(OBDISP *pOBD, int bWrap)
 {
-  pOBD->oled_wrap = bWrap;
+  pOBD->wrap = bWrap;
 } /* oledSetTextWrap() */
 //
 // Draw a string of normal (8x8), small (6x8) or large (16x32) characters
@@ -1655,7 +1650,7 @@ unsigned char c, *s, ucTemp[40];
     {
       pOBD->iCursorX = x; pOBD->iCursorY = y; // set the new cursor position
     }
-    if (pOBD->iCursorX >= pOBD->oled_x || pOBD->iCursorY >= pOBD->oled_y / 8)
+    if (pOBD->iCursorX >= pOBD->width || pOBD->iCursorY >= pOBD->height / 8)
        return -1; // can't draw off the display
 
     obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
@@ -1663,7 +1658,7 @@ unsigned char c, *s, ucTemp[40];
     {
        i = 0;
        iFontSkip = iScroll & 7; // number of columns to initially skip
-       while (pOBD->iCursorX < pOBD->oled_x && szMsg[i] != 0 && pOBD->iCursorY < pOBD->oled_y / 8)
+       while (pOBD->iCursorX < pOBD->width && szMsg[i] != 0 && pOBD->iCursorY < pOBD->height / 8)
        {
          if (iScroll < 8) // only display visible characters
          {
@@ -1674,11 +1669,11 @@ unsigned char c, *s, ucTemp[40];
              if (bInvert) InvertBytes(ucTemp, 8);
     //         oledCachedWrite(ucTemp, 8);
              iLen = 8 - iFontSkip;
-             if (pOBD->iCursorX + iLen > pOBD->oled_x) // clip right edge
-                 iLen = pOBD->oled_x - pOBD->iCursorX;
+             if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
+                 iLen = pOBD->width - pOBD->iCursorX;
              obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
              pOBD->iCursorX += iLen;
-             if (pOBD->iCursorX >= pOBD->oled_x-7 && pOBD->oled_wrap) // word wrap enabled?
+             if (pOBD->iCursorX >= pOBD->width-7 && pOBD->wrap) // word wrap enabled?
              {
                pOBD->iCursorX = 0; // start at the beginning of the next line
                pOBD->iCursorY++;
@@ -1697,14 +1692,14 @@ unsigned char c, *s, ucTemp[40];
     {
       i = 0;
       iFontSkip = iScroll & 15; // number of columns to initially skip
-      while (pOBD->iCursorX < pOBD->oled_x && pOBD->iCursorY < (pOBD->oled_y / 8)-3 && szMsg[i] != 0)
+      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height / 8)-3 && szMsg[i] != 0)
       {
           if (iScroll < 16) // if characters are visible
           {
               s = (unsigned char *)&ucBigFont[(unsigned char)(szMsg[i]-32)*64];
               iLen = 16 - iFontSkip;
-              if (pOBD->iCursorX + iLen > pOBD->oled_x) // clip right edge
-                  iLen = pOBD->oled_x - pOBD->iCursorX;
+              if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
+                  iLen = pOBD->width - pOBD->iCursorX;
               // we can't directly use the pointer to FLASH memory, so copy to a local buffer
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               memcpy_P(ucTemp, s, 16);
@@ -1729,7 +1724,7 @@ unsigned char c, *s, ucTemp[40];
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               }
               pOBD->iCursorX += iLen;
-              if (pOBD->iCursorX >= pOBD->oled_x-15 && pOBD->oled_wrap) // word wrap enabled?
+              if (pOBD->iCursorX >= pOBD->width-15 && pOBD->wrap) // word wrap enabled?
               {
                 pOBD->iCursorX = 0; // start at the beginning of the next line
                 pOBD->iCursorY+=4;
@@ -1746,7 +1741,7 @@ unsigned char c, *s, ucTemp[40];
     {
       i = 0;
       iFontSkip = iScroll & 15; // number of columns to initially skip
-      while (pOBD->iCursorX < pOBD->oled_x && pOBD->iCursorY < (pOBD->oled_y/8)-1 && szMsg[i] != 0)
+      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height/8)-1 && szMsg[i] != 0)
       {   
 // stretch the 'normal' font instead of using the big font
           if (iScroll < 16) // if characters are visible
@@ -1780,14 +1775,14 @@ unsigned char c, *s, ucTemp[40];
                   pDest[17] = uc2;
               }
               iLen = 16 - iFontSkip;
-              if (pOBD->iCursorX + iLen > pOBD->oled_x) // clip right edge
-                  iLen = pOBD->oled_x - pOBD->iCursorX;
+              if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
+                  iLen = pOBD->width - pOBD->iCursorX;
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[8+iFontSkip], iLen, bRender);
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+1, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[24+iFontSkip], iLen, bRender);
               pOBD->iCursorX += iLen;
-              if (pOBD->iCursorX >= pOBD->oled_x-15 && pOBD->oled_wrap) // word wrap enabled?
+              if (pOBD->iCursorX >= pOBD->width-15 && pOBD->wrap) // word wrap enabled?
               {
                 pOBD->iCursorX = 0; // start at the beginning of the next line
                 pOBD->iCursorY += 2;
@@ -1804,7 +1799,7 @@ unsigned char c, *s, ucTemp[40];
     {
        i = 0;
        iFontSkip = iScroll % 6;
-       while (pOBD->iCursorX < pOBD->oled_x && pOBD->iCursorY < (pOBD->oled_y/8) && szMsg[i] != 0)
+       while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height/8) && szMsg[i] != 0)
        {
            if (iScroll < 6) // if characters are visible
            {
@@ -1813,13 +1808,13 @@ unsigned char c, *s, ucTemp[40];
                memcpy_P(ucTemp, &ucSmallFont[(int)c*6], 6);
                if (bInvert) InvertBytes(ucTemp, 6);
                iLen = 6 - iFontSkip;
-               if (pOBD->iCursorX + iLen > pOBD->oled_x) // clip right edge
-                   iLen = pOBD->oled_x - pOBD->iCursorX;
+               if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
+                   iLen = pOBD->width - pOBD->iCursorX;
                obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
     //         oledCachedWrite(ucTemp, 6);
                pOBD->iCursorX += iLen;
                iFontSkip = 0;
-               if (pOBD->iCursorX >= pOBD->oled_x-5 && pOBD->oled_wrap) // word wrap enabled?
+               if (pOBD->iCursorX >= pOBD->width-5 && pOBD->wrap) // word wrap enabled?
                {
                  pOBD->iCursorX = 0; // start at the beginning of the next line
                  pOBD->iCursorY++;
@@ -1845,7 +1840,7 @@ int obdDrawGFX(OBDISP *pOBD, uint8_t *pBuffer, int iSrcCol, int iSrcRow, int iDe
 {
     int y;
     
-    if (iSrcCol < 0 || iSrcCol > 127 || iSrcRow < 0 || iSrcRow > 7 || iDestCol < 0 || iDestCol >= pOBD->oled_x || iDestRow < 0 || iDestRow >= (pOBD->oled_y >> 3) || iSrcPitch <= 0)
+    if (iSrcCol < 0 || iSrcCol > 127 || iSrcRow < 0 || iSrcRow > 7 || iDestCol < 0 || iDestCol >= pOBD->width || iDestRow < 0 || iDestRow >= (pOBD->height >> 3) || iSrcPitch <= 0)
         return -1; // invalid
     
     for (y=iSrcRow; y<iSrcRow+iHeight; y++)
@@ -1874,8 +1869,8 @@ uint8_t *pSrc = pOBD->ucScreen;
   if (pBuffer == NULL)
     return; // no backbuffer and no provided buffer
   
-  iLines = pOBD->oled_y >> 3;
-  iCols = pOBD->oled_x >> 4;
+  iLines = pOBD->height >> 3;
+  iCols = pOBD->width >> 4;
   for (y=0; y<iLines; y++)
   {
     bNeedPos = 1; // start of a new line means we need to set the position too
@@ -1897,8 +1892,8 @@ uint8_t *pSrc = pOBD->ucScreen;
       pSrc += 16;
       pBuffer += 16;
     } // for x
-    pSrc += (128 - pOBD->oled_x); // for narrow displays, skip to the next line
-    pBuffer += (128 - pOBD->oled_x);
+    pSrc += (128 - pOBD->width); // for narrow displays, skip to the next line
+    pBuffer += (128 - pOBD->width);
   } // for y
 } /* obdDumpBuffer() */
 //
@@ -1911,8 +1906,8 @@ uint8_t x, y;
 uint8_t iLines, iCols;
 unsigned char temp[16];
 
-  iLines = pOBD->oled_y >> 3;
-  iCols = pOBD->oled_x >> 4;
+  iLines = pOBD->height >> 3;
+  iCols = pOBD->width >> 4;
   memset(temp, ucData, 16);
   pOBD->iCursorX = pOBD->iCursorY = 0;
  
@@ -1924,11 +1919,11 @@ unsigned char temp[16];
       obdWriteDataBlock(pOBD, temp, 16, bRender);
     } // for x
     // 72 isn't evenly divisible by 16, so fix it
-    if (pOBD->oled_type == OLED_72x40)
+    if (pOBD->type == OLED_72x40)
        obdWriteDataBlock(pOBD, temp, 8, bRender);
   } // for y
   if (pOBD->ucScreen)
-    memset(pOBD->ucScreen, ucData, (pOBD->oled_x * pOBD->oled_y)/8);
+    memset(pOBD->ucScreen, ucData, (pOBD->width * pOBD->height)/8);
 } /* obdFill() */
 
 //
@@ -1953,7 +1948,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, int bRender)
   int xinc, yinc;
   int y, x;
   
-  if (x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 || x1 >= pOBD->oled_x || x2 >= pOBD->oled_x || y1 >= pOBD->oled_y || y2 >= pOBD->oled_y)
+  if (x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 || x1 >= pOBD->width || x2 >= pOBD->width || y1 >= pOBD->height || y2 >= pOBD->height)
      return;
 
   if(abs(dx) > abs(dy)) {
@@ -2081,7 +2076,7 @@ static void DrawScaledPixel(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
     x += iCX; y += iCY;
-    if (x < 0 || x >= pOBD->oled_x || y < 0 || y >= pOBD->oled_y)
+    if (x < 0 || x >= pOBD->width || y < 0 || y >= pOBD->height)
         return; // off the screen
     d = &pOBD->ucScreen[((y >> 3)*128) + x];
     ucMask = 1 << (y & 7);
@@ -2102,10 +2097,10 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
     iLen = x*2;
     x = iCX - x; y += iCY;
     x2 = x + iLen;
-    if (y < 0 || y >= pOBD->oled_y)
+    if (y < 0 || y >= pOBD->height)
         return; // completely off the screen
     if (x < 0) x = 0;
-    if (x2 >= pOBD->oled_x) x2 = pOBD->oled_x-1;
+    if (x2 >= pOBD->width) x2 = pOBD->width-1;
     iLen = x2 - x + 1; // new length
     d = &pOBD->ucScreen[((y >> 3)*128) + x];
     ucMask = 1 << (y & 7);
@@ -2198,7 +2193,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
     if (pOBD == NULL || pOBD->ucScreen == NULL)
         return; // only works with a back buffer
     if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0 ||
-       x1 >= pOBD->oled_x || y1 >= pOBD->oled_y || x2 >= pOBD->oled_x || y2 >= pOBD->oled_y) return; // invalid coordinates
+       x1 >= pOBD->width || y1 >= pOBD->height || x2 >= pOBD->width || y2 >= pOBD->height) return; // invalid coordinates
     // Make sure that X1/Y1 is above and to the left of X2/Y2
     // swap coordinates as needed to make this true
     if (x2 < x1)
@@ -2324,3 +2319,279 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
         }
     } // outline
 } /* obdRectangle() */
+
+// A valid CW or CCW move returns 1 or -1, invalid returns 0.
+static int obdMenuReadRotary(SIMPLEMENU *sm) {
+static int8_t rot_enc_table[] = {0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0};
+uint8_t c;
+int rc = 0;
+
+
+  sm->prevNextCode <<= 2;
+  if (digitalRead(sm->u8Dn) == sm->iPressed)
+     sm->prevNextCode |= 0x02;
+  if (digitalRead(sm->u8Up) == sm->iPressed)
+     sm->prevNextCode |= 0x01;
+  sm->prevNextCode &= 0x0f;
+
+   // If valid then store as 16 bit data.
+   if  (rot_enc_table[sm->prevNextCode]) {
+      sm->store <<= 4;
+      sm->store |= sm->prevNextCode;
+      c = sm->store & 0xff;
+      //if (store==0xd42b) return 1;
+      //if (store==0xe817) return -1;
+      if ((c & 0xf) == 2) rc = -1;
+      else if ((c & 0xf) == 1) rc = 1;
+   }
+//   Serial.printf("store = 0x%04x, val = %d\n", sm->store, rc);
+   return rc;
+} /* obdMenuReadRotary() */
+
+//
+// Initialize the simple menu structure
+//
+int obdMenuInit(OBDISP *pOBD, SIMPLEMENU *sm, char **pText, int iFontSize, int bCenter, int btnUp, int btnDn, int btnEnter, int iPressedState, int bIsRotary)
+{
+  int iLen;
+  if (sm == NULL || pText == NULL) return 0;
+  sm->pOBD = pOBD;
+  sm->u8Up = btnUp; // pin numbers of the action buttons
+  sm->u8Dn = btnDn; // or rotary A line
+  sm->u8Enter = btnEnter; // or rotary B line
+  sm->bIsRotary = bIsRotary;
+  sm->u8BtnState = 0; // no active buttons to start
+  sm->iPressed = iPressedState; // active state of a pressed button
+  sm->bCenter = bCenter;
+  sm->iFontSize = iFontSize;
+  sm->pMenuText = pText;
+  sm->iMenuIndex = 0; // start at first item
+  sm->iDispX = 128; // DEBUG
+  sm->iDispY = 64; // DEBUG
+  sm->bOneButton = (btnDn == -1 && btnEnter == -1); // only 1 button defined
+  sm->pfnCallback = NULL;
+  sm->prevNextCode = 0;
+  sm->store = 0;
+  iLen = 0;
+  while (pText[iLen] != NULL)
+    iLen++;
+  sm->iMenuLen = iLen-1; // don't count the title text
+  return 1; // success
+} /* obdMenuInit() */
+
+//
+// Get the text and centering position for
+// a specific menu item
+// returns the X position
+//
+static int obdMenuGetItem(SIMPLEMENU *sm, int iItem, char *szText)
+{
+  int x, cx, len;
+
+  if (sm->iFontSize == FONT_SMALL)
+     cx = 6;
+  else if (sm->iFontSize == FONT_NORMAL)
+     cx = 8;
+  else cx = 16;
+  strcpy(szText, sm->pMenuText[iItem]);
+  if (sm->pfnCallback && iItem > 0) // don't add callback for menu title
+  {
+    strcat(szText, " ");
+    strcat(szText, (*sm->pfnCallback)(iItem-1));
+  }
+  x = 0;
+  if (sm->bCenter || iItem == 0) // always center the menu title
+  {
+    len = strlen(szText);
+     x = (sm->iDispX - (len * cx)) / 2;
+  }
+  return x;
+} /* obdMenuGetItem() */
+
+//
+// Erase the display and show the given menu
+//
+void obdMenuShow(SIMPLEMENU *sm, int iItem)
+{
+int i, x, iCount, iStart = 0;
+int iFirst, iLast;
+char szTemp[64];
+
+  iCount = (sm->iDispY / 8) - 1; // DEBUG - number of visible menu lines
+  iFirst = iLast = iItem;
+  if (iItem == -1) // show the entire menu
+  {
+    obdFill(sm->pOBD, 0, 0);
+    x = obdMenuGetItem(sm, 0, szTemp); // get the title text
+    obdMenuShowItem(sm->pOBD, x, 0, szTemp, 0, 0, sm->iFontSize, 0); // show title
+    iFirst = 0;
+    iLast = iCount-1;
+  }
+  if (sm->iMenuIndex >= iCount) // needs to scroll up
+     iStart = sm->iMenuIndex - (iCount-1);
+  for (i=iFirst; i<=iLast; i++) // draw the visible menu lines
+  {
+    x = obdMenuGetItem(sm, i + iStart + 1, szTemp);
+    obdMenuShowItem(sm->pOBD, x, i+1, szTemp, (i+iStart == sm->iMenuIndex), (iFirst==iLast), sm->iFontSize, (iFirst==iLast));
+  }
+  if (iItem == -1) // now the display it in one shot
+    obdDumpBuffer(sm->pOBD, NULL);
+} /* obdMenuShow() */
+
+//
+// Set a callback function to return custom info/status
+// for each menu item
+//
+void obdMenuSetCallback(SIMPLEMENU *sm, SIMPLECALLBACK pfnCallBack)
+{
+  if (sm != NULL)
+    sm->pfnCallback = pfnCallBack;
+} /* obdMenuSetCallback() */
+//
+// Display the text of a single menu item
+// optionally erases what's under it to prevent left-over text when the length changes
+//
+void obdMenuShowItem(OBDISP *pOBD, int x, int y, char *szText, int bInvert, int bErase, int iFontSize, int bRender)
+{
+  static char *szBlank = (char *)"                      ";
+  if (bErase)
+    obdWriteString(pOBD, 0, 0, y, szBlank, iFontSize, 0, bRender); // erase old info
+  obdWriteString(pOBD, 0, x, y, szText, iFontSize, bInvert, bRender);
+} /* obdMenuShowItem() */
+
+//
+// Flash a menu item when it is selected
+//
+static void obdMenuFlash(SIMPLEMENU *sm, int iItem)
+{
+int x, y, i, iCount;
+char szTemp[64];
+
+  iCount = (sm->iDispY / 8) - 1; // DEBUG - number of visible menu lines
+  y = iItem+1;
+  if (y > iCount) // max bottom line
+     y = iCount;
+
+  x = obdMenuGetItem(sm, iItem+1, szTemp);
+  for (i=0; i<3; i++)
+  {
+    obdMenuShowItem(sm->pOBD, x, y, szTemp, 0, 0, sm->iFontSize, 1); // show non-inverted
+    delay(200);
+    obdMenuShowItem(sm->pOBD, x, y, szTemp, 1, 0, sm->iFontSize, 1); // show inverted
+    delay(200);
+  }
+} /* obdMenuFlash() */
+
+//
+// Change the menu index incrementally
+// redraws the minimum amount of screen to show the new info
+// (this prevents flicker/flash and saves battery life)
+// returns the new menu index
+//
+int obdMenuDelta(SIMPLEMENU *sm, int iDelta)
+{
+  int i, x, iNewIndex, iCount;
+  int iStart1, iStart2;
+  char szTemp[64];
+
+  if (iDelta == 0) return sm->iMenuIndex; // nothing to do
+  
+  iNewIndex = sm->iMenuIndex + iDelta;
+  if (!sm->bOneButton && (iNewIndex < 0 || iNewIndex >= sm->iMenuLen)) // no change possible, exit
+     return sm->iMenuIndex; // unchanged
+  // If we are using a single button, wrap around the ends
+  if (iNewIndex < 0) iNewIndex = (sm->iMenuLen - 1);
+  else if (iNewIndex > sm->iMenuLen-1) iNewIndex = 0;
+     
+  iCount = (sm->iDispY / 8) - 1; // DEBUG - number of visible menu lines
+  iStart1 = iStart2 = 0;
+  if (sm->iMenuIndex > iCount-1)
+     iStart1 = sm->iMenuIndex - (iCount-1);
+  if (iNewIndex > iCount-1) // needs to scroll up
+     iStart2 = iNewIndex - (iCount-1);
+  if (iStart1 != iStart2) // need to redraw all items
+  {
+    for (i=0; i<iCount; i++)
+    {
+      x = obdMenuGetItem(sm, i+iStart2+1, szTemp);
+      obdMenuShowItem(sm->pOBD, x, i+1, szTemp, (i+iStart2 == iNewIndex), 1, sm->iFontSize, 0);
+    }
+    obdDumpBuffer(sm->pOBD, NULL);
+  }
+  else // need to redraw only the new and old items
+  {
+      i = sm->iMenuIndex - iStart1;
+      x = obdMenuGetItem(sm, sm->iMenuIndex+1, szTemp);
+      obdMenuShowItem(sm->pOBD, x, i+1, szTemp, 0, 0, sm->iFontSize, 1);
+      i = iNewIndex - iStart2;
+      x = obdMenuGetItem(sm, iNewIndex+1, szTemp);
+      obdMenuShowItem(sm->pOBD, x, i+1, szTemp, 1, 0, sm->iFontSize, 1);
+  }
+  sm->iMenuIndex = iNewIndex;
+  return iNewIndex;
+} /* obdMenuDelta() */
+
+//
+// With the given setup, check for button presses
+// and act accordingly
+// returns -1 for normal interactions and the menu item index if the user presses the ENTER button
+//
+// time in milliseconds for a long press
+#define MENU_LONG_PRESS 600
+int obdMenuRun(SIMPLEMENU *sm)
+{
+uint8_t buttons = 0;
+unsigned long ul;
+int iDelta, rc = -1;
+
+  if (sm->bIsRotary) { // read the rotary encoder
+    if (digitalRead(sm->u8Enter) == sm->iPressed) {
+       rc = sm->iMenuIndex; // user pressed ENTER, return current menu index
+    } else { // check for rotary encoder activity
+      iDelta = obdMenuReadRotary(sm);
+      obdMenuDelta(sm, iDelta);
+    }
+  } else {
+// check the button states
+    if (digitalRead(sm->u8Up) == sm->iPressed)
+       buttons |= 1;
+    if (buttons != sm->u8BtnState) // something changed
+    {
+      if (sm->bOneButton) // different logic for a single button system
+      {
+        if (sm->u8BtnState == 0 && buttons == 1) // up button just pressed
+        {
+           sm->ulPressTime = millis(); // record the press time
+        }
+        if (sm->u8BtnState == 1 && buttons == 0) // up button just released
+        {
+          ul = millis() - sm->ulPressTime;
+          if (ul < MENU_LONG_PRESS) // short press = navigate menu
+            obdMenuDelta(sm, 1);
+          else // treat it like a long press
+            rc = sm->iMenuIndex; // action
+        }
+      }
+      else // 3 button setup (UP/DOWN/ENTER)
+      {
+        if (digitalRead(sm->u8Dn) == sm->iPressed)
+           buttons |= 2;
+        if (digitalRead(sm->u8Enter) == sm->iPressed)
+           rc = sm->iMenuIndex; // user pressed ENTER, return current menu index
+        if ((sm->u8BtnState & 1) == 0 && (buttons & 1) == 1) // Up button pressed
+        {
+          obdMenuDelta(sm, -1);
+        }
+        if ((sm->u8BtnState & 2) == 0 && (buttons & 2) == 2) // Down button pressed
+        {
+          obdMenuDelta(sm, 1);
+        }
+      }
+      sm->u8BtnState = buttons; // save the latest state
+    }
+  }
+  if (rc != -1) // selected
+     obdMenuFlash(sm, sm->iMenuIndex);
+  return rc;
+} /* obdMenuRun() */
+

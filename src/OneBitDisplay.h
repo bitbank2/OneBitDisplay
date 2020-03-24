@@ -6,16 +6,38 @@
 typedef struct obdstruct
 {
 uint8_t oled_addr; // requested address or 0xff for automatic detection
-uint8_t oled_wrap, oled_flip, oled_type;
+uint8_t wrap, flip, type;
 uint8_t *ucScreen;
 uint8_t iCursorX, iCursorY;
-uint8_t oled_x, oled_y;
+uint8_t width, height;
 int iScreenOffset;
 BBI2C bbi2c;
 uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin;
 uint8_t iLEDPin; // backlight
 uint8_t bBitBang;
 } OBDISP;
+
+typedef char * (*SIMPLECALLBACK)(int iMenuItem);
+
+typedef struct smenu {
+  uint8_t u8Up, u8Dn, u8Enter; // button pin numbers
+  uint8_t bIsRotary; // rotary encoder or up/down buttons?
+  uint8_t bCenter; // center all menu text if true
+  uint8_t u8BtnState; // state of all buttons
+  uint8_t bOneButton; // flag indicating the menu operates from a single button
+  int iMenuIndex; // current menu index
+  int iMenuLen; // number of entries in the menu (calculated at startup)
+  char **pMenuText; // string array with menu title and text
+  int iFontSize;
+  int iPressed; // polarity of button pressed state
+  unsigned long ulPressTime; // time in millis when button was pressed
+  int iDispX, iDispY; // display width/height in pixels
+  uint8_t prevNextCode; // rotary encoder state machine
+  uint16_t store;
+  SIMPLECALLBACK pfnCallback;
+  OBDISP *pOBD; // display structureme
+} SIMPLEMENU;
+
 // Make the Linux library interface C instead of C++
 #if defined(_LINUX_) && defined(__cplusplus)
 extern "C" {
@@ -85,7 +107,7 @@ int obdInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int bWir
 //
 // Initialize an SPI version of the display
 //
-void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI, int iCLK, int bFlip, int bInvert, int32_t iSpeed);
+void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI, int iCLK, int iLED, int bFlip, int bInvert, int iBitBang, int32_t iSpeed);
 
 //
 // Provide or revoke a back buffer for your OLED graphics
@@ -220,6 +242,40 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
 // Turn the LCD backlight on or off
 //
 void obdBacklight(OBDISP *pODB, int bOn);
+
+//
+// Menu functions
+//
+// Initialize the simple menu structure
+//
+int obdMenuInit(OBDISP *pOBD, SIMPLEMENU *sm, char **pText, int iFontSize, int bCenter, int btnUp, int btnDn, int btnEnter, int iPressedState, int bIsRotary);
+//
+// Erase the display and show the given menu
+//
+void obdMenuShow(SIMPLEMENU *sm, int iItem);
+//
+// Set a callback function to return custom info/status
+// for each menu item
+//
+void obdMenuSetCallback(SIMPLEMENU *sm, SIMPLECALLBACK pfnCallBack);
+//
+// Display the text of a single menu item
+// optionally erases what's under it to prevent left-over text when the length changes
+//
+void obdMenuShowItem(OBDISP *pOBD, int x, int y, char *szText, int bInvert, int bErase, int iFontSize, int bRender);
+//
+// Change the menu index incrementally
+// redraws the minimum amount of screen to show the new info
+// (this prevents flicker/flash and saves battery life)
+// returns the new menu index
+//
+int obdMenuDelta(SIMPLEMENU *sm, int iDelta);
+//
+// With the given setup, check for button presses
+// and act accordingly
+// returns -1 for normal interactions and the menu item index if the user presses the ENTER button
+//
+int obdMenuRun(SIMPLEMENU *sm);
 
 #if defined(_LINUX_) && defined(__cplusplus)
 }
