@@ -879,6 +879,17 @@ int rc = OLED_NOT_FOUND;
 #ifdef _LINUX_
   pOBD->oled_addr = (uint8_t)scl;
 #else
+  // Reset it
+  if (reset != -1)
+  {
+    pinMode(reset, OUTPUT);
+    digitalWrite(reset, HIGH);
+    delay(50);
+    digitalWrite(reset, LOW);
+    delay(50);
+    digitalWrite(reset, HIGH);
+    delay(10);
+  }
   // find the device address if requested
   if (iAddr == -1 || iAddr == 0 || iAddr == 0xff) // find it
   {
@@ -893,17 +904,6 @@ int rc = OLED_NOT_FOUND;
   else
   {
     pOBD->oled_addr = iAddr;
-  }
-  // Reset it
-  if (reset != -1)
-  {
-    pinMode(reset, OUTPUT);
-    digitalWrite(reset, HIGH);
-    delay(50);
-    digitalWrite(reset, LOW);
-    delay(50);
-    digitalWrite(reset, HIGH);
-    delay(10);
   }
 #endif
   // Detect the display controller (SSD1306, SH1107 or SH1106)
