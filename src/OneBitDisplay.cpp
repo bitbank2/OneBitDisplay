@@ -601,7 +601,7 @@ static void _I2CWrite(BBI2C *pI2C, unsigned char *pData, int iLen)
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
 #if !defined( __AVR_ATtiny85__ )
-  if (pOBD->iCSPin != 0xff) // we're writing to SPI, treat it differently
+  if (pOBD->com_mode == COM_SPI) // we're writing to SPI, treat it differently
   {
     digitalWrite(pOBD->iDCPin, (pData[0] == 0) ? LOW : HIGH); // data versus command
     digitalWrite(pOBD->iCSPin, LOW);
@@ -861,7 +861,7 @@ int iLen;
 //
 // Initializes the OLED controller into "page mode"
 //
-int obdInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int bWire, int sda, int scl, int reset, int32_t iSpeed)
+int obdI2CInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int bWire, int sda, int scl, int reset, int32_t iSpeed)
 {
 unsigned char uc[4];
 int rc = OLED_NOT_FOUND;
@@ -1201,7 +1201,7 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= 1024)
 // the original data get overwritten by the SPI.transfer() function
   if (bRender)
   {
-      if (pOBD->iDCPin != 0xff) // SPI/Bit Bang
+      if (pOBD->com_mode == COM_SPI) // SPI/Bit Bang
       {
           digitalWrite(pOBD->iCSPin, LOW);
           if (pOBD->iMOSIPin != 0xff) // Bit Bang
@@ -1616,65 +1616,62 @@ uint8_t i;
 // Pass the pointer to the beginning of the BMP file
 // First pass version assumes a full screen bitmap
 //
-int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int bInvert, int bRender)
+int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int dx, int dy, int bInvert)
 {
-int16_t i16;
-int iOffBits, q, y, j; // offset to bitmap data
+int16_t i16, cx, cy;
+int iOffBits; // offset to bitmap data
 int iPitch;
-uint8_t x, z, b, *s;
-uint8_t dst_mask;
-uint8_t ucTemp[16]; // process 16 bytes at a time
+uint8_t x, y, b, *s, *d;
+uint8_t dst_mask, src_mask;
 uint8_t bFlipped = false;
 
+  if (pOBD->ucScreen == NULL)
+    return -1; // must have a back buffer
   i16 = pgm_read_word(pBMP);
   if (i16 != 0x4d42) // must start with 'BM'
      return -1; // not a BMP file
-  i16 = pgm_read_word(pBMP + 18);
-  if (i16 != 128) // must be 128 pixels wide
+  cx = pgm_read_word(pBMP + 18);
+  if (cx + dx > pOBD->width) // must fit on the display
      return -1;
-  i16 = pgm_read_word(pBMP + 22);
-  if (i16 != 64 && i16 != -64) // must be 64 pixels tall
+  cy = pgm_read_word(pBMP + 22);
+  if (cy < 0) cy = -cy;
+  else bFlipped = true;
+  if (cy + dy > pOBD->height) // must fit on the display
      return -1;
-  if (i16 == 64) // BMP is flipped vertically (typical)
-     bFlipped = true;
   i16 = pgm_read_word(pBMP + 28);
   if (i16 != 1) // must be 1 bit per pixel
      return -1;
   iOffBits = pgm_read_word(pBMP + 10);
-  iPitch = 16;
+  iPitch = ((cx>>3) + 3) & 0xfffc; // must be DWORD aligned
   if (bFlipped)
   { 
-    iPitch = -16;
-    iOffBits += (63 * 16); // start from bottom
+    iOffBits += ((cy-1) * iPitch); // start from bottom
+    iPitch = -iPitch;
   }
 
-// rotate the data and send it to the display
-  for (y=0; y<8; y++) // 8 lines of 8 pixels
+  for (y=0; y<cy; y++)
   {
-     obdSetPosition(pOBD, 0, y, bRender);
-     for (j=0; j<8; j++) // do 8 sections of 16 columns
+     dst_mask = 1 << ((y+dy) & 7);
+     d = &pOBD->ucScreen[(((y+dy)>>3)*128)+dx];
+     s = &pBMP[iOffBits + (y*iPitch)];
+     src_mask = 0;
+     for (x=0; x<cx; x++)
      {
-         s = &pBMP[iOffBits + (j*2) + (y * iPitch*8)]; // source line
-         memset(ucTemp, 0, 16); // start with all black
-         for (x=0; x<16; x+=8) // do each block of 16x8 pixels
-         {
-            dst_mask = 1;
-            for (q=0; q<8; q++) // gather 8 rows
-            {
-               b = pgm_read_byte(s + (q * iPitch));
-               for (z=0; z<8; z++) // gather up the 8 bits of this column
-               {
-                  if (b & 0x80)
-                      ucTemp[x+z] |= dst_mask;
-                  b <<= 1;
-               } // for z
-               dst_mask <<= 1;
-            } // for q
-            s++; // next source byte
-         } // for x
-         if (bInvert) InvertBytes(ucTemp, 16);
-         obdWriteDataBlock(pOBD, ucTemp, 16, bRender);
-     } // for j
+        if (src_mask == 0) // need to load the next byte
+        {
+           b = pgm_read_byte(s++);
+           src_mask = 0x80; // MSB on left
+        }
+        if (b & src_mask)
+        {
+           if (bInvert)
+              d[0] &= ~dst_mask;
+           else
+              d[0] |= dst_mask;
+        }
+        d++;
+        src_mask >>= 1;
+     } // for x
   } // for y
   return 0;
 } /* obdLoadBMP() */

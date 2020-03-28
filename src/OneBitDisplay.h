@@ -93,7 +93,7 @@ enum {
   ANGLE_FLIPY
 };
 
-// Return value from obdInit()
+// Return value from obd obdI2CInit()
 enum {
   OLED_NOT_FOUND = -1, // no display found
   OLED_SSD1306_3C,  // SSD1306 found at 0x3C
@@ -111,7 +111,7 @@ enum {
 // Otherwise use the Wire library.
 // If you don't need to use a separate reset pin, set it to -1
 //
-int obdInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int bWire, int iSDAPin, int iSCLPin, int iResetPin, int32_t iSpeed);
+int obdI2CInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int bWire, int iSDAPin, int iSCLPin, int iResetPin, int32_t iSpeed);
 //
 // Initialize an SPI version of the display
 //
@@ -126,10 +126,6 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
 //
 void obdSetBackBuffer(OBDISP *pOBD, uint8_t *pBuffer);
 //
-// Sends a command to turn off the OLED display
-//
-void obdShutdown();
-//
 // Sets the brightness (0=off, 255=brightest)
 //
 void obdSetContrast(OBDISP *pOBD, unsigned char ucContrast);
@@ -138,7 +134,7 @@ void obdSetContrast(OBDISP *pOBD, unsigned char ucContrast);
 // Pass the pointer to the beginning of the BMP file
 // First pass version assumes a full screen bitmap
 //
-int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int bInvert, int bRender);
+int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int x, int y, int bInvert);
 //
 // Power up/down the display
 // useful for low power situations
