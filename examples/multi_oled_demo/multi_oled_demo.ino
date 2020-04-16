@@ -18,7 +18,7 @@
 // Set this to -1 to disable or the GPIO pin number connected to the reset
 // line of your display if it requires an external reset
 #define RESET_PIN -1
-// let OneBitDisplay figure out the display address
+// let ss_oled figure out the display address
 #define OLED_ADDR -1
 // don't rotate the display
 #define FLIP180 0
@@ -32,7 +32,7 @@
 #define MY_OLED2 OLED_64x32
 
 // 2 copies of the SSOLED structure. Each structure is about 56 bytes
-// There is no limit to the number of simultaneous displays which can be controlled by OneBitDisplay 
+// There is no limit to the number of simultaneous displays which can be controlled by ss_oled 
 OBDISP obd[2];
 
 void setup() {
@@ -54,7 +54,7 @@ rc = obdI2CInit(&obd[0], MY_OLED1, OLED_ADDR, FLIP180, INVERT, 1, SDA_PIN, SCL_P
     obdWriteString(&obd[0], 0,8,3,(char *)"Display", FONT_STRETCHED, 0, 1);
     obdWriteString(&obd[0], 0,56,6,(char *)"0", FONT_STRETCHED, 0, 1);
   }
-rc = obdInit(&obd[1], MY_OLED2, OLED_ADDR, FLIP180, INVERT, 0, GROVE_SDA_PIN, GROVE_SCL_PIN, RESET_PIN, 400000L); // use standard I2C bus at 400Khz
+rc = obdI2CInit(&obd[1], MY_OLED2, OLED_ADDR, FLIP180, INVERT, 0, GROVE_SDA_PIN, GROVE_SCL_PIN, RESET_PIN, 400000L); // use standard I2C bus at 400Khz
   if (rc != OLED_NOT_FOUND)
   {
     obdFill(&obd[1], 0, 1);
