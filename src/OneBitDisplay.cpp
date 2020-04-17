@@ -1068,12 +1068,14 @@ unsigned char buf[3];
 void obdSetContrast(OBDISP *pOBD, unsigned char ucContrast)
 {
   if (pOBD->type == LCD_HX1230)
-  {
-      if (ucContrast > 31) ucContrast = 31;
+  { // valid values are 0-31, so scale it
+      ucContrast >>= 3;
       obdWriteCommand(pOBD, 0x80 + ucContrast);
   }
   else if (pOBD->type == LCD_NOKIA5110)
   {
+      // we allow values of 0xb0-0xbf, so shrink the range
+      ucContrast >>= 4;
       obdWriteCommand(pOBD, 0x21); // set advanced command mode
       obdWriteCommand(pOBD, 0xb0 | ucContrast);
       obdWriteCommand(pOBD, 0x20); // set simple command mode
@@ -1888,6 +1890,97 @@ unsigned char c, *s, ucTemp[40];
     } // 6x8
   return -1; // invalid size
 } /* obdWriteString() */
+//
+// Get the width of text in a custom font
+//
+int obdGetStringWidth(GFXfont *pFont, char *szMsg)
+{
+int iWidth = 0;
+int c, i = 0;
+GFXglyph *pGlyph;
+
+   if (pFont == NULL || szMsg == NULL) return -1; // bad pointers
+   while (szMsg[i]) {
+      c = szMsg[i++];
+      if (c < pFont->first || c > pFont->last) // undefined character
+         continue; // skip it
+      c -= pFont->first; // first char of font defined
+      pGlyph = &pFont->glyph[c];
+      iWidth += pGlyph->xAdvance;
+   }
+   return iWidth;
+} /* obdGetCustomStringWidth() */
+
+//
+// Draw a string of characters in a custom font
+// A back buffer must be defined
+//
+int obdWriteStringCustom(OBDISP *pOBD, GFXfont *pFont, int x, int y, char *szMsg, uint8_t ucColor)
+{
+int i, end_y, dx, dy, tx, ty, c, iBitOff;
+uint8_t *s, *d, bits, ucMask, ucClr, uc;
+GFXglyph *pGlyph;
+
+   if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL || x < 0)
+      return -1;
+   i = 0;
+   while (szMsg[i] && x < pOBD->width)
+   {
+      c = szMsg[i++];
+      if (c < pFont->first || c > pFont->last) // undefined character
+         continue; // skip it
+      c -= pFont->first; // first char of font defined
+      pGlyph = &pFont->glyph[c];
+      dx = x + pGlyph->xOffset; // offset from character UL to start drawing
+      dy = y + pGlyph->yOffset;
+      s = pFont->bitmap + pGlyph->bitmapOffset; // start of bitmap data
+      // Bitmap drawing loop. Image is MSB first and each pixel is packed next
+      // to the next (continuing on to the next character line)
+      iBitOff = 0; // bitmap offset (in bits)
+      bits = uc = 0; // bits left in this font byte
+      end_y = dy + pGlyph->height;
+      if (dy < 0) { // skip these lines
+          iBitOff += (pGlyph->width * (-dy));
+          dy = 0;
+      }
+      for (ty=dy; ty<end_y && ty < pOBD->height; ty++) {
+         ucMask = 1<<(ty & 7); // destination bit number for this line
+         ucClr = (ucColor) ? ucMask : 0;
+         d = &pOBD->ucScreen[(ty >> 3) * 128 + dx]; // internal buffer dest
+         for (tx=0; tx<pGlyph->width; tx++) {
+            if (uc == 0) { // need to read more font data
+               tx += bits; // skip any remaining 0 bits
+               uc = s[iBitOff>>3]; // get more font bitmap data
+               bits = 8 - (iBitOff & 7); // we might not be on a byte boundary
+               iBitOff += bits; // because of a clipped line
+               uc <<= (8-bits);
+               if (tx >= pGlyph->width) {
+                  while(tx >= pGlyph->width) { // rolls into next line(s)
+                     tx -= pGlyph->width;
+                     ty++;
+                  }
+                  if (ty >= end_y || ty >= pOBD->height) { // we're past the end
+                     tx = pGlyph->width;
+                     continue; // exit this character cleanly
+                  }
+                  // need to recalculate mask and offset in case Y changed
+                  ucMask = 1<<(ty & 7); // destination bit number for this line
+                  ucClr = (ucColor) ? ucMask : 0;
+                  d = &pOBD->ucScreen[(ty >> 3) * 128 + dx]; // internal buffer dest
+               }
+            } // if we ran out of bits
+            if (uc & 0x80) { // set pixel
+                  d[tx] &= ~ucMask;
+                  d[tx] |= ucClr;
+            }
+            bits--; // next bit
+            uc <<= 1;
+         } // for x
+      } // for y
+      x += pGlyph->xAdvance; // width of this character
+   } // while drawing characters
+   return 0;
+} /* obdWriteStringCustom() */
 
 //
 // Render a sprite/rectangle of pixels from a provided buffer to the display.
@@ -1997,7 +2090,7 @@ void obdSetBackBuffer(OBDISP *pOBD, uint8_t *pBuffer)
   pOBD->ucScreen = pBuffer;
 } /* obdSetBackBuffer() */
 
-void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, int bRender)
+void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, int bRender)
 {
   int temp;
   int dx = x2 - x1;
@@ -2034,7 +2127,10 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, int bRender)
     p = pStart = &pOBD->ucScreen[x1 + ((y >> 3) << 7)]; // point to current spot in back buffer
     mask = 1 << (y & 7); // current bit offset
     for(x=x1; x1 <= x2; x1++) {
-      *p++ |= mask; // set pixel and increment x pointer
+      if (ucColor)
+        *p++ |= mask; // set pixel and increment x pointer
+      else
+        *p++ &= ~mask;
       error -= dy;
       if (error < 0)
       {
@@ -2086,7 +2182,10 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, int bRender)
       xinc = -1;
     }
     for(x = x1; y1 <= y2; y1++) {
-      bNew |= mask; // set the pixel
+      if (ucColor)
+        bNew |= mask; // set the pixel
+      else
+        bNew &= ~mask;
       error -= dx;
       mask <<= 1; // y1++
       if (mask == 0) // we're done with this byte, write it if necessary

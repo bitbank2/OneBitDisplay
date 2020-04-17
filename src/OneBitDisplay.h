@@ -3,6 +3,28 @@
 
 #include <BitBang_I2C.h>
 
+// Proportional font data taken from Adafruit_GFX library
+/// Font data stored PER GLYPH
+#ifndef _ADAFRUIT_GFX_H
+typedef struct {
+  uint16_t bitmapOffset; ///< Pointer into GFXfont->bitmap
+  uint8_t width;         ///< Bitmap dimensions in pixels
+  uint8_t height;        ///< Bitmap dimensions in pixels
+  uint8_t xAdvance;      ///< Distance to advance cursor (x axis)
+  int8_t xOffset;        ///< X dist from cursor pos to UL corner
+  int8_t yOffset;        ///< Y dist from cursor pos to UL corner
+} GFXglyph;
+
+/// Data stored for FONT AS A WHOLE
+typedef struct {
+  uint8_t *bitmap;  ///< Glyph bitmaps, concatenated
+  GFXglyph *glyph;  ///< Glyph array
+  uint8_t first;    ///< ASCII extents (first char)
+  uint8_t last;     ///< ASCII extents (last char)
+  uint8_t yAdvance; ///< Newline distance (y axis)
+} GFXfont;
+#endif // _ADAFRUIT_GFX_H
+
 typedef struct obdstruct
 {
 uint8_t oled_addr; // requested address or 0xff for automatic detection
@@ -166,6 +188,15 @@ void obdSetTextWrap(OBDISP *pOBD, int bWrap);
 //  Returns 0 for success, -1 for invalid parameter
 //
 int obdWriteString(OBDISP *pOBD, int iScrollX, int x, int y, char *szMsg, int iSize, int bInvert, int bRender);
+//
+// Draw a string in a proportional font you supply
+// Requires a back buffer
+//
+int obdWriteStringCustom(OBDISP *pOBD, GFXfont *pFont, int x, int y, char *szMsg, uint8_t ucColor);
+//
+// Get the width of text in a custom font
+//
+int obdGetStringWidth(GFXfont *pFont, char *szMsg);
 //
 // Fill the frame buffer with a byte pattern
 // e.g. all off (0x00) or all on (0xff)
