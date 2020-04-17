@@ -27,6 +27,7 @@ Features:<br>
 - Supports 96x68 HX1230, 84x48 Nokia 5110 and 128x64 ST7567/UC1701 mono LCDs<br>
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
 - 4 sizes of fixed fonts (6x8, 8x8, 16x16, 16x32)<br>
+- Can use Adafruit_GFX format proportional fonts
 - Deferred rendering allows preparing a back buffer, then displaying it (usually faster)<br>
 - Text scrolling features (vertical and horizontal)<br>
 - Text cursor position with optional line wrap<br>
