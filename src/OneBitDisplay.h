@@ -196,7 +196,7 @@ int obdWriteStringCustom(OBDISP *pOBD, GFXfont *pFont, int x, int y, char *szMsg
 //
 // Get the width of text in a custom font
 //
-int obdGetStringWidth(GFXfont *pFont, char *szMsg);
+void obdGetStringBox(GFXfont *pFont, char *szMsg, int *width, int *top, int *bottom);
 //
 // Fill the frame buffer with a byte pattern
 // e.g. all off (0x00) or all on (0xff)

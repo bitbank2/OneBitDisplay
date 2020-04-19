@@ -1893,23 +1893,29 @@ unsigned char c, *s, ucTemp[40];
 //
 // Get the width of text in a custom font
 //
-int obdGetStringWidth(GFXfont *pFont, char *szMsg)
+void obdGetStringBox(GFXfont *pFont, char *szMsg, int *width, int *top, int *bottom)
 {
-int iWidth = 0;
+int cx = 0;
 int c, i = 0;
 GFXglyph *pGlyph;
+int miny, maxy;
 
-   if (pFont == NULL || szMsg == NULL) return -1; // bad pointers
+   if (width == NULL || top == NULL || bottom == NULL || pFont == NULL || szMsg == NULL) return; // bad pointers
+   miny = 100; maxy = 0;
    while (szMsg[i]) {
       c = szMsg[i++];
       if (c < pFont->first || c > pFont->last) // undefined character
          continue; // skip it
       c -= pFont->first; // first char of font defined
       pGlyph = &pFont->glyph[c];
-      iWidth += pGlyph->xAdvance;
+      cx += pGlyph->xAdvance;
+      if (pGlyph->yOffset < miny) miny = pGlyph->yOffset;
+      if (pGlyph->height+pGlyph->yOffset > maxy) maxy = pGlyph->height+pGlyph->yOffset;
    }
-   return iWidth;
-} /* obdGetCustomStringWidth() */
+   *width = cx;
+   *top = miny;
+   *bottom = maxy;
+} /* obdGetStringBox() */
 
 //
 // Draw a string of characters in a custom font
@@ -1919,21 +1925,27 @@ int obdWriteStringCustom(OBDISP *pOBD, GFXfont *pFont, int x, int y, char *szMsg
 {
 int i, end_y, dx, dy, tx, ty, c, iBitOff;
 uint8_t *s, *d, bits, ucMask, ucClr, uc;
-GFXglyph *pGlyph;
+GFXfont font;
+GFXglyph glyph, *pGlyph;
 
+   
    if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL || x < 0)
       return -1;
+   // in case of running on AVR, get copy of data from FLASH
+   memcpy_P(&font, pFont, sizeof(font));
+   pGlyph = &glyph;
+
    i = 0;
    while (szMsg[i] && x < pOBD->width)
    {
       c = szMsg[i++];
-      if (c < pFont->first || c > pFont->last) // undefined character
+      if (c < font.first || c > font.last) // undefined character
          continue; // skip it
-      c -= pFont->first; // first char of font defined
-      pGlyph = &pFont->glyph[c];
+      c -= font.first; // first char of font defined
+      memcpy_P(&glyph, &font.glyph[c], sizeof(glyph));
       dx = x + pGlyph->xOffset; // offset from character UL to start drawing
       dy = y + pGlyph->yOffset;
-      s = pFont->bitmap + pGlyph->bitmapOffset; // start of bitmap data
+      s = font.bitmap + pGlyph->bitmapOffset; // start of bitmap data
       // Bitmap drawing loop. Image is MSB first and each pixel is packed next
       // to the next (continuing on to the next character line)
       iBitOff = 0; // bitmap offset (in bits)
@@ -1950,7 +1962,7 @@ GFXglyph *pGlyph;
          for (tx=0; tx<pGlyph->width; tx++) {
             if (uc == 0) { // need to read more font data
                tx += bits; // skip any remaining 0 bits
-               uc = s[iBitOff>>3]; // get more font bitmap data
+               uc = pgm_read_byte(&s[iBitOff>>3]); // get more font bitmap data
                bits = 8 - (iBitOff & 7); // we might not be on a byte boundary
                iBitOff += bits; // because of a clipped line
                uc <<= (8-bits);
