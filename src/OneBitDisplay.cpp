@@ -991,18 +991,53 @@ static void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin
 {
 int i;
 uint8_t c;
+// We can access the GPIO ports much quicker on AVR by directly manipulating
+// the port registers
+#ifdef __AVR__
+volatile uint8_t *outSCK, *outMOSI; // port registers for fast I/O
+uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
+
+    port = digitalPinToPort(iMOSIPin);
+    outMOSI = portOutputRegister(port);
+    bitMOSI = digitalPinToBitMask(iMOSIPin);
+    port = digitalPinToPort(iSCKPin);
+    outSCK = portOutputRegister(port);
+    bitSCK = digitalPinToBitMask(iSCKPin);
+
+#endif
+
    while (iLen)
    {
       c = *pData++;
       if (pOBD->iDCPin == 0xff) // 3-wire SPI, write D/C bit first
       {
+#ifdef __AVR__
+          if (pOBD->mode == MODE_DATA)
+             *outMOSI |= bitMOSI;
+          else
+             *outMOSI &= ~bitMOSI;
+          *outSCK |= bitSCK; // toggle clock
+          *outSCK &= ~bitSCK; // no delay needed on SPI devices since AVR is slow
+#else
           digitalWrite(iMOSIPin, (pOBD->mode == MODE_DATA));
           digitalWrite(iSCKPin, HIGH);
           delayMicroseconds(0);
           digitalWrite(iSCKPin, LOW);
+#endif
       }
       if (c == 0 || c == 0xff) // quicker for all bits equal
       {
+#ifdef __AVR__
+         if (c & 1)
+            *outMOSI |= bitMOSI;
+         else
+            *outMOSI &= ~bitMOSI;
+         for (i=0; i<8; i++)
+         {
+            *outSCK |= bitSCK;
+            *outSCK &= ~bitSCK;
+         }
+#else
          digitalWrite(iMOSIPin, (c & 1));
          for (i=0; i<8; i++)
          {
@@ -1010,17 +1045,28 @@ uint8_t c;
             delayMicroseconds(0);
             digitalWrite(iSCKPin, LOW);
          }
+#endif
       }
       else
       {
          for (i=0; i<8; i++)
          {
+#ifdef __AVR__
+            if (c & 0x80) // MSB first
+               *outMOSI |= bitMOSI;
+            else
+               *outMOSI &= ~bitMOSI;
+            *outSCK |= bitSCK;
+            c <<= 1;
+            *outSCK &= ~bitSCK;
+#else
             digitalWrite(iMOSIPin,  (c & 0x80) != 0); // MSB first
             digitalWrite(iSCKPin, HIGH);
             c <<= 1;
             delayMicroseconds(0);
             digitalWrite(iSCKPin, LOW);
-         }
+#endif
+        }
       }
       iLen--;
    }
@@ -1982,8 +2028,10 @@ GFXglyph glyph, *pGlyph;
                }
             } // if we ran out of bits
             if (uc & 0x80) { // set pixel
+               if (ucClr)
+                  d[tx] |= ucMask;
+               else
                   d[tx] &= ~ucMask;
-                  d[tx] |= ucClr;
             }
             bits--; // next bit
             uc <<= 1;
