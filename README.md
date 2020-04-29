@@ -41,13 +41,11 @@ Features:<br>
 - Run full frame animations at high frame rates with a simple API<br>
 <br>
 This code depends on the BitBang_I2C library. You can download it here:<br>
-<br>
 https://github.com/bitbank2/BitBang_I2C
 <br>
-<br>
 See the Wiki for help getting started<br>
-https://github.com/bitbank2/OneBitDisplay/wiki
-
+https://github.com/bitbank2/OneBitDisplay/wiki <br>
+<br>
 Instructions for use:<br>
 ---------------------<br>
 Start by initializing the library. Either using hardware I2C, bit-banged I2C or SPI to talk to the display. For I2C, the
