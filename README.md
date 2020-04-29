@@ -44,7 +44,7 @@ This code depends on the BitBang_I2C library. You can download it here:<br>
 <br>
 https://github.com/bitbank2/BitBang_I2C
 <br>
-
+<br>
 See the Wiki for help getting started<br>
 https://github.com/bitbank2/OneBitDisplay/wiki
 
