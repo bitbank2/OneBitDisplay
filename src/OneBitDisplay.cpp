@@ -42,6 +42,37 @@ static int file_i2c = 0;
 #endif
 #include <SPI.h>
 
+#ifdef HAL_ESP32_HAL_H_
+// Bluetooth support
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
+static BLEUUID serviceUUID("0000fea0-0000-1000-8000-00805f9b34fb"); //Service 
+static BLEUUID dataUUID("0000fea1-0000-1000-8000-00805f9b34fb"); // data characteristic
+static BLEUUID nameUUID("0000fea2-0000-1000-8000-00805f9b34fb"); // name characteristic
+std::string VD_BLE_Name = "VirtualDisplay";
+char Scanned_BLE_Name[32];
+String Scanned_BLE_Address;
+BLEScanResults foundDevices;
+static BLEAddress *Server_BLE_Address;
+volatile boolean paired = false; //boolean variable to togge light
+BLEServer *pServer;
+BLEScan *pBLEScan;
+BLEService *pService;
+BLERemoteCharacteristic *pCharacteristicData, *pCharacteristicName;
+static int bConnected = 0;
+#endif // HAL_ESP32_HAL_H_
+
+// Bluetooth support for Nano 33 BLE
+#ifdef ARDUINO_ARDUINO_NANO33BLE
+#include <ArduinoBLE.h>
+
+static BLEDevice peripheral;
+static BLEService prtService;
+static BLECharacteristic pCharacteristicData, pCharacteristicName;
+static int bConnected = 0;
+#endif // Nano 33 BLE
+
 #endif // _LINUX_
 #include <OneBitDisplay.h>
 
@@ -545,10 +576,11 @@ const unsigned char uc1701_initbuf[] = {0xe2, 0x40, 0xa0, 0xc8, 0xa2, 0x2c, 0x2e
 const unsigned char hx1230_initbuf[] = {0x2f, 0x90, 0xa6, 0xa4, 0xaf, 0x40, 0xb0, 0x10, 0x00};
 const unsigned char nokia5110_initbuf[] = {0x21, 0xa4, 0xb1, 0x04,0x14,0x20,0x0c};
 
-#define MAX_CACHE 32
-//static byte bCache[MAX_CACHE] = {0x40}; // for faster character drawing
-//static byte bEnd = 1;
+#define MAX_CACHE 128
+static uint8_t u8Cache[MAX_CACHE]; // for faster character drawing
+static volatile uint8_t u8End = 0;
 static void obdWriteCommand(OBDISP *pOBD, unsigned char c);
+static void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
 static void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin);
 // wrapper/adapter functions to make the code work on Linux
@@ -618,34 +650,44 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
   else // must be I2C
 #endif // !ATtiny85
   {
-    I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, pData, iLen);
+    if (pOBD->bbi2c.bWire && iLen > 32) // Hardware I2C has write length limits
+    {
+       iLen--; // don't count the 0x40 byte the first time through
+       while (iLen >= 31) // max 31 data byes + data introducer
+       {
+          I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, pData, 32);
+          iLen -= 31;
+          pData += 31;
+          pData[0] = 0x40;
+       }
+       if (iLen) iLen++; // If remaining data, add the last 0x40 byte
+    }
+    if (iLen) // if any data remaining 
+    {
+      I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, pData, iLen);
+    }
   } // I2C
 } /* _I2CWrite() */
 #endif // _LINUX_
 
-#ifdef FUTURE
-static void oledCachedFlush(void)
+static void obdCachedFlush(OBDISP *pOBD, int bRender)
 {
-       _I2CWrite(bCache, bEnd); // write the old data
-#ifdef USE_BACKBUFFER
-       memcpy(&ucScreen[iScreenOffset], &bCache[1], bEnd-1);
-       iScreenOffset += (bEnd - 1);
-#endif
-       bEnd = 1;
-} /* oledCachedFlush() */
-
-static void oledCachedWrite(uint8_t *pData, uint8_t bLen)
-{
-
-   if (bEnd + bLen > MAX_CACHE) // need to flush it
-   {
-       oledCachedFlush(); // write the old data
+   if (u8End > 0) {
+      obdWriteDataBlock(pOBD, u8Cache, u8End, bRender);
+      u8End = 0;
    }
-   memcpy(&bCache[bEnd], pData, bLen);
-   bEnd += bLen;
+} /* obdCachedFlush() */
+
+static void obdCachedWrite(OBDISP *pOBD, uint8_t *pData, uint8_t u8Len, int bRender)
+{
+   if (u8End + u8Len > MAX_CACHE) // need to flush it
+   {
+       obdCachedFlush(pOBD, bRender); // write the old data
+   }
+   memcpy(&u8Cache[u8End], pData, u8Len);
+   u8End += u8Len;
   
-} /* oledCachedWrite() */
-#endif // FUTURE
+} /* obdCachedWrite() */
 //
 // Turn off the display
 //
@@ -858,6 +900,215 @@ int iLen;
   }
 } /* obdSPIInit() */
 #endif
+// Currently only supported on ESP32
+#ifdef HAL_ESP32_HAL_H_
+// Called for each device found during a BLE scan by the client
+class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks
+{
+    void onResult(BLEAdvertisedDevice advertisedDevice) {
+      Serial.printf("Scan Result: %s \n", advertisedDevice.toString().c_str());
+      if (Scanned_BLE_Name[0] == 0 && strcmp(VD_BLE_Name.c_str(), advertisedDevice.getName().c_str()) == 0) { // this is what we want
+        Server_BLE_Address = new BLEAddress(advertisedDevice.getAddress());
+        Scanned_BLE_Address = Server_BLE_Address->toString().c_str();
+        strcpy(Scanned_BLE_Name, advertisedDevice.getName().c_str());
+        Serial.printf("Found what we're looking for!\n");
+        pBLEScan->stop(); // stop scanning
+      }
+    }
+};
+
+// When the scan has found the BLE server device name we're looking for, we try to connect
+bool connectToserver (BLEAddress pAddress)
+{
+    BLEClient*  pClient  = BLEDevice::createClient();
+    Serial.println(" - Created client");
+
+    // Connect to the BLE Server.
+    pClient->connect(pAddress, BLE_ADDR_TYPE_RANDOM); // needed for iOS/Android/MacOS
+    Serial.print(" - Connected to "); Serial.println(VD_BLE_Name.c_str());
+    // Obtain a reference to the service we are after in the remote BLE server.
+    BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
+    Serial.println("Returned from getService()");
+    if (pRemoteService != NULL)
+    {
+      Serial.println(" - Found our service");
+      if (pClient->isConnected())
+      {
+        Serial.println(" - We're connected");
+    // Obtain a reference to the characteristic in the service of the remote BLE server.
+        pCharacteristicData = pRemoteService->getCharacteristic(dataUUID);
+        if (pCharacteristicData != nullptr)
+        {
+          Serial.println(" - Found our data characteristic");
+        }
+        pCharacteristicName = pRemoteService->getCharacteristic(nameUUID);
+        if (pCharacteristicName != nullptr)
+        {
+          Serial.println(" - Found our name characteristic");
+        }
+        return true;
+      } // client is connected
+   } // if remote service is not NULL
+   return false;
+} /* connectToserver() */
+
+//
+// Initialize the BLE connection to the virtual display server
+//
+static int _BLEInit(char *name)
+{
+
+    bConnected = 0;
+    pCharacteristicData = NULL;
+    pCharacteristicName = NULL;
+    BLEDevice::init("OneBitDisplay");
+    Scanned_BLE_Name[0] = 0;
+    pBLEScan = BLEDevice::getScan(); //create new scan
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks()); //Call the class that is defined above
+    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+   foundDevices = pBLEScan->start(3); //Scan for 3 seconds to find the Fitness band
+
+  while (!paired && foundDevices.getCount() >= 1)
+  {
+    if (strcmp(Scanned_BLE_Name,VD_BLE_Name.c_str()) == 0) // found the device we want
+    {
+//      pBLEScan->stop(); // stop scanning
+      yield();
+      Serial.println("Found Device :-)... connecting to Server as client");
+      Scanned_BLE_Name[0] = 0; // don't reconnect until we scan again
+      if (connectToserver(*Server_BLE_Address))
+      {
+      paired = true;
+      break;
+      }
+    }
+  }
+    if (pCharacteristicName != nullptr)
+    {
+      bConnected = 1;
+      pCharacteristicName->writeValue((uint8_t *)name, strlen(name), false); // we don't expect a response
+    }
+  return 0;
+} /* _BLEInit() */
+#endif // ESP32
+
+#ifdef ARDUINO_ARDUINO_NANO33BLE
+//
+// Initialize the BLE connection to the virtual display server
+//
+static int _BLEInit(char *name)
+{
+unsigned long ulTime;
+int bFound = 0;
+
+Serial.println("Entering _BLEInit()");
+
+    bConnected = 0;
+    Serial.println("About to call BLE.begin()");
+    BLE.begin();
+    BLE.setLocalName("Nano33BLE");
+    Serial.println("About to start scan");
+    BLE.scanForName("VirtualDisplay", true);
+    ulTime = millis();
+    while (!bFound && (millis() - ulTime) < 5000UL)
+    {
+    // check if a peripheral has been discovered
+        peripheral = BLE.available();
+        if (peripheral)
+        {
+        // discovered a peripheral, print out address, local name, and advertised service
+            Serial.print("Found ");
+            Serial.print(peripheral.address());
+            Serial.print(" '");
+            Serial.print(peripheral.localName());
+            Serial.print("' ");
+            Serial.print(peripheral.advertisedServiceUuid());
+            Serial.println();
+            if (memcmp(peripheral.localName().c_str(), "VirtualDisplay", 14) == 0)
+            { // found the one we're looking for
+               BLE.stopScan();
+               bFound = 1;
+            } // found it in scan
+        } // peripheral located
+        else
+        {
+           delay(50);
+        }
+    } // while scanning
+    if (bFound)
+    {
+       // Connect to the BLE Server.
+       Serial.println("connection attempt...");
+       if (peripheral.connect())
+       {
+          Serial.println("Connected!");
+          peripheral.discoverAttributes();
+          if (peripheral.discoverService("fea0"))
+          {
+             Serial.println("Discovered fea0 service");
+             prtService = peripheral.service("0000fea0-0000-1000-8000-00805f9b34fb"); // get the virtual display service
+             if (prtService)
+//             if (1)
+             {
+                Serial.println("Got the service");
+                pCharacteristicData = prtService.characteristic("0000fea1-0000-1000-8000-00805f9b34fb");
+                pCharacteristicName = prtService.characteristic("0000fea2-0000-1000-8000-00805f9b34fb");
+                if (pCharacteristicData)
+                {
+                    Serial.println("Got the characteristics");
+                    Serial.print("Properties = 0x");
+                    Serial.println(pCharacteristicData.properties(), HEX);
+                    bConnected = 1;
+                }
+             } else {
+               Serial.println("Couldn't get service");
+             }
+          }
+       }
+    }
+    if (bConnected)
+    {
+      pCharacteristicName.writeValue((uint8_t *)name, strlen(name)); // we don't expect a response
+    }
+  return 0;
+} /* _BLEInit() */
+#endif // Nano 33 BLE
+#if defined(HAL_ESP32_HAL_H_) || defined (ARDUINO_ARDUINO_NANO33BLE)
+//
+// Initializes a virtual display over BLE
+// Currently only OLED_128x64 is supported
+//
+int obdBLEInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, char *name)
+{
+   pOBD->ucScreen = NULL;
+   pOBD->type = iType;
+   pOBD->flip = bFlip;
+   pOBD->wrap = 0;
+   pOBD->com_mode = COM_BLE; // Bluetooth Low Energy mode
+   pOBD->width = 128; // DEBUG
+   pOBD->height = 64;
+
+   return _BLEInit(name); // initialize the BLE connection
+} /* obdBLEInit() */
+#endif // ESP32 and Nano 33 BLE 
+//
+// Initializes a virtual display over UART
+// Currently only OLED_128x64 is supported
+//
+int obdUARTInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, unsigned long ulSpeed)
+{
+   pOBD->ucScreen = NULL;
+   pOBD->type = iType;
+   pOBD->flip = bFlip;
+   pOBD->wrap = 0;
+   pOBD->com_mode = COM_UART;
+   pOBD->width = 128; // DEBUG
+   pOBD->height = 64;
+   Serial.begin(ulSpeed);
+
+   return 0;
+} /* obdUARTInit() */
+
 //
 // Initializes the OLED controller into "page mode"
 //
@@ -1075,12 +1326,31 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
 // Send a single byte command to the OLED controller
 static void obdWriteCommand(OBDISP *pOBD, unsigned char c)
 {
-unsigned char buf[2];
+unsigned char buf[4];
+
+#if defined(HAL_ESP32_HAL_H_) || defined (ARDUINO_ARDUINO_NANO33BLE)
+  if (pOBD->com_mode == COM_BLE) { // Bluetooth
+      buf[0] = 0x00; // cmd
+      buf[1] = c; // command byte
+      if (bConnected) {
+#ifdef HAL_ESP32_HAL_H_
+         pCharacteristicData->writeValue(buf, 2, false);
+#else
+         pCharacteristicData.writeValue(buf, 2);
+#endif
+      }
+  }
+#endif // ESP32 & Nano 33
 
   if (pOBD->com_mode == COM_I2C) {// I2C device
       buf[0] = 0x00; // command introducer
       buf[1] = c;
       _I2CWrite(pOBD, buf, 2);
+  } else if (pOBD->com_mode == COM_UART) {
+      buf[0] = 2; // length of data to com
+      buf[1] = 0x00; // command
+      buf[2] = c; // command byte
+      Serial.write(buf, 3);
   } else { // must be SPI
       obdSetDCMode(pOBD, MODE_COMMAND);
       digitalWrite(pOBD->iCSPin, LOW);
@@ -1095,13 +1365,34 @@ unsigned char buf[2];
 
 static void obdWriteCommand2(OBDISP *pOBD, unsigned char c, unsigned char d)
 {
-unsigned char buf[3];
+unsigned char buf[4];
+
+#if defined(HAL_ESP32_HAL_H_) || defined (ARDUINO_ARDUINO_NANO33BLE)
+    if (pOBD->com_mode == COM_BLE) { // Bluetooth
+        buf[0] = 0x00; // cmd
+        buf[1] = c; // command byte
+        buf[2] = d;
+        if (bConnected) {
+#ifdef HAL_ESP32_HAL_H_
+           pCharacteristicData->writeValue(buf, 3, false);
+#else
+           pCharacteristicData.writeValue(buf, 3);
+#endif
+        }
+    }
+#endif // ESP32 & Nano 33
 
     if (pOBD->com_mode == COM_I2C) {// I2C device
         buf[0] = 0x00;
         buf[1] = c;
         buf[2] = d;
         _I2CWrite(pOBD, buf, 3);
+    } else if (pOBD->com_mode == COM_UART) {
+        buf[0] = 3; // length
+        buf[1] = 0x00;
+        buf[2] = c;
+        buf[3] = d;
+        Serial.write(buf, 4);
     } else { // must be SPI
         obdWriteCommand(pOBD, c);
         obdWriteCommand(pOBD, d);
@@ -1183,6 +1474,7 @@ static void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
 {
 unsigned char buf[4];
 
+  obdCachedFlush(pOBD, bRender); // flush any cached data first
   pOBD->iScreenOffset = (y*128)+x;
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
@@ -1236,7 +1528,7 @@ unsigned char buf[4];
 //
 static void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender)
 {
-unsigned char ucTemp[129];
+unsigned char ucTemp[132];
 
 // Keep a copy in local buffer
 if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= 1024)
@@ -1249,6 +1541,20 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= 1024)
 // the original data get overwritten by the SPI.transfer() function
   if (bRender)
   {
+#if defined(HAL_ESP32_HAL_H_) || defined (ARDUINO_ARDUINO_NANO33BLE)
+      if (pOBD->com_mode == COM_BLE) { // Bluetooth
+          if (bConnected) {
+             ucTemp[0] = 0x40; // data command
+             memcpy(&ucTemp[1], ucBuf, iLen);
+#ifdef HAL_ESP32_HAL_H_
+             pCharacteristicData->writeValue(ucTemp, iLen+1, false);
+#else
+             pCharacteristicData.writeValue(ucTemp, iLen+1);
+#endif
+          }
+      }
+#endif // ESP32 & Nano 33
+
       if (pOBD->com_mode == COM_SPI) // SPI/Bit Bang
       {
           digitalWrite(pOBD->iCSPin, LOW);
@@ -1257,6 +1563,13 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= 1024)
           else
             SPI.transfer(ucBuf, iLen);
           digitalWrite(pOBD->iCSPin, HIGH);
+      }
+      else if (pOBD->com_mode == COM_UART)
+      {
+          ucTemp[0] = iLen+1; // data length
+          ucTemp[1] = 0x40;
+          memcpy(&ucTemp[2], ucBuf, iLen);
+          Serial.write(ucTemp, iLen+2);
       }
       else // I2C
       {
@@ -1774,11 +2087,11 @@ unsigned char c, *s, ucTemp[40];
              // we can't directly use the pointer to FLASH memory, so copy to a local buffer
              memcpy_P(ucTemp, &ucFont[iFontOff], 8);
              if (bInvert) InvertBytes(ucTemp, 8);
-    //         oledCachedWrite(ucTemp, 8);
              iLen = 8 - iFontSkip;
              if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
                  iLen = pOBD->width - pOBD->iCursorX;
-             obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
+             obdCachedWrite(pOBD, &ucTemp[iFontSkip], iLen, bRender);
+//             obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
              pOBD->iCursorX += iLen;
              if (pOBD->iCursorX >= pOBD->width-7 && pOBD->wrap) // word wrap enabled?
              {
@@ -1791,7 +2104,7 @@ unsigned char c, *s, ucTemp[40];
          iScroll -= 8;
          i++;
        } // while
-//     oledCachedFlush(); // write any remaining data
+       obdCachedFlush(pOBD, bRender); // write any remaining data
        return 0;
     } // 8x8
 #ifndef __AVR__
@@ -1917,8 +2230,8 @@ unsigned char c, *s, ucTemp[40];
                iLen = 6 - iFontSkip;
                if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
                    iLen = pOBD->width - pOBD->iCursorX;
-               obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
-    //         oledCachedWrite(ucTemp, 6);
+               obdCachedWrite(pOBD, &ucTemp[iFontSkip], iLen, bRender);
+//               obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
                pOBD->iCursorX += iLen;
                iFontSkip = 0;
                if (pOBD->iCursorX >= pOBD->width-5 && pOBD->wrap) // word wrap enabled?
@@ -1931,7 +2244,7 @@ unsigned char c, *s, ucTemp[40];
          iScroll -= 6;
          i++;
        }
-//    oledCachedFlush(); // write any remaining data      
+      obdCachedFlush(pOBD, bRender); // write any remaining data      
       return 0;
     } // 6x8
   return -1; // invalid size
@@ -2095,7 +2408,7 @@ uint8_t *pSrc = pOBD->ucScreen;
            bNeedPos = 0;
            obdSetPosition(pOBD, x*16, y, 1);
         }
-        obdWriteDataBlock(pOBD, pBuffer, 16, 1);
+        obdCachedWrite(pOBD, pBuffer, 16, 1);
       }
       else
       {
@@ -2107,6 +2420,7 @@ uint8_t *pSrc = pOBD->ucScreen;
     pSrc += (128 - pOBD->width); // for narrow displays, skip to the next line
     pBuffer += (128 - pOBD->width);
   } // for y
+  obdCachedFlush(pOBD, 1);
 } /* obdDumpBuffer() */
 //
 // Fill the frame buffer with a byte pattern
@@ -2114,25 +2428,17 @@ uint8_t *pSrc = pOBD->ucScreen;
 //
 void obdFill(OBDISP *pOBD, unsigned char ucData, int bRender)
 {
-uint8_t x, y;
-uint8_t iLines, iCols;
-unsigned char temp[16];
+uint8_t y;
+uint8_t iLines;
 
   iLines = pOBD->height >> 3;
-  iCols = pOBD->width >> 4;
-  memset(temp, ucData, 16);
+  memset(u8Cache, ucData, pOBD->width);
   pOBD->iCursorX = pOBD->iCursorY = 0;
  
   for (y=0; y<iLines; y++)
   {
     obdSetPosition(pOBD, 0,y, bRender); // set to (0,Y)
-    for (x=0; x<iCols; x++) // wiring library has a 32-byte buffer, so send 16 bytes so that the data prefix (0x40) can fit
-    {
-      obdWriteDataBlock(pOBD, temp, 16, bRender);
-    } // for x
-    // 72 isn't evenly divisible by 16, so fix it
-    if (pOBD->type == OLED_72x40)
-       obdWriteDataBlock(pOBD, temp, 8, bRender);
+    obdWriteDataBlock(pOBD, u8Cache, pOBD->width, bRender);
   } // for y
   if (pOBD->ucScreen)
     memset(pOBD->ucScreen, ucData, (pOBD->width * pOBD->height)/8);

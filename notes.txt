@@ -1,0 +1,40 @@
+Technical Notes:
+----------------
+
+I2C
+---
+Since adding the obdCachededWrite feature to reduce the number of I2C transactions
+when drawing fixed fonts, I discovered the limitations of the Wire library. On AVR
+targets the wire library allows a maximum write length of 32 bytes in a single call.
+Any data beyond the 32 bytes is not sent. The ESP32 has a similar behavior, but the
+limit is 128 bytes. OneBitDisplay tests for this condition in the write wrapper function
+and breaks up a data write into 32-byte pieces if it's being sent to hardware I2C.
+The bit-bang I2C doesn't have this limitation, so the write length is unlimited.
+
+BLE
+---
+Getting BLE to work on both ESP32 and the Arduino hardware like the Nano 33 BLE was
+challenging not only because of the different API, but a fundamental difference in
+behavior. Sending fast data is hindered when the write() requests a response. On ESP32
+the writeValue() method allows you to choose if you want a response or not, but on
+the ArduinoBLE library (for the Nano 33 BLE), it will choose to wait for a response
+when the characteristic offers both properties. I added a new overloaded function to
+the ArduinoBLE library to allow you to choose. I created a pull request on Github and
+hope that Arduino will eventually merge the code:
+
+https://github.com/arduino-libraries/ArduinoBLE/pull/72
+
+UART
+----
+Sending the SSD1306 commands over a UART presented new challenges. With I2C and
+BLE there are well defined "packets" because a transmission begins and ends.
+This is necessary for this type of data stream because a single byte tells the
+display controller to interpret the following bytes as commands or graphics.
+If there is no boundary between one packet and the next, the controller will
+misinterpret the start byte as a command or graphics from the previous packet.
+This is the exact problem with transmission over a UART because the way the
+data is read on the receiving end doesn't necessarily correspond with the way
+it's transmitted. To solve this problem, I added additional code on the 
+sending side to add a length byte in front of each packet and on the receiving
+end I added code to re-sync the data if the length+D/C bytes don't line up
+properly.
