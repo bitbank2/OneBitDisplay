@@ -26,8 +26,8 @@ Features:<br>
 - Supports 72x40, 96x16, 64x32, 128x32, 128x64, 128x128 (SH1107) and 132x64 (SH1106) OLED display sizes<br>
 - Supports 96x68 HX1230, 84x48 Nokia 5110 and 128x64 ST7567/UC1701 mono LCDs<br>
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
-- 4 sizes of fixed fonts (6x8, 8x8, 16x16, 16x32)<br>
-- Can use Adafruit_GFX format proportional fonts
+- Includes 4 sizes of fixed fonts (6x8, 8x8, 16x16, 16x32)<br>
+- Can use Adafruit_GFX format bitmap fonts (proportional and fixed)<br>
 - Deferred rendering allows preparing a back buffer, then displaying it (usually faster)<br>
 - Text scrolling features (vertical and horizontal)<br>
 - Text cursor position with optional line wrap<br>
@@ -41,10 +41,11 @@ Features:<br>
 - Run full frame animations at high frame rates with a simple API<br>
 <br>
 This code depends on the BitBang_I2C library. You can download it here:<br>
-<br>
 https://github.com/bitbank2/BitBang_I2C
 <br>
-
+See the Wiki for help getting started<br>
+https://github.com/bitbank2/OneBitDisplay/wiki <br>
+<br>
 Instructions for use:<br>
 ---------------------<br>
 Start by initializing the library. Either using hardware I2C, bit-banged I2C or SPI to talk to the display. For I2C, the
