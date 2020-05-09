@@ -1227,13 +1227,13 @@ int rc = OLED_NOT_FOUND;
 //
 // Sends a command to turn on or off the OLED display
 //
-void oledPower(OBDISP *pOBD, uint8_t bOn)
+void obdPower(OBDISP *pOBD, uint8_t bOn)
 {
     if (bOn)
       obdWriteCommand(pOBD, 0xaf); // turn on OLED
     else
       obdWriteCommand(pOBD, 0xae); // turn off OLED
-} /* oledPower() */
+} /* obdPower() */
 
 //
 // Bit Bang the data on GPIO pins
