@@ -1161,9 +1161,9 @@ int rc = OLED_NOT_FOUND;
   uint8_t u = 0;
   I2CReadRegister(&pOBD->bbi2c, pOBD->oled_addr, 0x00, &u, 1); // read the status register
   u &= 0x0f; // mask off power on/off bit
-  if (u == 0x7 || u == 0xf) // SH1107
-  {
-    pOBD->type = OLED_128x128;
+  if ((u == 0x7 || u == 0xf) && pOBD->type == OLED_128x128) // SH1107
+  { // A single SSD1306 display returned 7, so only act on it if the
+    // user specified that they're working with a 128x128 display
     rc = OLED_SH1107_3C;
     bFlip = !bFlip; // SH1107 seems to have this reversed from the usual direction
   }
@@ -1172,7 +1172,7 @@ int rc = OLED_NOT_FOUND;
     rc = OLED_SH1106_3C;
     pOBD->type = OLED_132x64; // needs to be treated a little differently
   }
-  else if (u == 3 || u == 6) // 6=128x64 display, 3=smaller
+  else if (u == 3 || u == 6 || u == 7) // 7=128x64(rare),6=128x64 display, 3=smaller
   {
     rc = OLED_SSD1306_3C;
   }
