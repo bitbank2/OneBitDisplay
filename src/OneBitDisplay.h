@@ -30,8 +30,8 @@ typedef struct obdstruct
 uint8_t oled_addr; // requested address or 0xff for automatic detection
 uint8_t wrap, flip, type;
 uint8_t *ucScreen;
-uint8_t iCursorX, iCursorY;
-uint8_t width, height;
+int iCursorX, iCursorY;
+int width, height;
 int iScreenOffset;
 BBI2C bbi2c;
 uint8_t com_mode; // communication mode (I2C / SPI)
@@ -104,7 +104,8 @@ enum {
   OLED_72x40,
   LCD_UC1701,
   LCD_HX1230,
-  LCD_NOKIA5110
+  LCD_NOKIA5110,
+  LCD_VIRTUAL
 };
 
 // Rotation and flip angles to draw tiles
@@ -129,6 +130,20 @@ enum {
   LCD_OK,
   LCD_ERROR
 };
+//
+// Create a virtual display of any size
+// The memory buffer must be provided at the time of creation
+//
+void obdCreateVirtualDisplay(OBDISP *pOBD, int width, int height, uint8_t *buffer);
+//
+// Draw the contents of a memory buffer onto a display
+// The sub-window will be clipped if it specifies too large an area
+// for the destination display. The source OBDISP structure must have
+// a valid back buffer defined
+// The top and bottom destination edges will be drawn on byte boundaries (8 rows)
+// The source top/bot edges can be on pixel boundaries
+//
+void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int destx, int desty, int width, int height);
 //
 // Initializes a virtual display over BLE
 // Currently only OLED_128x64 is supported

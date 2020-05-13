@@ -606,6 +606,73 @@ int rc;
   rc = read(file_i2c, pBuf, iLen);
   return (rc > 0);
 }
+//
+// Create a virtual display of any size
+// The memory buffer must be provided at the time of creation
+//
+void obdCreateVirtualDisplay(OBDISP *pOBD, int width, int height, uint8_t *buffer)
+{
+  if (pOBD != NULL && buffer != NULL)
+  {
+    pOBD->width = width;
+    pOBD->height = height;
+    pOBD->type = LCD_VIRTUAL;
+    pOBD->ucScreen = buffer;
+    pOBD->iCursorX = pOBD->iCursorY = 0;
+    pOBD->iScreenOffset = 0;
+  }
+} /* obdCreateVirtualDisplay() */
+//
+// Draw the contents of a memory buffer onto a display
+// The sub-window will be clipped if it specifies too large an area
+// for the destination display. The source OBDISP structure must have
+// a valid back buffer defined
+// The top and bottom destination edges will be drawn on byte boundaries (8 rows)
+// The source top/bot edges can be on pixel boundaries
+// This can be used for partial screen updates
+//
+void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int destx, int desty, int width, int height)
+{
+uint8_t *s,ucTemp[32]; // temp buffer to gather source pixels
+int x, y, tx, i, j;
+int iPitch;
+
+   if (pOBDSrc == NULL || pOBDDest == NULL || pOBDSrc->ucScreen == NULL)
+      return; // invalid pointers
+   if (width > pOBDDest->width)
+      width = pOBDDest->width;
+   if (height > pOBDDest->height)
+      height = pOBDDest->height;
+   iPitch = pOBDSrc->width;
+   if (iPitch < 128) iPitch = 128;
+   for (y=0; y<height; y+=8)
+   {
+      obdSetPosition(pOBDDest, destx, desty/8, 1);
+      for (x=0; x<width; x+=32)
+      {
+         tx = 32;
+         if (width-x < 32) tx = width-x;
+         s = &pOBDSrc->ucBuffer[(y/8)*iPitch + x];
+	 if (srcy & 7) // need to shift the bits to get 8 rows of src data
+         {
+            uint8_t uc, ucShift = srcy & 7;
+            for (i=0; i<tx; i++)
+            { // combine current and next line to capture 8 pixels
+               uc = s[0] >> ucShift;
+               uc |= s[iPitch] << (7-ucShift);
+               ucTemp[i] = uc;
+            }
+            obdCachedWrite(pOBDDest, ucTemp, tx, 1);
+         }
+         else
+         { // simpler case
+            obdCachedWrite(pOBDDest, s, tx, 1); // just copy it
+         }
+      } // for x
+   } for y
+   obdCachedFlush(pOBDDest);
+} /* obdDumpWindow() */
+
 int I2CInit(BBI2C *pI2C, int32_t iSpeed)
 {
 char filename[32];
@@ -1428,23 +1495,25 @@ int obdScrollBuffer(OBDISP *pOBD, int iStartCol, int iEndCol, int iStartRow, int
 {
     uint8_t b, *s;
     int col, row;
-    
-    if (iStartCol < 0 || iStartCol > 127 || iEndCol < 0 || iEndCol > 127 || iStartCol > iEndCol) // invalid
+    int iPitch;
+
+    if (iStartCol < 0 || iStartCol >= pOBD->width || iEndCol < 0 || iEndCol > pOBD->width || iStartCol > iEndCol) // invalid
         return -1;
-    if (iStartRow < 0 || iStartRow > 7 || iEndRow < 0 || iEndRow > 7 || iStartRow > iEndRow)
+    if (iStartRow < 0 || iStartRow >= (pOBD->height/8) || iEndRow < 0 || iEndRow >= (pOBD->height/8) || iStartRow > iEndRow)
         return -1;
-    
+    iPitch = pOBD->width;
+    if (iPitch < 128) iPitch = 128;
     if (bUp)
     {
         for (row=iStartRow; row<=iEndRow; row++)
         {
-            s = &pOBD->ucScreen[(row * 128) + iStartCol];
+            s = &pOBD->ucScreen[(row * iPitch) + iStartCol];
             for (col=iStartCol; col<=iEndCol; col++)
             {
                 b = *s;
                 b >>= 1; // scroll pixels 'up'
                 if (row < iEndRow)
-                    b |= (s[128] << 7); // capture pixel of row below, except for last row
+                    b |= (s[iPitch] << 7); // capture pixel of row below, except for last row
                 *s++ = b;
             } // for col
         } // for row
@@ -1453,13 +1522,13 @@ int obdScrollBuffer(OBDISP *pOBD, int iStartCol, int iEndCol, int iStartRow, int
     {
         for (row=iEndRow; row>=iStartRow; row--)
         {
-            s = &pOBD->ucScreen[(row * 128)+iStartCol];
+            s = &pOBD->ucScreen[(row * iPitch)+iStartCol];
             for (col=iStartCol; col<=iEndCol; col++)
             {
                 b = *s;
                 b <<= 1; // scroll down
                 if (row > iStartRow)
-                    b |= (s[-128] >> 7); // capture pixel of row above
+                    b |= (s[-iPitch] >> 7); // capture pixel of row above
                 *s++ = b;
             } // for col
         } // for row
@@ -1473,9 +1542,13 @@ int obdScrollBuffer(OBDISP *pOBD, int iStartCol, int iEndCol, int iStartRow, int
 static void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
 {
 unsigned char buf[4];
+int iPitch = pOBD->width;
 
+  if (iPitch < 128) iPitch = 128;
+  pOBD->iScreenOffset = (y*iPitch)+x;
+  if (pOBD->type == LCD_VIRTUAL)
+    return; // nothing to do
   obdCachedFlush(pOBD, bRender); // flush any cached data first
-  pOBD->iScreenOffset = (y*128)+x;
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
   if (pOBD->type == LCD_NOKIA5110)
@@ -1529,14 +1602,23 @@ unsigned char buf[4];
 static void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender)
 {
 unsigned char ucTemp[132];
+int iPitch, iBufferSize;
+
+  iPitch = pOBD->width;
+  if (iPitch < 128) iPitch = 128;
+  iBufferSize = iPitch * (pOBD->height / 8);
 
 // Keep a copy in local buffer
-if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= 1024)
+if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= iBufferSize)
 {
   memcpy(&pOBD->ucScreen[pOBD->iScreenOffset], ucBuf, iLen);
   pOBD->iScreenOffset += iLen;
-  pOBD->iScreenOffset &= 1023; // we use a fixed stride of 128 no matter what the display size
+  // wrap around ?
+  if (pOBD->iScreenOffset >= iBufferSize)
+    pOBD->iScreenOffset -= iBufferSize;
 }
+if (pOBD->type == LCD_VIRTUAL)
+  return; // nothing else to do
 // Copying the data has the benefit in SPI mode of not letting
 // the original data get overwritten by the SPI.transfer() function
   if (bRender)
@@ -1749,6 +1831,10 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
 {
     int tx, ty, dx, dy, iStartX;
     uint8_t *s, *d, uc, pix, ucSrcMask, ucDstMask;
+    int iLocalPitch;
+
+    iLocalPitch = pOBD->width;
+    if (iLocalPitch < 128) iLocalPitch = 128;
     
     if (x+cx < 0 || y+cy < 0 || x >= pOBD->width || y >= pOBD->height || pOBD->ucScreen == NULL)
         return; // no backbuffer or out of bounds
@@ -1776,7 +1862,7 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
     for (ty=0; ty<cy; ty++)
     {
         s = &pSprite[iStartX >> 3];
-        d = &pOBD->ucScreen[(dy>>3) * pOBD->width + dx];
+        d = &pOBD->ucScreen[(dy>>3) * iLocalPitch + dx];
         ucSrcMask = 0x80 >> (iStartX & 7);
         pix = *s++;
         ucDstMask = 1 << (dy & 7);
@@ -1822,15 +1908,18 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
 // the MSB on the left and 2 bytes per line
 // On AVR, the source image is assumed to be in FLASH memory
 // The function can draw the tile on byte boundaries, so the x value
-// can be from 0 to 112 and y can be from 0 to 6
+// can be from 0 to width-16 and y can be from 0 to (height/8)-2
 //
 void obdDrawTile(OBDISP *pOBD, const uint8_t *pTile, int x, int y, int iRotation, int bInvert, int bRender)
 {
     uint8_t ucTemp[32]; // prepare LCD data here
     uint8_t i, j, k, iOffset, ucMask, uc, ucPixels;
     uint8_t bFlipX=0, bFlipY=0;
+    int iPitch;
     
-    if (x < 0 || y < 0 || y > 6 || x > 112)
+    iPitch = pOBD->width;
+    if (iPitch < 128) iPitch = 128;
+    if (x < 0 || y < 0 || y > (pOBD->height/8)-2 || x > pOBD->width-16)
         return; // out of bounds
     if (pTile == NULL) return; // bad pointer; really? :(
     if (iRotation == ANGLE_180 || iRotation == ANGLE_270 || iRotation == ANGLE_FLIPX)
@@ -1910,9 +1999,14 @@ int obdSetPixel(OBDISP *pOBD, int x, int y, unsigned char ucColor, int bRender)
 {
 int i;
 unsigned char uc, ucOld;
+int iPitch, iSize;
 
-  i = ((y >> 3) * 128) + x;
-  if (i < 0 || i > 1023) // off the screen
+  iPitch = pOBD->width;
+  if (iPitch < 128) iPitch = 128;
+  iSize = iPitch * (pOBD->height/8);
+
+  i = ((y >> 3) * iPitch) + x;
+  if (i < 0 || i > iSize-1) // off the screen
     return -1;
   obdSetPosition(pOBD, x, y>>3, bRender);
 
@@ -2286,10 +2380,12 @@ int i, end_y, dx, dy, tx, ty, c, iBitOff;
 uint8_t *s, *d, bits, ucMask, ucClr, uc;
 GFXfont font;
 GFXglyph glyph, *pGlyph;
-
+int iPitch;
    
    if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL || x < 0)
       return -1;
+   iPitch = pOBD->width;
+   if (iPitch < 128) iPitch = 128;
    // in case of running on AVR, get copy of data from FLASH
    memcpy_P(&font, pFont, sizeof(font));
    pGlyph = &glyph;
@@ -2317,7 +2413,7 @@ GFXglyph glyph, *pGlyph;
       for (ty=dy; ty<end_y && ty < pOBD->height; ty++) {
          ucMask = 1<<(ty & 7); // destination bit number for this line
          ucClr = (ucColor) ? ucMask : 0;
-         d = &pOBD->ucScreen[(ty >> 3) * 128 + dx]; // internal buffer dest
+         d = &pOBD->ucScreen[(ty >> 3) * iPitch + dx]; // internal buffer dest
          for (tx=0; tx<pGlyph->width; tx++) {
             if (uc == 0) { // need to read more font data
                tx += bits; // skip any remaining 0 bits
@@ -2337,7 +2433,7 @@ GFXglyph glyph, *pGlyph;
                   // need to recalculate mask and offset in case Y changed
                   ucMask = 1<<(ty & 7); // destination bit number for this line
                   ucClr = (ucColor) ? ucMask : 0;
-                  d = &pOBD->ucScreen[(ty >> 3) * 128 + dx]; // internal buffer dest
+                  d = &pOBD->ucScreen[(ty >> 3) * iPitch + dx]; // internal buffer dest
                }
             } // if we ran out of bits
             if (uc & 0x80) { // set pixel
@@ -2365,7 +2461,7 @@ int obdDrawGFX(OBDISP *pOBD, uint8_t *pBuffer, int iSrcCol, int iSrcRow, int iDe
 {
     int y;
     
-    if (iSrcCol < 0 || iSrcCol > 127 || iSrcRow < 0 || iSrcRow > 7 || iDestCol < 0 || iDestCol >= pOBD->width || iDestRow < 0 || iDestRow >= (pOBD->height >> 3) || iSrcPitch <= 0)
+    if (iSrcCol < 0 || iSrcCol >= pOBD->width || iSrcRow < 0 || iSrcRow > (pOBD->height/8)-1 || iDestCol < 0 || iDestCol >= pOBD->width || iDestRow < 0 || iDestRow >= (pOBD->height >> 3) || iSrcPitch <= 0)
         return -1; // invalid
     
     for (y=iSrcRow; y<iSrcRow+iHeight; y++)
@@ -2389,6 +2485,8 @@ int iLines, iCols;
 uint8_t bNeedPos;
 uint8_t *pSrc = pOBD->ucScreen;
     
+  if (pOBD->type == LCD_VIRTUAL) // wrong function for this type of display
+    return;
   if (pBuffer == NULL) // dump the internal buffer if none is given
     pBuffer = pOBD->ucScreen;
   if (pBuffer == NULL)
@@ -2431,9 +2529,14 @@ void obdFill(OBDISP *pOBD, unsigned char ucData, int bRender)
 uint8_t y;
 uint8_t iLines;
 
+  pOBD->iCursorX = pOBD->iCursorY = 0;
+  if (pOBD->type == LCD_VIRTUAL) // pure memory, handle it differently
+  {
+     memset(pOBD->ucScreen, ucData, pOBD->width * (pOBD->height/8));
+     return;
+  }
   iLines = pOBD->height >> 3;
   memset(u8Cache, ucData, pOBD->width);
-  pOBD->iCursorX = pOBD->iCursorY = 0;
  
   for (y=0; y<iLines; y++)
   {
@@ -2465,6 +2568,9 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
   uint8_t *p, *pStart, mask, bOld, bNew;
   int xinc, yinc;
   int y, x;
+  int iPitch = pOBD->width;
+
+  if (iPitch < 128) iPitch = 128; // use 128 for tiny displays too
   
   if (x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 || x1 >= pOBD->width || x2 >= pOBD->width || y1 >= pOBD->height || y2 >= pOBD->height)
      return;
@@ -2490,7 +2596,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
       dy = -dy;
       yinc = -1;
     }
-    p = pStart = &pOBD->ucScreen[x1 + ((y >> 3) << 7)]; // point to current spot in back buffer
+    p = pStart = &pOBD->ucScreen[x1 + ((y >> 3) * iPitch)]; // point to current spot in back buffer
     mask = 1 << (y & 7); // current bit offset
     for(x=x1; x1 <= x2; x1++) {
       if (ucColor)
@@ -2536,7 +2642,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
       y2 = temp;
     } 
 
-    p = &pOBD->ucScreen[x1 + ((y1 >> 3) * 128)]; // point to current spot in back buffer
+    p = &pOBD->ucScreen[x1 + ((y1 >> 3) * iPitch)]; // point to current spot in back buffer
     bOld = bNew = p[0]; // current data at that address
     mask = 1 << (y1 & 7); // current bit offset
     dx = (x2 - x1);
@@ -2596,13 +2702,16 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
 static void DrawScaledPixel(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t iXFrac, int32_t iYFrac, uint8_t ucColor)
 {
     uint8_t *d, ucMask;
-    
+    int iPitch;
+
+    iPitch = pOBD->width;
+    if (iPitch < 128) iPitch = 128;
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
     x += iCX; y += iCY;
     if (x < 0 || x >= pOBD->width || y < 0 || y >= pOBD->height)
         return; // off the screen
-    d = &pOBD->ucScreen[((y >> 3)*128) + x];
+    d = &pOBD->ucScreen[((y >> 3)*iPitch) + x];
     ucMask = 1 << (y & 7);
     if (ucColor)
         *d |= ucMask;
@@ -2616,6 +2725,10 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
 {
     int iLen, x2;
     uint8_t *d, ucMask;
+    int iPitch;
+
+    iPitch = pOBD->width;
+    if (iPitch < 128) iPitch = 128;
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
     iLen = x*2;
@@ -2626,7 +2739,7 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
     if (x < 0) x = 0;
     if (x2 >= pOBD->width) x2 = pOBD->width-1;
     iLen = x2 - x + 1; // new length
-    d = &pOBD->ucScreen[((y >> 3)*128) + x];
+    d = &pOBD->ucScreen[((y >> 3)*iPitch) + x];
     ucMask = 1 << (y & 7);
     if (ucColor) // white
     {
@@ -2714,10 +2827,14 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
 {
     uint8_t *d, ucMask, ucMask2;
     int tmp, iOff;
+    int iPitch;
+
     if (pOBD == NULL || pOBD->ucScreen == NULL)
         return; // only works with a back buffer
     if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0 ||
        x1 >= pOBD->width || y1 >= pOBD->height || x2 >= pOBD->width || y2 >= pOBD->height) return; // invalid coordinates
+    iPitch = pOBD->width;
+    if (iPitch < 128) iPitch = 128;
     // Make sure that X1/Y1 is above and to the left of X2/Y2
     // swap coordinates as needed to make this true
     if (x2 < x1)
@@ -2739,7 +2856,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
         ucMask = 0xff << (y1 & 7);
         if (iMiddle == 0) // top and bottom lines are in the same row
             ucMask &= (0xff >> (7-(y2 & 7)));
-        d = &pOBD->ucScreen[(y1 >> 3)*128 + x1];
+        d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
         // Draw top
         for (x = x1; x <= x2; x++)
         {
@@ -2754,7 +2871,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
             ucMask = (ucColor) ? 0xff : 0x00;
             for (y=1; y<iMiddle; y++)
             {
-                d = &pOBD->ucScreen[(y1 >> 3)*128 + x1 + (y*128)];
+                d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1 + (y*iPitch)];
                 for (x = x1; x <= x2; x++)
                     *d++ = ucMask;
             }
@@ -2762,7 +2879,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
         if (iMiddle >= 1) // need to draw bottom part
         {
             ucMask = 0xff >> (7-(y2 & 7));
-            d = &pOBD->ucScreen[(y2 >> 3)*128 + x1];
+            d = &pOBD->ucScreen[(y2 >> 3)*iPitch + x1];
             for (x = x1; x <= x2; x++)
             {
                 if (ucColor)
@@ -2775,7 +2892,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
     else // outline
     {
       // see if top and bottom lines are within the same byte rows
-        d = &pOBD->ucScreen[(y1 >> 3)*128 + x1];
+        d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
         if ((y1 >> 3) == (y2 >> 3))
         {
             ucMask2 = 0xff << (y1 & 7);  // L/R end masks
@@ -2819,16 +2936,16 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
                 ucMask <<= 1;
                 if  (ucMask == 0) {
                     ucMask = 1;
-                    d += 128;
+                    d += iPitch;
                 }
             }
             // T/B sides
             ucMask = 1 << (y1 & 7);
             ucMask2 = 1 << (y2 & 7);
             x1++;
-            d = &pOBD->ucScreen[(y1 >> 3)*128 + x1];
+            d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
             iOff = (y2 >> 3) - (y1 >> 3);
-            iOff *= 128;
+            iOff *= iPitch;
             for (; x1 < x2; x1++)
             {
                 if (ucColor) {
