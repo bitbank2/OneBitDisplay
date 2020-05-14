@@ -579,6 +579,9 @@ const unsigned char nokia5110_initbuf[] = {0x21, 0xa4, 0xb1, 0x04,0x14,0x20,0x0c
 #define MAX_CACHE 128
 static uint8_t u8Cache[MAX_CACHE]; // for faster character drawing
 static volatile uint8_t u8End = 0;
+static void obdCachedFlush(OBDISP *pOBD, int bRender);
+static void obdCachedWrite(OBDISP *pOBD, uint8_t *pData, uint8_t u8Len, int bRender);
+static void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender);
 static void obdWriteCommand(OBDISP *pOBD, unsigned char c);
 static void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
@@ -606,73 +609,6 @@ int rc;
   rc = read(file_i2c, pBuf, iLen);
   return (rc > 0);
 }
-//
-// Create a virtual display of any size
-// The memory buffer must be provided at the time of creation
-//
-void obdCreateVirtualDisplay(OBDISP *pOBD, int width, int height, uint8_t *buffer)
-{
-  if (pOBD != NULL && buffer != NULL)
-  {
-    pOBD->width = width;
-    pOBD->height = height;
-    pOBD->type = LCD_VIRTUAL;
-    pOBD->ucScreen = buffer;
-    pOBD->iCursorX = pOBD->iCursorY = 0;
-    pOBD->iScreenOffset = 0;
-  }
-} /* obdCreateVirtualDisplay() */
-//
-// Draw the contents of a memory buffer onto a display
-// The sub-window will be clipped if it specifies too large an area
-// for the destination display. The source OBDISP structure must have
-// a valid back buffer defined
-// The top and bottom destination edges will be drawn on byte boundaries (8 rows)
-// The source top/bot edges can be on pixel boundaries
-// This can be used for partial screen updates
-//
-void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int destx, int desty, int width, int height)
-{
-uint8_t *s,ucTemp[32]; // temp buffer to gather source pixels
-int x, y, tx, i, j;
-int iPitch;
-
-   if (pOBDSrc == NULL || pOBDDest == NULL || pOBDSrc->ucScreen == NULL)
-      return; // invalid pointers
-   if (width > pOBDDest->width)
-      width = pOBDDest->width;
-   if (height > pOBDDest->height)
-      height = pOBDDest->height;
-   iPitch = pOBDSrc->width;
-   if (iPitch < 128) iPitch = 128;
-   for (y=0; y<height; y+=8)
-   {
-      obdSetPosition(pOBDDest, destx, desty/8, 1);
-      for (x=0; x<width; x+=32)
-      {
-         tx = 32;
-         if (width-x < 32) tx = width-x;
-         s = &pOBDSrc->ucBuffer[(y/8)*iPitch + x];
-	 if (srcy & 7) // need to shift the bits to get 8 rows of src data
-         {
-            uint8_t uc, ucShift = srcy & 7;
-            for (i=0; i<tx; i++)
-            { // combine current and next line to capture 8 pixels
-               uc = s[0] >> ucShift;
-               uc |= s[iPitch] << (7-ucShift);
-               ucTemp[i] = uc;
-            }
-            obdCachedWrite(pOBDDest, ucTemp, tx, 1);
-         }
-         else
-         { // simpler case
-            obdCachedWrite(pOBDDest, s, tx, 1); // just copy it
-         }
-      } // for x
-   } for y
-   obdCachedFlush(pOBDDest);
-} /* obdDumpWindow() */
-
 int I2CInit(BBI2C *pI2C, int32_t iSpeed)
 {
 char filename[32];
@@ -736,6 +672,73 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
   } // I2C
 } /* _I2CWrite() */
 #endif // _LINUX_
+
+//
+// Create a virtual display of any size
+// The memory buffer must be provided at the time of creation
+//
+void obdCreateVirtualDisplay(OBDISP *pOBD, int width, int height, uint8_t *buffer)
+{
+  if (pOBD != NULL && buffer != NULL)
+  {
+    pOBD->width = width;
+    pOBD->height = height;
+    pOBD->type = LCD_VIRTUAL;
+    pOBD->ucScreen = buffer;
+    pOBD->iCursorX = pOBD->iCursorY = 0;
+    pOBD->iScreenOffset = 0;
+  }
+} /* obdCreateVirtualDisplay() */
+//
+// Draw the contents of a memory buffer onto a display
+// The sub-window will be clipped if it specifies too large an area
+// for the destination display. The source OBDISP structure must have
+// a valid back buffer defined
+// The top and bottom destination edges will be drawn on byte boundaries (8 rows)
+// The source top/bot edges can be on pixel boundaries
+// This can be used for partial screen updates
+//
+void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int destx, int desty, int width, int height)
+{
+uint8_t *s,ucTemp[32]; // temp buffer to gather source pixels
+int x, y, tx, i, j;
+int iPitch;
+
+   if (pOBDSrc == NULL || pOBDDest == NULL || pOBDSrc->ucScreen == NULL)
+      return; // invalid pointers
+   if (width > pOBDDest->width)
+      width = pOBDDest->width;
+   if (height > pOBDDest->height)
+      height = pOBDDest->height;
+   iPitch = pOBDSrc->width;
+   if (iPitch < 128) iPitch = 128;
+   for (y=0; y<height; y+=8)
+   {
+      obdSetPosition(pOBDDest, destx, (desty+y)/8, 1);
+      for (x=0; x<width; x+=32)
+      {
+         tx = 32;
+         if (width-x < 32) tx = width-x;
+         s = &pOBDSrc->ucScreen[((srcy+y)/8)*iPitch + srcx+x];
+	 if (srcy & 7) // need to shift the bits to get 8 rows of src data
+         {
+            uint8_t uc, ucShift = srcy & 7;
+            for (i=0; i<tx; i++)
+            { // combine current and next line to capture 8 pixels
+               uc = s[0] >> ucShift;
+               uc |= s[iPitch] << (7-ucShift);
+               ucTemp[i] = uc;
+            }
+            obdCachedWrite(pOBDDest, ucTemp, tx, 1);
+         }
+         else
+         { // simpler case
+            obdCachedWrite(pOBDDest, s, tx, 1); // just copy it
+         }
+      } // for x
+   } // for y
+   obdCachedFlush(pOBDDest, 1);
+} /* obdDumpWindow() */
 
 static void obdCachedFlush(OBDISP *pOBD, int bRender)
 {
@@ -1162,6 +1165,7 @@ int obdBLEInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, char *name)
 // Initializes a virtual display over UART
 // Currently only OLED_128x64 is supported
 //
+#ifndef W600_EV
 int obdUARTInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, unsigned long ulSpeed)
 {
    pOBD->ucScreen = NULL;
@@ -1175,7 +1179,7 @@ int obdUARTInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, unsigned long u
 
    return 0;
 } /* obdUARTInit() */
-
+#endif // W600_EV
 //
 // Initializes the OLED controller into "page mode"
 //
@@ -1413,11 +1417,13 @@ unsigned char buf[4];
       buf[0] = 0x00; // command introducer
       buf[1] = c;
       _I2CWrite(pOBD, buf, 2);
+#ifndef W600_EV
   } else if (pOBD->com_mode == COM_UART) {
       buf[0] = 2; // length of data to com
       buf[1] = 0x00; // command
       buf[2] = c; // command byte
       Serial.write(buf, 3);
+#endif // W600_EV
   } else { // must be SPI
       obdSetDCMode(pOBD, MODE_COMMAND);
       digitalWrite(pOBD->iCSPin, LOW);
@@ -1454,12 +1460,14 @@ unsigned char buf[4];
         buf[1] = c;
         buf[2] = d;
         _I2CWrite(pOBD, buf, 3);
+#ifndef W600_EV
     } else if (pOBD->com_mode == COM_UART) {
         buf[0] = 3; // length
         buf[1] = 0x00;
         buf[2] = c;
         buf[3] = d;
         Serial.write(buf, 4);
+#endif // W600_EV
     } else { // must be SPI
         obdWriteCommand(pOBD, c);
         obdWriteCommand(pOBD, d);
@@ -1544,11 +1552,11 @@ static void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
 unsigned char buf[4];
 int iPitch = pOBD->width;
 
+  obdCachedFlush(pOBD, bRender); // flush any cached data first
   if (iPitch < 128) iPitch = 128;
   pOBD->iScreenOffset = (y*iPitch)+x;
   if (pOBD->type == LCD_VIRTUAL)
     return; // nothing to do
-  obdCachedFlush(pOBD, bRender); // flush any cached data first
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
   if (pOBD->type == LCD_NOKIA5110)
@@ -1646,6 +1654,7 @@ if (pOBD->type == LCD_VIRTUAL)
             SPI.transfer(ucBuf, iLen);
           digitalWrite(pOBD->iCSPin, HIGH);
       }
+#ifndef W600_EV
       else if (pOBD->com_mode == COM_UART)
       {
           ucTemp[0] = iLen+1; // data length
@@ -1653,6 +1662,7 @@ if (pOBD->type == LCD_VIRTUAL)
           memcpy(&ucTemp[2], ucBuf, iLen);
           Serial.write(ucTemp, iLen+2);
       }
+#endif // W600_EV
       else // I2C
       {
           ucTemp[0] = 0x40; // data command

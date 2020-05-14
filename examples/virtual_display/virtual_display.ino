@@ -1,11 +1,12 @@
 //
-// Small Simple OLED library demo
+// OneBitDisplay library demo
 //
-// Dßemonstrates how to initialize and use a few functions of the ss_oled library
+// Demonstrates how to initialize and use a few functions
 // If your MCU has enough RAM to spare, enable the backbuffer to see a demonstration
 // of the speed different between drawing directly on the display versus
 // deferred rendering, followed by a "dump" of the memory to the display
 //
+#include <random.h>
 #include <OneBitDisplay.h>
 OBDISP obLeft;
 OBDISP obRight;
@@ -121,25 +122,26 @@ uint8_t * masks[] = {(uint8_t *)toastermask0, (uint8_t *)toastermask1, (uint8_t 
 
 void setup() {
 int rc;
-  // put your setup code here, to run once:
 //int obdI2CInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int bWire, int iSDAPin, int iSCLPin, int iResetPin, int32_t iSpeed);
-rc = obdI2CInit(&obLeft, OLED_128x64, -1, 0, 0,0,-1, -1,800000L); // use standard I2C bus at 400Khz
+  obdCreateVirtualDisplay(&obVirt, 256, 64, ucBackBuffer);
+rc = obdI2CInit(&obLeft, OLED_128x64, -1, 0, 0,0,WM_IO_PB_12, WM_IO_PA_00,-1,1200000L); // use standard I2C bus at 400Khz
+rc = obdI2CInit(&obRight, OLED_128x64, -1, 0, 0,0,WM_IO_PB_11, WM_IO_PA_00,-1,1200000L); // use standard I2C bus at 400Khz
   if (rc != OLED_NOT_FOUND)
   {
     char *msgs[] = {(char *)"SSD1306 @ 0x3C", (char *)"SSD1306 @ 0x3D",(char *)"SH1106 @ 0x3C",(char *)"SH1106 @ 0x3D"};
     obdFill(&obLeft, 0, 1);
     obdWriteString(&obLeft,0,0,0,msgs[rc], FONT_NORMAL, 0, 1);
-    obdSetBackBuffer(&obLeft,ucBackBuffer);
+//    obdSetBackBuffer(&obLeft,ucBackBuffer);
     delay(2000);
   }
 }
-
+#define NUM_SPRITES 10
 void loop() {
   // put your main code here, to run repeatedly:
 int i, x, y;
 char szTemp[32];
 unsigned long ms;
-int xpos[10], ypos[10], index[10], velocity[10];
+int xpos[NUM_SPRITES], ypos[NUM_SPRITES], index[NUM_SPRITES], velocity[NUM_SPRITES];
 
   obdFill(&obLeft,0x0, 1);
   obdWriteString(&obLeft,0,16,0,(char *)"ss_oled Demo", FONT_NORMAL, 0, 1);
@@ -148,32 +150,33 @@ int xpos[10], ypos[10], index[10], velocity[10];
   delay(2000);
 
 // Sprites
-  for (i=0; i<10; i++)
+  for (i=0; i<NUM_SPRITES; i++)
   {
-    xpos[i] = 4*(random(128)+31);
-    ypos[i] = 4*(random(64)-31);
-    index[i] = random(4);
-    velocity[i] = 1+random(3);
+    xpos[i] = 4*((rand()&255) +31);
+    ypos[i] = 4*((rand()&63) - 31);
+    index[i] = rand() & 3;
+    velocity[i] = 1+(rand() & 3);
   }
   while (1)
   {
     memset(ucBackBuffer, 0, sizeof(ucBackBuffer));
-    for (i=0; i<10; i++)
+    for (i=0; i<NUM_SPRITES; i++)
     {
       int x, y;
-      obdDrawSprite(&obLeft,masks[index[i] & 3], 32, 32, 4, xpos[i]>>2, ypos[i]>>2, 0);
-      obdDrawSprite(&obLeft,toasters[index[i] & 3], 32, 32, 4, xpos[i]>>2, ypos[i]>>2, 1);
+      obdDrawSprite(&obVirt,masks[index[i] & 3], 32, 32, 4, xpos[i]>>2, ypos[i]>>2, 0);
+      obdDrawSprite(&obVirt,toasters[index[i] & 3], 32, 32, 4, xpos[i]>>2, ypos[i]>>2, 1);
       xpos[i]-= velocity[i];
       ypos[i]+= velocity[i];
       index[i]++;
       x = xpos[i] >> 2; y = ypos[i] >> 2;
       if (x < -31 || y >= 64)
       {
-        xpos[i] = 4*(random(128)+31);
-        ypos[i] = 4*(random(64)-31);
+        xpos[i] = 4*((rand()&255) + 31);
+        ypos[i] = 4*((rand()&63) - 31);
       }
     }
-    oledDumpBuffer(&obLeft,NULL);
-    delay(25); 
+    obdDumpWindow(&obVirt, &obLeft,0,0,0,0,128,64);
+    obdDumpWindow(&obVirt, &obRight,128,0,0,0,128,64);
+//    delay(25); 
   } // while (1)
 } /* main() */
