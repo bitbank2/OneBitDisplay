@@ -1226,6 +1226,9 @@ int rc = OLED_NOT_FOUND;
   else
   {
     pOBD->oled_addr = iAddr;
+    I2CTest(&pOBD->bbi2c, iAddr);
+    if (!I2CTest(&pOBD->bbi2c, iAddr))
+       return rc; // no display found
   }
 #endif
   // Detect the display controller (SSD1306, SH1107 or SH1106)
