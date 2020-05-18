@@ -759,20 +759,18 @@ static void obdCachedWrite(OBDISP *pOBD, uint8_t *pData, uint8_t u8Len, int bRen
   
 } /* obdCachedWrite() */
 //
-// Turn off the display
+// Turn the display on or off
 //
-void obdShutdown(OBDISP *pOBD)
+void obdPower(OBDISP *pOBD, int bOn)
 {
-uint8_t uc[2];
+uint8_t ucCMD;
 
-    uc[0] = 0; // command
-    uc[1] = 0xae; // display off
-    _I2CWrite(pOBD, uc, 2);
-#ifdef _LINUX_
-    close(file_i2c);
-    file_i2c = 0;
-#endif
-} /* obdShutdown() */
+  if (pOBD->type == LCD_NOKIA5110)
+    ucCMD = (bOn) ? 0x20 : 0x24;
+  else // all other supported displays
+    ucCMD = (bOn) ? 0xaf : 0xae;
+  obdWriteCommand(pOBD, ucCMD);
+} /* obdPower() */
 #if !defined( _LINUX_ )
 
 // Controls the LED backlight
