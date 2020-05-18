@@ -1,10 +1,9 @@
 //
 // OneBitDisplay library demo
 //
-// Demonstrates how to initialize and use a few functions
-// If your MCU has enough RAM to spare, enable the backbuffer to see a demonstration
-// of the speed different between drawing directly on the display versus
-// deferred rendering, followed by a "dump" of the memory to the display
+// Demonstrates how to use virtual displays
+// these allow you to create a display of any size in memory
+// and draw it across multiple physical displays
 //
 #include <random.h>
 #include <OneBitDisplay.h>
@@ -12,9 +11,10 @@ OBDISP obLeft;
 OBDISP obRight;
 OBDISP obVirt;
 
-// Create a 256x64 framebuffer
+// define a 256x64 framebuffer
 static uint8_t ucBackBuffer[2048];
 
+// Toaster animation images
 const uint8_t toastermask0[] = {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
   0x00, 0x20, 0x00, 0x00, 0x00, 0x88, 0x00, 0x00,
@@ -123,21 +123,23 @@ uint8_t * masks[] = {(uint8_t *)toastermask0, (uint8_t *)toastermask1, (uint8_t 
 void setup() {
 int rc;
 //int obdI2CInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int bWire, int iSDAPin, int iSCLPin, int iResetPin, int32_t iSpeed);
+// Create a virtual display (memory only)
   obdCreateVirtualDisplay(&obVirt, 256, 64, ucBackBuffer);
-rc = obdI2CInit(&obLeft, OLED_128x64, -1, 0, 0,0,WM_IO_PB_12, WM_IO_PA_00,-1,1200000L); // use standard I2C bus at 400Khz
-rc = obdI2CInit(&obRight, OLED_128x64, -1, 0, 0,0,WM_IO_PB_11, WM_IO_PA_00,-1,1200000L); // use standard I2C bus at 400Khz
+// Initialize 2 physical OLED displays
+// In this case, they are defined on the W600-PICO using bit banging
+// Change the SDA and SCL pin definitions to match your setup
+rc = obdI2CInit(&obLeft, OLED_128x64, -1, 0, 0,0,WM_IO_PB_12, WM_IO_PA_00,-1,1200000L);
+rc = obdI2CInit(&obRight, OLED_128x64, -1, 0, 0,0,WM_IO_PB_11, WM_IO_PA_00,-1,1200000L);
   if (rc != OLED_NOT_FOUND)
   {
     char *msgs[] = {(char *)"SSD1306 @ 0x3C", (char *)"SSD1306 @ 0x3D",(char *)"SH1106 @ 0x3C",(char *)"SH1106 @ 0x3D"};
     obdFill(&obLeft, 0, 1);
     obdWriteString(&obLeft,0,0,0,msgs[rc], FONT_NORMAL, 0, 1);
-//    obdSetBackBuffer(&obLeft,ucBackBuffer);
     delay(2000);
   }
 }
 #define NUM_SPRITES 10
 void loop() {
-  // put your main code here, to run repeatedly:
 int i, x, y;
 char szTemp[32];
 unsigned long ms;
@@ -150,6 +152,7 @@ int xpos[NUM_SPRITES], ypos[NUM_SPRITES], index[NUM_SPRITES], velocity[NUM_SPRIT
   delay(2000);
 
 // Sprites
+// generate random starting positions, speed and animation frame index
   for (i=0; i<NUM_SPRITES; i++)
   {
     xpos[i] = 4*((rand()&255) +31);
@@ -159,7 +162,7 @@ int xpos[NUM_SPRITES], ypos[NUM_SPRITES], index[NUM_SPRITES], velocity[NUM_SPRIT
   }
   while (1)
   {
-    memset(ucBackBuffer, 0, sizeof(ucBackBuffer));
+    obdFill(&obVirt, 0, 0); // erase the virtual display
     for (i=0; i<NUM_SPRITES; i++)
     {
       int x, y;
@@ -175,8 +178,9 @@ int xpos[NUM_SPRITES], ypos[NUM_SPRITES], index[NUM_SPRITES], velocity[NUM_SPRIT
         ypos[i] = 4*((rand()&63) - 31);
       }
     }
+    // Show the left half of the virtual display on the left OLED
     obdDumpWindow(&obVirt, &obLeft,0,0,0,0,128,64);
+    // and the right half on the right OLED
     obdDumpWindow(&obVirt, &obRight,128,0,0,0,128,64);
-//    delay(25); 
   } // while (1)
 } /* main() */
