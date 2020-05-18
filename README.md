@@ -25,6 +25,7 @@ Features:<br>
 - Optionally detect the display address and type (I2C only)<br>
 - Supports 72x40, 96x16, 64x32, 128x32, 128x64, 128x128 (SH1107) and 132x64 (SH1106) OLED display sizes<br>
 - Supports 96x68 HX1230, 84x48 Nokia 5110 and 128x64 ST7567/UC1701 mono LCDs<br>
+- Virtual displays of any size which can be drawn across multiple physical displays
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
 - Includes 4 sizes of fixed fonts (6x8, 8x8, 16x16, 16x32)<br>
 - Can use Adafruit_GFX format bitmap fonts (proportional and fixed)<br>
