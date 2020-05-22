@@ -189,7 +189,7 @@ int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int x, int y, int bInvert);
 // Power up/down the display
 // useful for low power situations
 //
-void obdPower(OBDISP *pOBD, uint8_t bOn);
+void obdPower(OBDISP *pOBD, int bOn);
 //
 // Set the current cursor position
 // The column represents the pixel column (0-127)
