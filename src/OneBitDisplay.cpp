@@ -701,7 +701,7 @@ void obdCreateVirtualDisplay(OBDISP *pOBD, int width, int height, uint8_t *buffe
 void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int destx, int desty, int width, int height)
 {
 uint8_t *s,ucTemp[32]; // temp buffer to gather source pixels
-int x, y, tx, i, j;
+int x, y, tx, i;
 int iPitch;
 
    if (pOBDSrc == NULL || pOBDDest == NULL || pOBDSrc->ucScreen == NULL)
