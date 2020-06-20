@@ -49,6 +49,7 @@ typedef struct smenu {
   uint8_t bCenter; // center all menu text if true
   uint8_t u8BtnState; // state of all buttons
   uint8_t bOneButton; // flag indicating the menu operates from a single button
+  uint8_t prevNextCode; // rotary encoder state machine
   int iMenuIndex; // current menu index
   int iMenuLen; // number of entries in the menu (calculated at startup)
   char **pMenuText; // string array with menu title and text
@@ -56,10 +57,9 @@ typedef struct smenu {
   int iPressed; // polarity of button pressed state
   unsigned long ulPressTime; // time in millis when button was pressed
   int iDispX, iDispY; // display width/height in pixels
-  uint8_t prevNextCode; // rotary encoder state machine
-  uint16_t store;
   SIMPLECALLBACK pfnCallback;
   OBDISP *pOBD; // display structureme
+  uint16_t store;
 } SIMPLEMENU;
 
 // Make the Linux library interface C instead of C++
@@ -216,6 +216,13 @@ void obdSetTextWrap(OBDISP *pOBD, int bWrap);
 //  Returns 0 for success, -1 for invalid parameter
 //
 int obdWriteString(OBDISP *pOBD, int iScrollX, int x, int y, char *szMsg, int iSize, int bInvert, int bRender);
+//
+// Draw a string with a fractional scale in both dimensions
+// the scale is a 16-bit integer with and 8-bit fraction and 8-bit mantissa
+// To draw at 1x scale, set the scale factor to 256. To draw at 2x, use 512
+// The output must be drawn into a memory buffer, not directly to the display
+//
+int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int bInvert, int iXScale, int iYScale);
 //
 // Draw a string in a proportional font you supply
 // Requires a back buffer

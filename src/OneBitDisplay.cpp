@@ -701,7 +701,7 @@ void obdCreateVirtualDisplay(OBDISP *pOBD, int width, int height, uint8_t *buffe
 void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int destx, int desty, int width, int height)
 {
 uint8_t *s,ucTemp[32]; // temp buffer to gather source pixels
-int x, y, tx, i, j;
+int x, y, tx, i;
 int iPitch;
 
    if (pOBDSrc == NULL || pOBDDest == NULL || pOBDSrc->ucScreen == NULL)
@@ -2159,6 +2159,62 @@ void obdSetTextWrap(OBDISP *pOBD, int bWrap)
   pOBD->wrap = bWrap;
 } /* obdSetTextWrap() */
 //
+// Draw a string with a fractional scale in both dimensions
+// the scale is a 16-bit integer with and 8-bit fraction and 8-bit mantissa
+// To draw at 1x scale, set the scale factor to 256. To draw at 2x, use 512
+// The output must be drawn into a memory buffer, not directly to the display
+//
+int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int bInvert, int iXScale, int iYScale)
+{
+uint32_t row, col, dx, dy;
+uint32_t sx, sy;
+uint8_t c, uc, *d;
+const uint8_t *s;
+uint8_t ucTemp[16];
+int tx, ty, bit, iFontOff;
+int iPitch, iOffset;
+int iFontWidth;
+
+   if (iXScale == 0 || iYScale == 0 || szMsg == NULL || pOBD == NULL || pOBD->ucScreen == NULL || x < 0 || y < 0 || x >= pOBD->width-1 || y >= pOBD->height-1)
+      return -1; // invalid display structure
+   iFontWidth = (iSize == FONT_SMALL) ? 6:8;
+   s = (iSize == FONT_SMALL) ? ucSmallFont : ucFont;
+   iPitch = pOBD->width;
+   if (iPitch < 128) iPitch = 128;
+   dx = (iFontWidth * iXScale) >> 8; // width of each character
+   dy = (8 * iYScale) >> 8; // height of each character
+   sx = 65536 / iXScale; // turn the scale into an accumulator value
+   sy = 65536 / iYScale;
+   while (*szMsg && x < pOBD->width) {
+      c = *szMsg++; // debug - start with normal font
+      iFontOff = (int)(c-32) * iFontWidth;
+      // we can't directly use the pointer to FLASH memory, so copy to a local buffer
+      memcpy_P(ucTemp, &s[iFontOff], iFontWidth);
+      if (bInvert) InvertBytes(ucTemp, iFontWidth);
+      col = 0;
+      if (x+dx >= pOBD->width) // we've hit the right edge
+         dx = pOBD->width - x; // draw partial character
+      for (tx=0; tx<dx; tx++) {
+         row = 0;
+         uc = ucTemp[col >> 8];
+         d = &pOBD->ucScreen[(y >> 3) * iPitch + x + tx];
+         for (ty=0; ty<dy; ty++) {
+            bit = row >> 8;
+            iOffset = (ty >> 3) * iPitch;
+            if (uc & (1 << bit))
+               d[iOffset] |= (1 << (ty & 7));
+            else
+               d[iOffset] &= ~(1 << (ty & 7));
+            row += sy; // add fractional increment to source row of character
+         } // for ty
+         col += sx; // add fractional increment to source column
+      } // for tx
+      x += dx;
+   } // while (*szMsg)
+   return 0;
+} /* obdScaledString() */
+
+//
 // Draw a string of normal (8x8), small (6x8) or large (16x32) characters
 // At the given col+row
 //
@@ -3025,8 +3081,9 @@ int obdMenuInit(OBDISP *pOBD, SIMPLEMENU *sm, char **pText, int iFontSize, int b
   sm->prevNextCode = 0;
   sm->store = 0;
   iLen = 0;
-  while (pText[iLen] != NULL)
+  while (pText[iLen] != NULL) {
     iLen++;
+  }
   sm->iMenuLen = iLen-1; // don't count the title text
   return 1; // success
 } /* obdMenuInit() */
@@ -3039,6 +3096,9 @@ int obdMenuInit(OBDISP *pOBD, SIMPLEMENU *sm, char **pText, int iFontSize, int b
 static int obdMenuGetItem(SIMPLEMENU *sm, int iItem, char *szText)
 {
   int x, cx, len;
+
+  if (iItem > sm->iMenuLen)
+     return -1; // invalid request
 
   if (sm->iFontSize == FONT_SMALL)
      cx = 6;
@@ -3081,10 +3141,16 @@ char szTemp[64];
   }
   if (sm->iMenuIndex >= iCount) // needs to scroll up
      iStart = sm->iMenuIndex - (iCount-1);
-  for (i=iFirst; i<=iLast; i++) // draw the visible menu lines
+  if (sm->iMenuIndex < 0 || sm->iMenuIndex+iCount > sm->iMenuLen) { // invalid
+     sm->iMenuIndex = 0;
+     iStart = 0;
+  }
+
+  for (i=iFirst; i<=iLast && i+iStart < sm->iMenuLen; i++) // draw the visible menu lines
   {
     x = obdMenuGetItem(sm, i + iStart + 1, szTemp);
-    obdMenuShowItem(sm->pOBD, x, i+1, szTemp, (i+iStart == sm->iMenuIndex), (iFirst==iLast), sm->iFontSize, (iFirst==iLast));
+    if (x >= 0) // display if valid
+       obdMenuShowItem(sm->pOBD, x, i+1, szTemp, (i+iStart == sm->iMenuIndex), (iFirst==iLast), sm->iFontSize, (iFirst==iLast));
   }
   if (iItem == -1) // now the display it in one shot
     obdDumpBuffer(sm->pOBD, NULL);
@@ -3125,6 +3191,8 @@ char szTemp[64];
      y = iCount;
 
   x = obdMenuGetItem(sm, iItem+1, szTemp);
+  if (x < 0) return; // invalid request
+
   for (i=0; i<3; i++)
   {
     obdMenuShowItem(sm->pOBD, x, y, szTemp, 0, 0, sm->iFontSize, 1); // show non-inverted
@@ -3166,7 +3234,8 @@ int obdMenuDelta(SIMPLEMENU *sm, int iDelta)
     for (i=0; i<iCount; i++)
     {
       x = obdMenuGetItem(sm, i+iStart2+1, szTemp);
-      obdMenuShowItem(sm->pOBD, x, i+1, szTemp, (i+iStart2 == iNewIndex), 1, sm->iFontSize, 0);
+      if (x >= 0)
+         obdMenuShowItem(sm->pOBD, x, i+1, szTemp, (i+iStart2 == iNewIndex), 1, sm->iFontSize, 0);
     }
     obdDumpBuffer(sm->pOBD, NULL);
   }
@@ -3174,10 +3243,12 @@ int obdMenuDelta(SIMPLEMENU *sm, int iDelta)
   {
       i = sm->iMenuIndex - iStart1;
       x = obdMenuGetItem(sm, sm->iMenuIndex+1, szTemp);
-      obdMenuShowItem(sm->pOBD, x, i+1, szTemp, 0, 0, sm->iFontSize, 1);
+      if (x >= 0)
+         obdMenuShowItem(sm->pOBD, x, i+1, szTemp, 0, 0, sm->iFontSize, 1);
       i = iNewIndex - iStart2;
       x = obdMenuGetItem(sm, iNewIndex+1, szTemp);
-      obdMenuShowItem(sm->pOBD, x, i+1, szTemp, 1, 0, sm->iFontSize, 1);
+      if (x >= 0)
+         obdMenuShowItem(sm->pOBD, x, i+1, szTemp, 1, 0, sm->iFontSize, 1);
   }
   sm->iMenuIndex = iNewIndex;
   return iNewIndex;
@@ -3198,11 +3269,14 @@ int iDelta, rc = -1;
 
   if (sm->bIsRotary) { // read the rotary encoder
     if (digitalRead(sm->u8Enter) == sm->iPressed) {
-       rc = sm->iMenuIndex; // user pressed ENTER, return current menu index
+       buttons |= 1; // pressed
+       if (buttons != sm->u8BtnState)
+          rc = sm->iMenuIndex; // user pressed ENTER, return current menu index
     } else { // check for rotary encoder activity
       iDelta = obdMenuReadRotary(sm);
       obdMenuDelta(sm, iDelta);
     }
+    sm->u8BtnState = buttons;
   } else {
 // check the button states
     if (digitalRead(sm->u8Up) == sm->iPressed)

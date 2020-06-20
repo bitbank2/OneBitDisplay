@@ -28,6 +28,7 @@ Features:<br>
 - Virtual displays of any size which can be drawn across multiple physical displays
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
 - Includes 4 sizes of fixed fonts (6x8, 8x8, 16x16, 16x32)<br>
+- Text drawing at any fractional scale (e.g. 1.25x)
 - Can use Adafruit_GFX format bitmap fonts (proportional and fixed)<br>
 - Deferred rendering allows preparing a back buffer, then displaying it (usually faster)<br>
 - Text scrolling features (vertical and horizontal)<br>

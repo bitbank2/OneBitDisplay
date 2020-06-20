@@ -47,7 +47,7 @@ static char *szOnOff[] = {(char *)"Off", (char *)"On"};
 #define MY_OLED OLED_128x64
 uint8_t ucBackBuffer[1024];
 
-// The diisplay structure. Each structure is about 56 bytes
+// The display structure. Each structure is about 56 bytes
 // There is no limit to the number of simultaneous displays which can be controlled by OneBitDisplay 
 OBDISP obd;
 
