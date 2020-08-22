@@ -76,6 +76,24 @@ static int bConnected = 0;
 #endif // _LINUX_
 #include <OneBitDisplay.h>
 
+const uint8_t ucMirror[256] PROGMEM =
+     {0, 128, 64, 192, 32, 160, 96, 224, 16, 144, 80, 208, 48, 176, 112, 240,
+      8, 136, 72, 200, 40, 168, 104, 232, 24, 152, 88, 216, 56, 184, 120, 248,
+      4, 132, 68, 196, 36, 164, 100, 228, 20, 148, 84, 212, 52, 180, 116, 244,
+      12, 140, 76, 204, 44, 172, 108, 236, 28, 156, 92, 220, 60, 188, 124, 252,
+      2, 130, 66, 194, 34, 162, 98, 226, 18, 146, 82, 210, 50, 178, 114, 242,
+      10, 138, 74, 202, 42, 170, 106, 234, 26, 154, 90, 218, 58, 186, 122, 250,
+      6, 134, 70, 198, 38, 166, 102, 230, 22, 150, 86, 214, 54, 182, 118, 246,
+      14, 142, 78, 206, 46, 174, 110, 238, 30, 158, 94, 222, 62, 190, 126, 254,
+      1, 129, 65, 193, 33, 161, 97, 225, 17, 145, 81, 209, 49, 177, 113, 241,
+      9, 137, 73, 201, 41, 169, 105, 233, 25, 153, 89, 217, 57, 185, 121, 249,
+      5, 133, 69, 197, 37, 165, 101, 229, 21, 149, 85, 213, 53, 181, 117, 245,
+      13, 141, 77, 205, 45, 173, 109, 237, 29, 157, 93, 221, 61, 189, 125, 253,
+      3, 131, 67, 195, 35, 163, 99, 227, 19, 147, 83, 211, 51, 179, 115, 243,
+      11, 139, 75, 203, 43, 171, 107, 235, 27, 155, 91, 219, 59, 187, 123, 251,
+      7, 135, 71, 199, 39, 167, 103, 231, 23, 151, 87, 215, 55, 183, 119, 247,
+      15, 143, 79, 207, 47, 175, 111, 239, 31, 159, 95, 223, 63, 191, 127, 255};
+
 const uint8_t ucFont[]PROGMEM = {
 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x06,0x5f,0x5f,0x06,0x00,0x00,
 0x00,0x07,0x07,0x00,0x07,0x07,0x00,0x00,0x14,0x7f,0x7f,0x14,0x7f,0x7f,0x14,0x00,
@@ -581,9 +599,9 @@ static uint8_t u8Cache[MAX_CACHE]; // for faster character drawing
 static volatile uint8_t u8End = 0;
 static void obdCachedFlush(OBDISP *pOBD, int bRender);
 static void obdCachedWrite(OBDISP *pOBD, uint8_t *pData, uint8_t u8Len, int bRender);
-static void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender);
-static void obdWriteCommand(OBDISP *pOBD, unsigned char c);
-static void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender);
+void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender);
+void obdWriteCommand(OBDISP *pOBD, unsigned char c);
+void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
 static void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin);
 // wrapper/adapter functions to make the code work on Linux
@@ -638,8 +656,11 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 #if !defined( __AVR_ATtiny85__ )
   if (pOBD->com_mode == COM_SPI) // we're writing to SPI, treat it differently
   {
-    digitalWrite(pOBD->iDCPin, (pData[0] == 0) ? LOW : HIGH); // data versus command
-    digitalWrite(pOBD->iCSPin, LOW);
+    if (pOBD->type != SHARP_144x168)
+    {
+      digitalWrite(pOBD->iDCPin, (pData[0] == 0) ? LOW : HIGH); // data versus command
+      digitalWrite(pOBD->iCSPin, LOW);
+    }
 #ifdef HAL_ESP32_HAL_H_ 
    {
    uint8_t ucTemp[1024];
@@ -648,7 +669,8 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 #else
     SPI.transfer(&pData[1], iLen-1);
 #endif
-    digitalWrite(pOBD->iCSPin, HIGH);
+    if (pOBD->type != SHARP_144x168)
+      digitalWrite(pOBD->iCSPin, HIGH);
   }
   else // must be I2C
 #endif // !ATtiny85
@@ -843,11 +865,13 @@ int iLen;
   pOBD->iLEDPin = iLED;
   pOBD->type = iType;
   pOBD->flip = bFlip;
+  pOBD->invert = bInvert;
   pOBD->wrap = 0; // default - disable text wrap
   pOBD->com_mode = COM_SPI; // communication mode
-  pinMode(pOBD->iDCPin, OUTPUT);
+  if (pOBD->iDCPin != 0xff) // Note - not needed on Sharp Memory LCDs
+    pinMode(pOBD->iDCPin, OUTPUT);
   pinMode(pOBD->iCSPin, OUTPUT);
-  digitalWrite(pOBD->iCSPin, HIGH);
+  digitalWrite(pOBD->iCSPin, (pOBD->type != SHARP_144x168));
   if (bBitBang)
   {
       pinMode(iMOSI, OUTPUT);
@@ -879,7 +903,13 @@ int iLen;
 
   pOBD->width = 128; // assume 128x64
   pOBD->height = 64;
-  if (iType == LCD_HX1230)
+  if (iType == SHARP_144x168)
+  {
+      pOBD->width = 168;
+      pOBD->height = 144;
+      pOBD->iDCPin = 0xff; // no D/C wire on this display
+  }
+  else if (iType == LCD_HX1230)
   {
       pOBD->width = 96;
       pOBD->height = 68;
@@ -1169,6 +1199,7 @@ int obdUARTInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, unsigned long u
    pOBD->ucScreen = NULL;
    pOBD->type = iType;
    pOBD->flip = bFlip;
+   pOBD->invert = bInvert;
    pOBD->wrap = 0;
    pOBD->com_mode = COM_UART;
    pOBD->width = 128; // DEBUG
@@ -1189,6 +1220,7 @@ int rc = OLED_NOT_FOUND;
   pOBD->ucScreen = NULL; // reset backbuffer; user must provide one later
   pOBD->type = iType;
   pOBD->flip = bFlip;
+  pOBD->invert = bInvert;
   pOBD->wrap = 0; // default - disable text wrap
   pOBD->bbi2c.iSDA = sda;
   pOBD->bbi2c.iSCL = scl;
@@ -1396,7 +1428,7 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
 } /* SPI_BitBang() */
 
 // Send a single byte command to the OLED controller
-static void obdWriteCommand(OBDISP *pOBD, unsigned char c)
+void obdWriteCommand(OBDISP *pOBD, unsigned char c)
 {
 unsigned char buf[4];
 
@@ -1548,15 +1580,16 @@ int obdScrollBuffer(OBDISP *pOBD, int iStartCol, int iEndCol, int iStartRow, int
 // Send commands to position the "cursor" (aka memory write address)
 // to the given row and column
 //
-static void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
+void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
 {
 unsigned char buf[4];
 int iPitch = pOBD->width;
 
-  obdCachedFlush(pOBD, bRender); // flush any cached data first
   if (iPitch < 128) iPitch = 128;
   pOBD->iScreenOffset = (y*iPitch)+x;
-  if (pOBD->type == LCD_VIRTUAL)
+
+  obdCachedFlush(pOBD, bRender); // flush any cached data first
+  if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168)
     return; // nothing to do
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
@@ -1608,7 +1641,7 @@ int iPitch = pOBD->width;
 // Write a block of pixel data to the OLED
 // Length can be anything from 1 to 1024 (whole display)
 //
-static void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender)
+void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender)
 {
 unsigned char ucTemp[132];
 int iPitch, iBufferSize;
@@ -1626,7 +1659,7 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= iBufferSize)
   if (pOBD->iScreenOffset >= iBufferSize)
     pOBD->iScreenOffset -= iBufferSize;
 }
-if (pOBD->type == LCD_VIRTUAL)
+if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168)
   return; // nothing else to do
 // Copying the data has the benefit in SPI mode of not letting
 // the original data get overwritten by the SPI.transfer() function
@@ -2177,6 +2210,8 @@ int iFontWidth;
 
    if (iXScale == 0 || iYScale == 0 || szMsg == NULL || pOBD == NULL || pOBD->ucScreen == NULL || x < 0 || y < 0 || x >= pOBD->width-1 || y >= pOBD->height-1)
       return -1; // invalid display structure
+   if (iSize != FONT_NORMAL && iSize != FONT_SMALL)
+      return -1; // only on the small fonts (for now)
    iFontWidth = (iSize == FONT_SMALL) ? 6:8;
    s = (iSize == FONT_SMALL) ? ucSmallFont : ucFont;
    iPitch = pOBD->width;
@@ -2192,13 +2227,13 @@ int iFontWidth;
       memcpy_P(ucTemp, &s[iFontOff], iFontWidth);
       if (bInvert) InvertBytes(ucTemp, iFontWidth);
       col = 0;
-      if (x+dx >= pOBD->width) // we've hit the right edge
+      if (x+dx >= (uint32_t)pOBD->width) // we've hit the right edge
          dx = pOBD->width - x; // draw partial character
-      for (tx=0; tx<dx; tx++) {
+      for (tx=0; tx<(int)dx; tx++) {
          row = 0;
          uc = ucTemp[col >> 8];
          d = &pOBD->ucScreen[(y >> 3) * iPitch + x + tx];
-         for (ty=0; ty<dy; ty++) {
+         for (ty=0; ty<(int)dy; ty++) {
             bit = row >> 8;
             iOffset = (ty >> 3) * iPitch;
             if (uc & (1 << bit))
@@ -2542,6 +2577,69 @@ int obdDrawGFX(OBDISP *pOBD, uint8_t *pBuffer, int iSrcCol, int iSrcRow, int iDe
     return 0;
 } /* obdDrawGFX() */
 //
+// Special case for Sharp Memory LCD
+//
+static void SharpDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
+{
+int x, y;
+uint8_t c, ucInvert, *s, *d, ucStart;
+uint8_t ucLineBuf[22];
+static uint8_t ucVCOM = 0;
+
+  ucInvert = (pOBD->invert) ? 0x00 : 0xff;
+  digitalWrite(pOBD->iCSPin, HIGH); // active high
+
+  ucStart = 0x80; // write command
+  if (ucVCOM)
+    ucStart |= 0x40; // VCOM bit
+  ucLineBuf[1] = ucStart;
+  // this code assumes I2C, so the first byte is ignored
+  _I2CWrite(pOBD, ucLineBuf, 2); // write command(01) + vcom(02)
+  ucVCOM = !ucVCOM; // need to toggle this each transaction
+
+ // We need to flip and invert the image in code because the Sharp memory LCD
+ // controller only has the simplest of commands for data writing
+  if (pOBD->flip)
+  {
+     for (x=0; x<168; x++) // we have to write the memory in the wrong direction
+     {  
+        s = &pBuffer[x + (17*168)]; // point to last line first
+        d = &ucLineBuf[2];
+        ucLineBuf[1] = pgm_read_byte(&ucMirror[x+1]); // current line number
+        for (y=0; y<144/8; y++) //
+        {  
+           c = s[0] ^ ucInvert; // we need to brute-force invert it
+           *d++ = c;
+           s -= 168;
+        } // for y
+        // write this line to the display
+        ucLineBuf[20] = 0; // end of line
+        _I2CWrite(pOBD, ucLineBuf, 21);
+     } // for x
+  }
+  else // normal orientation
+  {
+     for (x=0; x<168; x++) // we have to write the memory in the wrong direction
+     {
+        s = &pBuffer[167-x]; // point to last line first
+        d = &ucLineBuf[2];
+        ucLineBuf[1] = pgm_read_byte(&ucMirror[x+1]); // current line number
+        for (y=0; y<144/8; y++) // 
+        {
+           c = s[0] ^ ucInvert; // we need to brute-force invert it
+           *d++ = pgm_read_byte(&ucMirror[c]);
+           s += 168;
+        } // for y
+        // write this line to the display
+        ucLineBuf[20] = 0; // end of line
+        _I2CWrite(pOBD, ucLineBuf, 21);
+     } // for x
+  }
+  ucLineBuf[1] = 0;
+  _I2CWrite(pOBD, ucLineBuf, 2); // final transfer
+  digitalWrite(pOBD->iCSPin, LOW); // de-activate
+} /* SharpDumpBuffer() */
+//
 // Dump a screen's worth of data directly to the display
 // Try to speed it up by comparing the new bytes with the existing buffer
 //
@@ -2559,6 +2657,11 @@ uint8_t *pSrc = pOBD->ucScreen;
   if (pBuffer == NULL)
     return; // no backbuffer and no provided buffer
   
+  if (pOBD->type == SHARP_144x168) // special case for Sharp Memory LCD
+  {
+    SharpDumpBuffer(pOBD, pBuffer);
+    return;
+  }
   iLines = pOBD->height >> 3;
   iCols = pOBD->width >> 4;
   for (y=0; y<iLines; y++)
@@ -2597,7 +2700,7 @@ uint8_t y;
 uint8_t iLines;
 
   pOBD->iCursorX = pOBD->iCursorY = 0;
-  if (pOBD->type == LCD_VIRTUAL) // pure memory, handle it differently
+  if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168) // pure memory, handle it differently
   {
      memset(pOBD->ucScreen, ucData, pOBD->width * (pOBD->height/8));
      return;

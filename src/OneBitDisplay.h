@@ -28,7 +28,7 @@ typedef struct {
 typedef struct obdstruct
 {
 uint8_t oled_addr; // requested address or 0xff for automatic detection
-uint8_t wrap, flip, type;
+uint8_t wrap, flip, invert, type;
 uint8_t *ucScreen;
 int iCursorX, iCursorY;
 int width, height;
@@ -105,7 +105,8 @@ enum {
   LCD_UC1701,
   LCD_HX1230,
   LCD_NOKIA5110,
-  LCD_VIRTUAL
+  LCD_VIRTUAL,
+  SHARP_144x168
 };
 
 // Rotation and flip angles to draw tiles
@@ -272,7 +273,9 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
 // When it finishes the last frame, it will start again from the beginning
 //
 uint8_t * obdPlayAnimFrame(OBDISP *pOBD, uint8_t *pAnimation, uint8_t *pCurrent, int iLen);
-
+void obdWriteCommand(OBDISP *pOBD, unsigned char c);
+void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender);
+void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender);
 //
 // Scroll the internal buffer by 1 scanline (up/down)
 // width is in pixels, lines is group of 8 rows
