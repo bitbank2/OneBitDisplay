@@ -594,7 +594,7 @@ const unsigned char uc1701_initbuf[] = {0xe2, 0x40, 0xa0, 0xc8, 0xa2, 0x2c, 0x2e
 const unsigned char hx1230_initbuf[] = {0x2f, 0x90, 0xa6, 0xa4, 0xaf, 0x40, 0xb0, 0x10, 0x00};
 const unsigned char nokia5110_initbuf[] = {0x21, 0xa4, 0xb1, 0x04,0x14,0x20,0x0c};
 
-#define MAX_CACHE 128
+#define MAX_CACHE 192
 static uint8_t u8Cache[MAX_CACHE]; // for faster character drawing
 static volatile uint8_t u8End = 0;
 static void obdCachedFlush(OBDISP *pOBD, int bRender);
@@ -821,7 +821,7 @@ static void LCDPowerUp(OBDISP *pOBD)
     uint8_t *s;
     obdSetDCMode(pOBD, MODE_COMMAND);
     digitalWrite(pOBD->iCSPin, LOW);
-    if (pOBD->type == LCD_UC1701)
+    if (pOBD->type == LCD_UC1701 || pOBD->type == LCD_UC1609)
     {
         s = (uint8_t *)uc1701_initbuf;
         iLen = sizeof(uc1701_initbuf);
@@ -909,6 +909,11 @@ int iLen;
       pOBD->height = 144;
       pOBD->iDCPin = 0xff; // no D/C wire on this display
   }
+  else if (iType == LCD_UC1609)
+  {
+      pOBD->width = 192;
+      pOBD->height = 64;
+  }
   else if (iType == LCD_HX1230)
   {
       pOBD->width = 96;
@@ -995,6 +1000,27 @@ int iLen;
       {
          obdWriteCommand(pOBD, 0xa7); // set inverted pixel mode
       }
+  }
+  if (iType == LCD_UC1609)
+  {
+      obdWriteCommand(pOBD, 0xe2); // system reset
+      obdWriteCommand(pOBD, 0xa0); // set frame rate to 76fps
+      obdWriteCommand(pOBD, 0xeb); // set BR
+      obdWriteCommand(pOBD, 0x2f); // set Power Control
+      obdWriteCommand(pOBD, 0xc4); // set LCD mapping control
+      obdWriteCommand(pOBD, 0x81); // set PM
+      obdWriteCommand(pOBD, 0x90); // set contrast to 144
+      obdWriteCommand(pOBD, 0xaf); // display enable
+      if (bFlip) // flip horizontal + vertical
+      {  
+         obdWriteCommand(pOBD, 0xa1); // set SEG direction (A1 to flip horizontal)       
+         obdWriteCommand(pOBD, 0xc2); // set COM direction (C0 to flip vert)
+      }
+      if (bInvert)
+      {
+         obdWriteCommand(pOBD, 0xa7); // set inverted pixel mode
+      }
+
   }
 } /* obdSPIInit() */
 #endif
@@ -1643,7 +1669,7 @@ int iPitch = pOBD->width;
 //
 void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender)
 {
-unsigned char ucTemp[132];
+unsigned char ucTemp[196];
 int iPitch, iBufferSize;
 
   iPitch = pOBD->width;
@@ -2111,7 +2137,7 @@ uint8_t i;
 } /* InvertBytes() */
 
 //
-// Load a 128x64 1-bpp Windows bitmap
+// Load a 1-bpp Windows bitmap
 // Pass the pointer to the beginning of the BMP file
 // First pass version assumes a full screen bitmap
 //
@@ -2124,8 +2150,6 @@ uint8_t x, y, b, *s, *d;
 uint8_t dst_mask, src_mask;
 uint8_t bFlipped = false;
 
-  if (pOBD->ucScreen == NULL)
-    return -1; // must have a back buffer
   i16 = pgm_read_word(pBMP);
   if (i16 != 0x4d42) // must start with 'BM'
      return -1; // not a BMP file
@@ -2151,7 +2175,14 @@ uint8_t bFlipped = false;
   for (y=0; y<cy; y++)
   {
      dst_mask = 1 << ((y+dy) & 7);
-     d = &pOBD->ucScreen[(((y+dy)>>3)*128)+dx];
+     if (pOBD->ucScreen)
+        d = &pOBD->ucScreen[(((y+dy)>>3)*128)+dx];
+     else
+     {
+        d = u8Cache;
+        if ((y & 7) == 0)
+           memset(u8Cache, 0, sizeof(u8Cache));
+     }
      s = &pBMP[iOffBits + (y*iPitch)];
      src_mask = 0;
      for (x=0; x<cx; x++)
@@ -2171,6 +2202,11 @@ uint8_t bFlipped = false;
         d++;
         src_mask >>= 1;
      } // for x
+     if (pOBD->ucScreen == NULL && ((y & 7) == 7 || y == cy-1)) // dump to LCD
+     {
+       obdSetPosition(pOBD, dx, (y+dy)>>3, 1); 
+       obdWriteDataBlock(pOBD, u8Cache, cx, 1);
+     }
   } // for y
   return 0;
 } /* obdLoadBMP() */
@@ -2556,7 +2592,7 @@ int iPitch;
 //
 // Render a sprite/rectangle of pixels from a provided buffer to the display.
 // The row values refer to byte rows, not pixel rows due to the memory
-// layout of OLEDs.
+// layout of OLEDs and LCDs.
 // returns 0 for success, -1 for invalid parameter
 //
 int obdDrawGFX(OBDISP *pOBD, uint8_t *pBuffer, int iSrcCol, int iSrcRow, int iDestCol, int iDestRow, int iWidth, int iHeight, int iSrcPitch)
@@ -2702,7 +2738,8 @@ uint8_t iLines;
   pOBD->iCursorX = pOBD->iCursorY = 0;
   if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168) // pure memory, handle it differently
   {
-     memset(pOBD->ucScreen, ucData, pOBD->width * (pOBD->height/8));
+     if (pOBD->ucScreen)
+        memset(pOBD->ucScreen, ucData, pOBD->width * (pOBD->height/8));
      return;
   }
   iLines = pOBD->height >> 3;
