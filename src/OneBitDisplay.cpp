@@ -2145,11 +2145,13 @@ int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int dx, int dy, int bInvert)
 {
 int16_t i16, cx, cy;
 int iOffBits; // offset to bitmap data
-int iPitch;
+int iPitch, iDestPitch;
 uint8_t x, y, b, *s, *d;
 uint8_t dst_mask, src_mask;
 uint8_t bFlipped = false;
 
+  iDestPitch = pOBD->width;
+  if (iDestPitch < 128) iDestPitch = 128;
   i16 = pgm_read_word(pBMP);
   if (i16 != 0x4d42) // must start with 'BM'
      return -1; // not a BMP file
@@ -2176,7 +2178,7 @@ uint8_t bFlipped = false;
   {
      dst_mask = 1 << ((y+dy) & 7);
      if (pOBD->ucScreen)
-        d = &pOBD->ucScreen[(((y+dy)>>3)*128)+dx];
+        d = &pOBD->ucScreen[(((y+dy)>>3)*iDestPitch)+dx];
      else
      {
         d = u8Cache;
