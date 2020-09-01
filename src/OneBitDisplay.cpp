@@ -2681,11 +2681,14 @@ static uint8_t ucVCOM = 0;
 //
 void obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
-int x, y;
+int x, y, iPitch;
 int iLines, iCols;
 uint8_t bNeedPos;
 uint8_t *pSrc = pOBD->ucScreen;
     
+  iPitch = pOBD->width;
+  if (iPitch < 128)
+     iPitch = 128;
   if (pOBD->type == LCD_VIRTUAL) // wrong function for this type of display
     return;
   if (pBuffer == NULL) // dump the internal buffer if none is given
@@ -2710,6 +2713,7 @@ uint8_t *pSrc = pOBD->ucScreen;
         if (bNeedPos) // need to reposition output cursor?
         {
            bNeedPos = 0;
+           obdCachedFlush(pOBD, 1);
            obdSetPosition(pOBD, x*16, y, 1);
         }
         obdCachedWrite(pOBD, pBuffer, 16, 1);
@@ -2721,8 +2725,8 @@ uint8_t *pSrc = pOBD->ucScreen;
       pSrc += 16;
       pBuffer += 16;
     } // for x
-    pSrc += (128 - pOBD->width); // for narrow displays, skip to the next line
-    pBuffer += (128 - pOBD->width);
+    pSrc += (iPitch - pOBD->width); // for narrow displays, skip to the next line
+    pBuffer += (iPitch - pOBD->width);
   } // for y
   obdCachedFlush(pOBD, 1);
 } /* obdDumpBuffer() */
@@ -2824,7 +2828,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
            obdWriteDataBlock(pOBD, pStart,  (int)(p-pStart), bRender); // write the row we changed
            x = x1+1; // we've already written the byte at x1
            y1 = y+yinc;
-           p += (yinc > 0) ? 128 : -128;
+           p += (yinc > 0) ? iPitch : -iPitch;
            pStart = p;
            mask = 1 << (y1 & 7);
         }
