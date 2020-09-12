@@ -1611,10 +1611,11 @@ void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
 unsigned char buf[4];
 int iPitch = pOBD->width;
 
+  obdCachedFlush(pOBD, bRender); // flush any cached data first
+	
   if (iPitch < 128) iPitch = 128;
   pOBD->iScreenOffset = (y*iPitch)+x;
-
-  obdCachedFlush(pOBD, bRender); // flush any cached data first
+  
   if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168)
     return; // nothing to do
   if (!bRender)
