@@ -656,7 +656,7 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 #if !defined( __AVR_ATtiny85__ )
   if (pOBD->com_mode == COM_SPI) // we're writing to SPI, treat it differently
   {
-    if (pOBD->type != SHARP_144x168)
+    if (pOBD->iDCPin != 0xff)
     {
       digitalWrite(pOBD->iDCPin, (pData[0] == 0) ? LOW : HIGH); // data versus command
       digitalWrite(pOBD->iCSPin, LOW);
@@ -669,7 +669,7 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 #else
     SPI.transfer(&pData[1], iLen-1);
 #endif
-    if (pOBD->type != SHARP_144x168)
+    if (pOBD->type < SHARP_144x168)
       digitalWrite(pOBD->iCSPin, HIGH);
   }
   else // must be I2C
@@ -761,6 +761,51 @@ int iPitch;
    } // for y
    obdCachedFlush(pOBDDest, 1);
 } /* obdDumpWindow() */
+
+//
+// Write a single line to a Sharp memory LCD
+// You must provide the exact number of bytes needed for a complete line
+// e.g. for the 144x168 display, pSrc must provide 144 pixels (18 bytes) 
+//
+void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine)
+{
+    int x;
+    uint8_t c, ucInvert, *d, ucStart;
+    uint8_t ucLineBuf[54]; // 400 pixels is max supported width = 50 bytes + 4
+    int iPitch = pOBD->width / 8;
+    static int iVCOM = 0;
+
+//    if (pOBD == NULL || pSrc == NULL || pOBD->type < SHARP_144x168)
+//        return; // invalid request
+    if (iLine < 0 || iLine >= pOBD->height)
+        return;
+    
+      ucInvert = (pOBD->invert) ? 0x00 : 0xff;
+      digitalWrite(pOBD->iCSPin, HIGH); // active high
+
+      ucStart = 0x80; // write command
+      iVCOM++;
+      if (iVCOM & 0x100) // flip it every 256 lines
+        ucStart |= 0x40; // VCOM bit
+      ucLineBuf[1] = ucStart;
+      // this code assumes I2C, so the first byte is ignored
+      _I2CWrite(pOBD, ucLineBuf, 2); // write command(01) + vcom(02)
+
+     d = &ucLineBuf[2];
+     ucLineBuf[1] = pgm_read_byte(&ucMirror[iLine+1]); // current line number
+     for (x=0; x<iPitch; x++)
+     {
+         c = pSrc[0] ^ ucInvert; // we need to brute-force invert it
+         *d++ = pgm_read_byte(&ucMirror[c]);
+         pSrc++;
+     } // for x
+    // write this line to the display
+    ucLineBuf[iPitch+2] = 0; // end of line
+    _I2CWrite(pOBD, ucLineBuf, iPitch+3);
+    ucLineBuf[1] = 0;
+    _I2CWrite(pOBD, ucLineBuf, 2); // final transfer
+    digitalWrite(pOBD->iCSPin, LOW); // de-activate
+} /* obdWriteLCDLine() */
 
 static void obdCachedFlush(OBDISP *pOBD, int bRender)
 {
@@ -871,7 +916,7 @@ int iLen;
   if (pOBD->iDCPin != 0xff) // Note - not needed on Sharp Memory LCDs
     pinMode(pOBD->iDCPin, OUTPUT);
   pinMode(pOBD->iCSPin, OUTPUT);
-  digitalWrite(pOBD->iCSPin, (pOBD->type != SHARP_144x168));
+  digitalWrite(pOBD->iCSPin, (pOBD->type < SHARP_144x168)); // set to not-active
   if (bBitBang)
   {
       pinMode(iMOSI, OUTPUT);
@@ -905,8 +950,14 @@ int iLen;
   pOBD->height = 64;
   if (iType == SHARP_144x168)
   {
-      pOBD->width = 168;
-      pOBD->height = 144;
+      pOBD->width = 144;
+      pOBD->height = 168;
+      pOBD->iDCPin = 0xff; // no D/C wire on this display
+  }
+  else if (iType == SHARP_400x240)
+  {
+      pOBD->width = 400;
+      pOBD->height = 240;
       pOBD->iDCPin = 0xff; // no D/C wire on this display
   }
   else if (iType == LCD_UC1609)
@@ -1616,7 +1667,7 @@ int iPitch = pOBD->width;
   if (iPitch < 128) iPitch = 128;
   pOBD->iScreenOffset = (y*iPitch)+x;
   
-  if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168)
+  if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
     return; // nothing to do
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
@@ -1686,7 +1737,7 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= iBufferSize)
   if (pOBD->iScreenOffset >= iBufferSize)
     pOBD->iScreenOffset -= iBufferSize;
 }
-if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168)
+if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
   return; // nothing else to do
 // Copying the data has the benefit in SPI mode of not letting
 // the original data get overwritten by the SPI.transfer() function
@@ -2364,14 +2415,14 @@ unsigned char c, *s, ucTemp[40];
               memcpy_P(ucTemp, s+16, 16);
               if (bInvert) InvertBytes(ucTemp, 16);
               obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
-              if (pOBD->iCursorY <= 5)
+//              if (pOBD->iCursorY <= 5)
               {
                  obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+2, bRender);
                  memcpy_P(ucTemp, s+32, 16);
                  if (bInvert) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               }
-              if (pOBD->iCursorY <= 4)
+//              if (pOBD->iCursorY <= 4)
               {
                  obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+3, bRender);
                  memcpy_P(ucTemp, s+48, 16);
@@ -2622,12 +2673,16 @@ static void SharpDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
 int x, y;
 uint8_t c, ucInvert, *s, *d, ucStart;
-uint8_t ucLineBuf[22];
+uint8_t ucLineBuf[56];
+int iPitch = pOBD->width / 8;
 static uint8_t ucVCOM = 0;
+int iBit;
+uint8_t ucMask;
 
   ucInvert = (pOBD->invert) ? 0x00 : 0xff;
   digitalWrite(pOBD->iCSPin, HIGH); // active high
-
+ 
+    ucLineBuf[0] = 0;
   ucStart = 0x80; // write command
   if (ucVCOM)
     ucStart |= 0x40; // VCOM bit
@@ -2640,38 +2695,51 @@ static uint8_t ucVCOM = 0;
  // controller only has the simplest of commands for data writing
   if (pOBD->flip)
   {
-     for (x=0; x<168; x++) // we have to write the memory in the wrong direction
+     for (y=0; y<pOBD->height; y++) // we have to write the memory in the wrong direction
      {  
-        s = &pBuffer[x + (17*168)]; // point to last line first
+         ucMask = 0x80 >> (y & 7);
+        s = &pBuffer[pOBD->width - 1 + (pOBD->width * ((pOBD->height - 1 - y) >> 3))]; // point to last line first
         d = &ucLineBuf[2];
-        ucLineBuf[1] = pgm_read_byte(&ucMirror[x+1]); // current line number
-        for (y=0; y<144/8; y++) //
+        ucLineBuf[1] = pgm_read_byte(&ucMirror[y+1]); // current line number
+        for (x=0; x<pOBD->width/8; x++)
         {  
-           c = s[0] ^ ucInvert; // we need to brute-force invert it
+           c = ucInvert; // we need to brute-force invert it
+            for (iBit=7; iBit>=0; iBit--)
+            {
+                if (s[0] & ucMask)
+                    c ^= (1 << iBit);
+                s--;
+            }
            *d++ = c;
-           s -= 168;
         } // for y
         // write this line to the display
-        ucLineBuf[20] = 0; // end of line
-        _I2CWrite(pOBD, ucLineBuf, 21);
+        ucLineBuf[iPitch+2] = 0; // end of line
+        _I2CWrite(pOBD, ucLineBuf, iPitch+3);
      } // for x
   }
   else // normal orientation
   {
-     for (x=0; x<168; x++) // we have to write the memory in the wrong direction
+     for (y=0; y<pOBD->height; y++) // we have to write the memory in the wrong direction
      {
-        s = &pBuffer[167-x]; // point to last line first
+        ucMask = 1 << (y & 7);
+        s = &pBuffer[pOBD->width * (y >> 3)]; // point to last line first
         d = &ucLineBuf[2];
-        ucLineBuf[1] = pgm_read_byte(&ucMirror[x+1]); // current line number
-        for (y=0; y<144/8; y++) // 
+        
+        ucLineBuf[1] = pgm_read_byte(&ucMirror[y+1]); // current line number
+        for (x=0; x<pOBD->width/8; x++)
         {
-           c = s[0] ^ ucInvert; // we need to brute-force invert it
-           *d++ = pgm_read_byte(&ucMirror[c]);
-           s += 168;
+            c = ucInvert;
+            for (iBit=7; iBit>=0; iBit--)
+            {
+                if (s[0] & ucMask)
+                    c ^= (1 << iBit);
+                s++;
+            }
+           *d++ = c;
         } // for y
         // write this line to the display
-        ucLineBuf[20] = 0; // end of line
-        _I2CWrite(pOBD, ucLineBuf, 21);
+        ucLineBuf[iPitch+2] = 0; // end of line
+        _I2CWrite(pOBD, ucLineBuf, iPitch+3);
      } // for x
   }
   ucLineBuf[1] = 0;
@@ -2699,7 +2767,7 @@ uint8_t *pSrc = pOBD->ucScreen;
   if (pBuffer == NULL)
     return; // no backbuffer and no provided buffer
   
-  if (pOBD->type == SHARP_144x168) // special case for Sharp Memory LCD
+  if (pOBD->type >= SHARP_144x168) // special case for Sharp Memory LCD
   {
     SharpDumpBuffer(pOBD, pBuffer);
     return;
@@ -2743,7 +2811,7 @@ uint8_t y;
 uint8_t iLines;
 
   pOBD->iCursorX = pOBD->iCursorY = 0;
-  if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168) // pure memory, handle it differently
+  if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168) // pure memory, handle it differently
   {
      if (pOBD->ucScreen)
         memset(pOBD->ucScreen, ucData, pOBD->width * (pOBD->height/8));

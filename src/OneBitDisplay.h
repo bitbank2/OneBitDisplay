@@ -107,7 +107,8 @@ enum {
   LCD_HX1230,
   LCD_NOKIA5110,
   LCD_VIRTUAL,
-  SHARP_144x168
+  SHARP_144x168,
+  SHARP_400x240
 };
 
 // Rotation and flip angles to draw tiles
@@ -146,6 +147,12 @@ void obdCreateVirtualDisplay(OBDISP *pOBD, int width, int height, uint8_t *buffe
 // The source top/bot edges can be on pixel boundaries
 //
 void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int destx, int desty, int width, int height);
+//
+// Write a single line to a Sharp memory LCD
+// You must provide the exact number of bytes needed for a complete line
+// e.g. for the 144x168 display, pSrc must provide 144 pixels (18 bytes)
+//
+void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine);
 //
 // Initializes a virtual display over BLE
 // Currently only OLED_128x64 is supported
