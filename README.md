@@ -49,6 +49,12 @@ https://github.com/bitbank2/BitBang_I2C
 See the Wiki for help getting started<br>
 https://github.com/bitbank2/OneBitDisplay/wiki <br>
 <br>
+
+![Sharp Memory LCD](/sharp_lcd.jpg?raw=true "Sharp_LCD")
+Sharp Memory LCD Support<br>
+------------------------<br>
+New - support for the Sharp 144x168 and 400x240 memory LCDs. These are a different type of LCD that have a high refresh rate and low power usage. They cost quite a bit more than normal LCDs. They require a memory back buffer to use the drawing functions due to the way data is written to them one line at a time. I've also added a specific function if you would like to skip the back buffer - `obdWriteLCDLine()`. It allows you to write a single line of pixels without needing any additional memory. Please see the Wiki for more details.<br>
+
 Instructions for use:<br>
 ---------------------<br>
 Start by initializing the library. Either using hardware I2C, bit-banged I2C or SPI to talk to the display. For I2C, the
