@@ -28,7 +28,7 @@ Features:<br>
 - Supports 144x168 and 400x240 Sharp Memory LCDs<br>
 - Virtual displays of any size which can be drawn across multiple physical displays
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
-- Includes 4 sizes of fixed fonts (6x8, 8x8, 16x16, 16x32)<br>
+- Includes 5 sizes of fixed fonts (6x8, 8x8, 12x16, 16x16, 16x32)<br>
 - Text drawing at any fractional scale (e.g. 1.25x)
 - Can use Adafruit_GFX format bitmap fonts (proportional and fixed)<br>
 - Deferred rendering allows preparing a back buffer, then displaying it (usually faster)<br>
@@ -49,6 +49,12 @@ https://github.com/bitbank2/BitBang_I2C
 See the Wiki for help getting started<br>
 https://github.com/bitbank2/OneBitDisplay/wiki <br>
 <br>
+
+![Fonts](/fonts_opt.jpg?raw=true "fonts")
+A few words about fonts<br>
+-----------------------<br>
+
+The library includes 3 fixed fonts (6x8, 8x8 and 16x32). The 16x32 font is disabled when compiling for AVR targets (e.g. Arduino Uno) to save FLASH program space. The other 2 fonts offer 2x stretched versions (12x16 from 6x8 and 16x16 from 8x8). A simple smoothing algorithm is applied to the stretched 6x8 font to make it look better. In the photo above are the first 4 font sizes shown on a 128x64 yellow OLED display. Only 96 ASCII characters are defined per font to save space. To use more elaborate fonts with more extensive character support, use Adafruit_GFX format bitmap fonts with the `obdWriteStringCustom()` function.<br>
 
 ![Sharp Memory LCD](/sharp_lcd.jpg?raw=true "Sharp_LCD")
 Sharp Memory LCD Support<br>
