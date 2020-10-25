@@ -33,7 +33,7 @@ int rc;
 //void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI, int iCLK, int iLED, int bFlip, int bInvert, int iBitBang, int32_t iSpeed);
   obdSPIInit(&obd, LCD_UC1609, DC_PIN, CS_PIN, RESET_PIN, MOSI_PIN, SCK_PIN, -1, 0, 0, 0, 4000000);
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0,0,0,(char *)"UC1701 192x64 LCD Demo", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0,0,0,(char *)"UC1701 192x64 LCD Demo", FONT_8x8, 0, 1);
   delay(4000);
   rc = obdLoadBMP(&obd, (uint8_t *)uc1609, 0, 0, 0);
   if (rc != 0)
@@ -58,7 +58,7 @@ void loop() {
   
 #ifdef DRAW_ELLIPSES
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Ellipses", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Ellipses", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd, 0, 1);
   ulTime = micros();
@@ -73,14 +73,14 @@ void loop() {
   }
   ulTime = micros() - ulTime;
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"100 frames drawn", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"100 frames drawn", FONT_8x8, 0, 1);
   sprintf(szTemp, "in %d ms", (int)(ulTime/1000));
-  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_8x8, 0, 1);
   sprintf(szTemp, "%d FPS", 100000000 / (ulTime));
-  obdWriteString(&obd, 0, 0, 2, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 2, szTemp, FONT_8x8, 0, 1);
   delay(4000);
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Ellipses", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Ellipses", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd, 0, 1);
   ulTime = micros();
@@ -96,18 +96,18 @@ void loop() {
   }
   ulTime = micros() - ulTime;
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"100 frames drawn", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"100 frames drawn", FONT_8x8, 0, 1);
   sprintf(szTemp, "in %d ms", (int)(ulTime/1000));
-  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_8x8, 0, 1);
   sprintf(szTemp, "%d FPS", 100000000 / (ulTime));
-  obdWriteString(&obd, 0, 0, 2, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 2, szTemp, FONT_8x8, 0, 1);
   delay(4000);
 
 #endif // DRAW_ELLIPSES
 
 #ifdef DRAW_RECTS
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Rectangles", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Rectangles", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd, 0, 1);
   ulTime = micros();
@@ -122,14 +122,14 @@ void loop() {
   }
   ulTime = micros() - ulTime;
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"100 frames drawn", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"100 frames drawn", FONT_8x8, 0, 1);
   sprintf(szTemp, "in %d ms", (int)(ulTime/1000));
-  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_8x8, 0, 1);
   sprintf(szTemp, "%d FPS", 100000000 / (ulTime));
-  obdWriteString(&obd, 0, 0, 2, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 2, szTemp, FONT_8x8, 0, 1);
   delay(4000);
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Rects", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Rects", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd, 0, 1);
   ulTime = micros();
@@ -145,16 +145,16 @@ void loop() {
   }
   ulTime = micros() - ulTime;
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"100 frames drawn", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"100 frames drawn", FONT_8x8, 0, 1);
   sprintf(szTemp, "in %d ms", (int)(ulTime/1000));
-  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_8x8, 0, 1);
   sprintf(szTemp, "%d FPS", 100000000 / (ulTime));
-  obdWriteString(&obd, 0, 0, 2, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 2, szTemp, FONT_8x8, 0, 1);
   delay(4000);
 #endif // DRAW_RECTS
 #ifdef DRAW_TEXT
   obdFill(&obd,0,1);
-  obdWriteString(&obd,0,0,0,(char *)"Small Font", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd,0,0,0,(char *)"Small Font", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd,0,1);
   ulTime = micros();
@@ -173,17 +173,17 @@ void loop() {
            x++;
            if (x >= 26) x -= 26;
         }
-        obdWriteString(&obd, 0,0,y,szTemp, FONT_SMALL, 0, 1);
+        obdWriteString(&obd, 0,0,y,szTemp, FONT_6x8, 0, 1);
      } // for y
   }
   ulTime = micros() - ulTime;
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"16800 chars", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"16800 chars", FONT_8x8, 0, 1);
   sprintf(szTemp, "in %d ms", (int)(ulTime/1000));
-  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_8x8, 0, 1);
   delay(4000);
   obdFill(&obd,0,1);
-  obdWriteString(&obd,0,0,0,(char *)"Normal Font", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd,0,0,0,(char *)"Normal Font", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd,0,1);
   ulTime = micros();
@@ -202,14 +202,14 @@ void loop() {
            x++;
            if (x >= 26) x -= 26;
         }
-        obdWriteString(&obd, 0,0,y,szTemp, FONT_NORMAL, 0, 1);
+        obdWriteString(&obd, 0,0,y,szTemp, FONT_8x8, 0, 1);
      } // for y
   }
   ulTime = micros() - ulTime;
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"12800 chars", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"12800 chars", FONT_8x8, 0, 1);
   sprintf(szTemp, "in %d ms", (int)(ulTime/1000));
-  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 1, szTemp, FONT_8x8, 0, 1);
   delay(4000);
 #endif // DRAW_TEXT
 } /* loop() */

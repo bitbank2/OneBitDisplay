@@ -84,13 +84,20 @@ typedef enum
 // These are defined the same in my SPI_LCD library
 #ifndef SPI_LCD_H
 
-// 4 possible font sizes: 8x8, 16x32, 6x8, 16x16 (stretched from 8x8)
+// 5 possible font sizes: 8x8, 16x32, 6x8, 12x16 (stretched from 6x8 with smoothing), 16x16 (stretched from 8x8)
 enum {
-   FONT_NORMAL = 0,
-   FONT_LARGE,
-   FONT_SMALL,
-   FONT_STRETCHED
+   FONT_6x8 = 0,
+   FONT_8x8,
+   FONT_12x16,
+   FONT_16x16,
+   FONT_16x32,
+   FONT_COUNT
 };
+// For backwards compatibility, keep the old names valid
+#define FONT_NORMAL FONT_8x8
+#define FONT_SMALL FONT_6x8
+#define FONT_STRETCHED FONT_16x16
+#define FONT_LARGE FONT_16x32
 #endif
 
 // Display type for init function

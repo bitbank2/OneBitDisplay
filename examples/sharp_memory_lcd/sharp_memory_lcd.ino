@@ -18,7 +18,7 @@ void setup() {
   obdSPIInit(&obd, SHARP_400x240, DC_PIN, CS_PIN, RESET_PIN, MOSI_PIN, CLK_PIN, LED_PIN, FLIP180, INVERT, BITBANG, 8000000L);
   obdSetBackBuffer(&obd, ucBackBuf);
   obdFill(&obd, 0, 0);
-  obdWriteString(&obd,0,0,0,(char *)"Sharp Memory LCD Demo!", FONT_STRETCHED, 0, 0);
+  obdWriteString(&obd,0,0,0,(char *)"Sharp Memory LCD Demo!", FONT_16x16, 0, 0);
   obdDumpBuffer(&obd, NULL);
 }
 

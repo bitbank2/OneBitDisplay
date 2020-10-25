@@ -19,7 +19,7 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  obdWriteString(&obd, 0, 0, 0, (char *)"Hello World!", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Hello World!", FONT_8x8, 0, 1);
   while (1)
   {
     

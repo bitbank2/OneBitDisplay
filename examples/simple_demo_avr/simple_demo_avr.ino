@@ -31,8 +31,8 @@ void setup()
         };
 
         obdFill(&obd, 0, 1);
-        obdWriteString(&obd, 0, 0, 0, (char *)"OLED found:", FONT_NORMAL, 0, 1);
-        obdWriteString(&obd, 0, 10, 2, msgs[rc], FONT_NORMAL, 0, 1);
+        obdWriteString(&obd, 0, 0, 0, (char *)"OLED found:", FONT_8x8, 0, 1);
+        obdWriteString(&obd, 0, 10, 2, msgs[rc], FONT_8x8, 0, 1);
         delay(3000);
     }
 }
@@ -42,10 +42,10 @@ void loop()
     int i, x, y;
 
     obdFill(&obd, 0, 1);
-    obdWriteString(&obd, 0, 28, 0,(char *)"OLED Demo", FONT_NORMAL, 0, 1);
-    obdWriteString(&obd, 0, 0, 1,(char *)"Written by Larry Bank", FONT_SMALL, 1, 1);
-    obdWriteString(&obd, 0, 0, 3,(char *)"**Demo**", FONT_STRETCHED, 0, 1);
-    obdWriteString(&obd, 0, 9, 6,(char *)"for AVR", FONT_STRETCHED, 0, 1);
+    obdWriteString(&obd, 0, 28, 0,(char *)"OLED Demo", FONT_8x8, 0, 1);
+    obdWriteString(&obd, 0, 0, 1,(char *)"Written by Larry Bank", FONT_6x8, 1, 1);
+    obdWriteString(&obd, 0, 0, 3,(char *)"**Demo**", FONT_16x16, 0, 1);
+    obdWriteString(&obd, 0, 9, 6,(char *)"for AVR", FONT_16x16, 0, 1);
 
     delay(2000);
     obdFill(&obd, 0, 1);

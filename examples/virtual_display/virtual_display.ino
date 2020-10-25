@@ -134,7 +134,7 @@ rc = obdI2CInit(&obRight, OLED_128x64, -1, 0, 0,0,WM_IO_PB_11, WM_IO_PA_00,-1,12
   {
     char *msgs[] = {(char *)"SSD1306 @ 0x3C", (char *)"SSD1306 @ 0x3D",(char *)"SH1106 @ 0x3C",(char *)"SH1106 @ 0x3D"};
     obdFill(&obLeft, 0, 1);
-    obdWriteString(&obLeft,0,0,0,msgs[rc], FONT_NORMAL, 0, 1);
+    obdWriteString(&obLeft,0,0,0,msgs[rc], FONT_8x8, 0, 1);
     delay(2000);
   }
 }
@@ -146,9 +146,9 @@ unsigned long ms;
 int xpos[NUM_SPRITES], ypos[NUM_SPRITES], index[NUM_SPRITES], velocity[NUM_SPRITES];
 
   obdFill(&obLeft,0x0, 1);
-  obdWriteString(&obLeft,0,16,0,(char *)"ss_oled Demo", FONT_NORMAL, 0, 1);
-  obdWriteString(&obLeft,0,0,1,(char *)"Written by Larry Bank", FONT_SMALL, 1, 1);
-  obdWriteString(&obLeft,0,0,3,(char *)"**Demo**", FONT_LARGE, 0, 1);
+  obdWriteString(&obLeft,0,16,0,(char *)"ss_oled Demo", FONT_8x8, 0, 1);
+  obdWriteString(&obLeft,0,0,1,(char *)"Written by Larry Bank", FONT_6x8, 1, 1);
+  obdWriteString(&obLeft,0,0,3,(char *)"**Demo**", FONT_16x32, 0, 1);
   delay(2000);
 
 // Sprites
