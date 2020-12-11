@@ -1,4 +1,4 @@
-// Sharp Memory LCD (144x168)
+// Sharp Memory LCD (400x240)
 
 #include <OneBitDisplay.h>
 
@@ -15,6 +15,11 @@ OBDISP obd;
 uint8_t ucBackBuf[400*240/8];
 
 void setup() {
+  // Note: to use the display make sure to pull DISP pin high (if you are not using a breakout board that does this for you:
+  // #define DISPLAY_PIN <pinNumber>  
+  // pinMode(DISPLAY_PIN, OUTPUT);
+  // digitalWrite(DISPLAY_PIN, HIGH);
+  
   obdSPIInit(&obd, SHARP_400x240, DC_PIN, CS_PIN, RESET_PIN, MOSI_PIN, CLK_PIN, LED_PIN, FLIP180, INVERT, BITBANG, 8000000L);
   obdSetBackBuffer(&obd, ucBackBuf);
   obdFill(&obd, 0, 0);
