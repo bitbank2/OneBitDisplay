@@ -1001,7 +1001,11 @@ int iLen;
         //  SPI.setClockDivider(16);
         //  SPI.setBitOrder(MSBFIRST);
         //  SPI.setDataMode(SPI_MODE0);
+    } else {
+        SPI.begin(iCLK, 0, iMOSI, iCS);
+        SPI.beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
     }
+
 
   pOBD->width = 128; // assume 128x64
   pOBD->height = 64;
