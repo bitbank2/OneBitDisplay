@@ -38,37 +38,6 @@ static int file_i2c = 0;
 #endif
 #include <SPI.h>
 
-#ifdef HAL_ESP32_HAL_H_
-// Bluetooth support
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-static BLEUUID serviceUUID("0000fea0-0000-1000-8000-00805f9b34fb"); //Service 
-static BLEUUID dataUUID("0000fea1-0000-1000-8000-00805f9b34fb"); // data characteristic
-static BLEUUID nameUUID("0000fea2-0000-1000-8000-00805f9b34fb"); // name characteristic
-std::string VD_BLE_Name = "VirtualDisplay";
-char Scanned_BLE_Name[32];
-String Scanned_BLE_Address;
-BLEScanResults foundDevices;
-static BLEAddress *Server_BLE_Address;
-volatile boolean paired = false; //boolean variable to togge light
-BLEServer *pServer;
-BLEScan *pBLEScan;
-BLEService *pService;
-BLERemoteCharacteristic *pCharacteristicData, *pCharacteristicName;
-static int bConnected = 0;
-#endif // HAL_ESP32_HAL_H_
-
-// Bluetooth support for Nano 33 BLE
-#ifdef ARDUINO_ARDUINO_NANO33BLE
-#include <ArduinoBLE.h>
-
-static BLEDevice peripheral;
-static BLEService prtService;
-static BLECharacteristic pCharacteristicData, pCharacteristicName;
-static int bConnected = 0;
-#endif // Nano 33 BLE
-
 #endif // _LINUX_
 #include <OneBitDisplay.h>
 
@@ -1132,217 +1101,6 @@ int iLen;
   }
 } /* obdSPIInit() */
 #endif
-// Currently only supported on ESP32
-#ifdef HAL_ESP32_HAL_H_
-// Called for each device found during a BLE scan by the client
-class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks
-{
-    void onResult(BLEAdvertisedDevice advertisedDevice) {
-      Serial.printf("Scan Result: %s \n", advertisedDevice.toString().c_str());
-      if (Scanned_BLE_Name[0] == 0 && strcmp(VD_BLE_Name.c_str(), advertisedDevice.getName().c_str()) == 0) { // this is what we want
-        Server_BLE_Address = new BLEAddress(advertisedDevice.getAddress());
-        Scanned_BLE_Address = Server_BLE_Address->toString().c_str();
-        strcpy(Scanned_BLE_Name, advertisedDevice.getName().c_str());
-        Serial.printf("Found what we're looking for!\n");
-        pBLEScan->stop(); // stop scanning
-      }
-    }
-};
-
-// When the scan has found the BLE server device name we're looking for, we try to connect
-bool connectToserver (BLEAddress pAddress)
-{
-    BLEClient*  pClient  = BLEDevice::createClient();
-    Serial.println(" - Created client");
-
-    // Connect to the BLE Server.
-    pClient->connect(pAddress, BLE_ADDR_TYPE_RANDOM); // needed for iOS/Android/MacOS
-    Serial.print(" - Connected to "); Serial.println(VD_BLE_Name.c_str());
-    // Obtain a reference to the service we are after in the remote BLE server.
-    BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
-    Serial.println("Returned from getService()");
-    if (pRemoteService != NULL)
-    {
-      Serial.println(" - Found our service");
-      if (pClient->isConnected())
-      {
-        Serial.println(" - We're connected");
-    // Obtain a reference to the characteristic in the service of the remote BLE server.
-        pCharacteristicData = pRemoteService->getCharacteristic(dataUUID);
-        if (pCharacteristicData != nullptr)
-        {
-          Serial.println(" - Found our data characteristic");
-        }
-        pCharacteristicName = pRemoteService->getCharacteristic(nameUUID);
-        if (pCharacteristicName != nullptr)
-        {
-          Serial.println(" - Found our name characteristic");
-        }
-        return true;
-      } // client is connected
-   } // if remote service is not NULL
-   return false;
-} /* connectToserver() */
-
-//
-// Initialize the BLE connection to the virtual display server
-//
-static int _BLEInit(char *name)
-{
-
-    bConnected = 0;
-    pCharacteristicData = NULL;
-    pCharacteristicName = NULL;
-    BLEDevice::init("OneBitDisplay");
-    Scanned_BLE_Name[0] = 0;
-    pBLEScan = BLEDevice::getScan(); //create new scan
-    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks()); //Call the class that is defined above
-    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
-   foundDevices = pBLEScan->start(3); //Scan for 3 seconds to find the Fitness band
-
-  while (!paired && foundDevices.getCount() >= 1)
-  {
-    if (strcmp(Scanned_BLE_Name,VD_BLE_Name.c_str()) == 0) // found the device we want
-    {
-//      pBLEScan->stop(); // stop scanning
-      yield();
-      Serial.println("Found Device :-)... connecting to Server as client");
-      Scanned_BLE_Name[0] = 0; // don't reconnect until we scan again
-      if (connectToserver(*Server_BLE_Address))
-      {
-      paired = true;
-      break;
-      }
-    }
-  }
-    if (pCharacteristicName != nullptr)
-    {
-      bConnected = 1;
-      pCharacteristicName->writeValue((uint8_t *)name, strlen(name), false); // we don't expect a response
-    }
-  return 0;
-} /* _BLEInit() */
-#endif // ESP32
-
-#ifdef ARDUINO_ARDUINO_NANO33BLE
-//
-// Initialize the BLE connection to the virtual display server
-//
-static int _BLEInit(char *name)
-{
-unsigned long ulTime;
-int bFound = 0;
-
-Serial.println("Entering _BLEInit()");
-
-    bConnected = 0;
-    Serial.println("About to call BLE.begin()");
-    BLE.begin();
-    BLE.setLocalName("Nano33BLE");
-    Serial.println("About to start scan");
-    BLE.scanForName("VirtualDisplay", true);
-    ulTime = millis();
-    while (!bFound && (millis() - ulTime) < 5000UL)
-    {
-    // check if a peripheral has been discovered
-        peripheral = BLE.available();
-        if (peripheral)
-        {
-        // discovered a peripheral, print out address, local name, and advertised service
-            Serial.print("Found ");
-            Serial.print(peripheral.address());
-            Serial.print(" '");
-            Serial.print(peripheral.localName());
-            Serial.print("' ");
-            Serial.print(peripheral.advertisedServiceUuid());
-            Serial.println();
-            if (memcmp(peripheral.localName().c_str(), "VirtualDisplay", 14) == 0)
-            { // found the one we're looking for
-               BLE.stopScan();
-               bFound = 1;
-            } // found it in scan
-        } // peripheral located
-        else
-        {
-           delay(50);
-        }
-    } // while scanning
-    if (bFound)
-    {
-       // Connect to the BLE Server.
-       Serial.println("connection attempt...");
-       if (peripheral.connect())
-       {
-          Serial.println("Connected!");
-          peripheral.discoverAttributes();
-          if (peripheral.discoverService("fea0"))
-          {
-             Serial.println("Discovered fea0 service");
-             prtService = peripheral.service("0000fea0-0000-1000-8000-00805f9b34fb"); // get the virtual display service
-             if (prtService)
-//             if (1)
-             {
-                Serial.println("Got the service");
-                pCharacteristicData = prtService.characteristic("0000fea1-0000-1000-8000-00805f9b34fb");
-                pCharacteristicName = prtService.characteristic("0000fea2-0000-1000-8000-00805f9b34fb");
-                if (pCharacteristicData)
-                {
-                    Serial.println("Got the characteristics");
-                    Serial.print("Properties = 0x");
-                    Serial.println(pCharacteristicData.properties(), HEX);
-                    bConnected = 1;
-                }
-             } else {
-               Serial.println("Couldn't get service");
-             }
-          }
-       }
-    }
-    if (bConnected)
-    {
-      pCharacteristicName.writeValue((uint8_t *)name, strlen(name)); // we don't expect a response
-    }
-  return 0;
-} /* _BLEInit() */
-#endif // Nano 33 BLE
-#if defined(HAL_ESP32_HAL_H_) || defined (ARDUINO_ARDUINO_NANO33BLE)
-//
-// Initializes a virtual display over BLE
-// Currently only OLED_128x64 is supported
-//
-int obdBLEInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, char *name)
-{
-   pOBD->ucScreen = NULL;
-   pOBD->type = iType;
-   pOBD->flip = bFlip;
-   pOBD->wrap = 0;
-   pOBD->com_mode = COM_BLE; // Bluetooth Low Energy mode
-   pOBD->width = 128; // DEBUG
-   pOBD->height = 64;
-
-   return _BLEInit(name); // initialize the BLE connection
-} /* obdBLEInit() */
-#endif // ESP32 and Nano 33 BLE 
-//
-// Initializes a virtual display over UART
-// Currently only OLED_128x64 is supported
-//
-#ifndef W600_EV
-int obdUARTInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, unsigned long ulSpeed)
-{
-   pOBD->ucScreen = NULL;
-   pOBD->type = iType;
-   pOBD->flip = bFlip;
-   pOBD->invert = bInvert;
-   pOBD->wrap = 0;
-   pOBD->com_mode = COM_UART;
-   pOBD->width = 128; // DEBUG
-   pOBD->height = 64;
-   Serial.begin(ulSpeed);
-
-   return 0;
-} /* obdUARTInit() */
-#endif // W600_EV
 //
 // Initializes the OLED controller into "page mode"
 //
@@ -1582,31 +1340,10 @@ void obdWriteCommand(OBDISP *pOBD, unsigned char c)
 {
 unsigned char buf[4];
 
-#if defined(HAL_ESP32_HAL_H_) || defined (ARDUINO_ARDUINO_NANO33BLE)
-  if (pOBD->com_mode == COM_BLE) { // Bluetooth
-      buf[0] = 0x00; // cmd
-      buf[1] = c; // command byte
-      if (bConnected) {
-#ifdef HAL_ESP32_HAL_H_
-         pCharacteristicData->writeValue(buf, 2, false);
-#else
-         pCharacteristicData.writeValue(buf, 2);
-#endif
-      }
-  }
-#endif // ESP32 & Nano 33
-
   if (pOBD->com_mode == COM_I2C) {// I2C device
       buf[0] = 0x00; // command introducer
       buf[1] = c;
       _I2CWrite(pOBD, buf, 2);
-#ifndef W600_EV
-  } else if (pOBD->com_mode == COM_UART) {
-      buf[0] = 2; // length of data to com
-      buf[1] = 0x00; // command
-      buf[2] = c; // command byte
-      Serial.write(buf, 3);
-#endif // W600_EV
   } else { // must be SPI
       obdSetDCMode(pOBD, MODE_COMMAND);
       digitalWrite(pOBD->iCSPin, LOW);
@@ -1623,34 +1360,11 @@ static void obdWriteCommand2(OBDISP *pOBD, unsigned char c, unsigned char d)
 {
 unsigned char buf[4];
 
-#if defined(HAL_ESP32_HAL_H_) || defined (ARDUINO_ARDUINO_NANO33BLE)
-    if (pOBD->com_mode == COM_BLE) { // Bluetooth
-        buf[0] = 0x00; // cmd
-        buf[1] = c; // command byte
-        buf[2] = d;
-        if (bConnected) {
-#ifdef HAL_ESP32_HAL_H_
-           pCharacteristicData->writeValue(buf, 3, false);
-#else
-           pCharacteristicData.writeValue(buf, 3);
-#endif
-        }
-    }
-#endif // ESP32 & Nano 33
-
     if (pOBD->com_mode == COM_I2C) {// I2C device
         buf[0] = 0x00;
         buf[1] = c;
         buf[2] = d;
         _I2CWrite(pOBD, buf, 3);
-#ifndef W600_EV
-    } else if (pOBD->com_mode == COM_UART) {
-        buf[0] = 3; // length
-        buf[1] = 0x00;
-        buf[2] = c;
-        buf[3] = d;
-        Serial.write(buf, 4);
-#endif // W600_EV
     } else { // must be SPI
         obdWriteCommand(pOBD, c);
         obdWriteCommand(pOBD, d);
@@ -1816,20 +1530,6 @@ if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
 // the original data get overwritten by the SPI.transfer() function
   if (bRender)
   {
-#if defined(HAL_ESP32_HAL_H_) || defined (ARDUINO_ARDUINO_NANO33BLE)
-      if (pOBD->com_mode == COM_BLE) { // Bluetooth
-          if (bConnected) {
-             ucTemp[0] = 0x40; // data command
-             memcpy(&ucTemp[1], ucBuf, iLen);
-#ifdef HAL_ESP32_HAL_H_
-             pCharacteristicData->writeValue(ucTemp, iLen+1, false);
-#else
-             pCharacteristicData.writeValue(ucTemp, iLen+1);
-#endif
-          }
-      }
-#endif // ESP32 & Nano 33
-
       if (pOBD->com_mode == COM_SPI) // SPI/Bit Bang
       {
           digitalWrite(pOBD->iCSPin, LOW);
@@ -1839,15 +1539,6 @@ if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
             SPI.transfer(ucBuf, iLen);
           digitalWrite(pOBD->iCSPin, HIGH);
       }
-#ifndef W600_EV
-      else if (pOBD->com_mode == COM_UART)
-      {
-          ucTemp[0] = iLen+1; // data length
-          ucTemp[1] = 0x40;
-          memcpy(&ucTemp[2], ucBuf, iLen);
-          Serial.write(ucTemp, iLen+2);
-      }
-#endif // W600_EV
       else // I2C
       {
           ucTemp[0] = 0x40; // data command

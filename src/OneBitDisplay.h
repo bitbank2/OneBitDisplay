@@ -77,8 +77,6 @@ typedef enum
 {
   COM_I2C = 0,
   COM_SPI,
-  COM_BLE,
-  COM_UART
 } COM_MODE;
 
 // These are defined the same in my SPI_LCD library
@@ -160,17 +158,6 @@ void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int de
 // e.g. for the 144x168 display, pSrc must provide 144 pixels (18 bytes)
 //
 void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine);
-//
-// Initializes a virtual display over BLE
-// Currently only OLED_128x64 is supported
-// 
-int obdBLEInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, char *name);
-//
-// Initializes a virtual display over BLE
-// Currently only OLED_128x64 is supported
-//
-int obdUARTInit(OBDISP *pOBD, int iType, int bFlip, int bInvert, unsigned long ulSpeed);
-
 //
 // Initializes the display controller into "page mode" on I2C
 // If SDAPin and SCLPin are not -1, then bit bang I2C on those pins
