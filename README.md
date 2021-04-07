@@ -27,6 +27,7 @@ Features:<br>
 - Supports 96x68 HX1230, 84x48 Nokia 5110 and 128x64 ST7567/UC1701 mono LCDs<br>
 - Supports 144x168 and 400x240 Sharp Memory LCDs<br>
 - Virtual displays of any size which can be drawn across multiple physical displays
+- Flexible copy function can convert the internal pixel format to any output format and orientation
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
 - Includes 5 sizes of fixed fonts (6x8, 8x8, 12x16, 16x16, 16x32)<br>
 - Text drawing at any fractional scale (e.g. 1.25x)
