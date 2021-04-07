@@ -143,6 +143,20 @@ enum {
 // The memory buffer must be provided at the time of creation
 //
 void obdCreateVirtualDisplay(OBDISP *pOBD, int width, int height, uint8_t *buffer);
+// Constants for the obdCopy() function
+// Output format options -
+#define OBD_LSB_FIRST     0x001
+#define OBD_MSB_FIRST     0x002
+#define OBD_VERT_BYTES    0x004
+#define OBD_HORZ_BYTES    0x008
+// Orientation options -
+#define OBD_ROTATE_90     0x010
+#define OBD_FLIP_VERT     0x020
+#define OBD_FLIP_HORZ     0x040
+#define OBD_INVERT        0x080
+// Copy the current bitmap buffer from its native form (LSB_FIRST, VERTICAL_BYTES) to the requested form
+// A copy of the same format will just do a memcpy
+int obdCopy(OBDISP *pOBD, int iFlags, uint8_t *pDestination);
 //
 // Draw the contents of a memory buffer onto a display
 // The sub-window will be clipped if it specifies too large an area
