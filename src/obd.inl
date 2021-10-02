@@ -1134,9 +1134,7 @@ void obdDrawTile(OBDISP *pOBD, const uint8_t *pTile, int x, int y, int iRotation
     uint8_t ucTemp[32]; // prepare LCD data here
     uint8_t i, j, k, iOffset, ucMask, uc, ucPixels;
     uint8_t bFlipX=0, bFlipY=0;
-    int iPitch;
     
-    iPitch = pOBD->width;
     if (x < 0 || y < 0 || y > (pOBD->height/8)-2 || x > pOBD->width-16)
         return; // out of bounds
     if (pTile == NULL) return; // bad pointer; really? :(
@@ -1420,7 +1418,7 @@ int iFontWidth;
          row = 0;
          uc = ucTemp[col >> 8];
          for (ty=0; ty<(int)dy; ty++) {
-            int nx, ny;
+            int nx = 0, ny = 0;
             bit = row >> 8;
             color = (uc & (1 << bit)); // set or clear the pixel
             switch (iRotation) {
