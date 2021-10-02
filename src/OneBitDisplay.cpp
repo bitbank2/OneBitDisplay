@@ -43,6 +43,10 @@ const unsigned char oled128_initbuf[] PROGMEM = {0x00, 0xae,0xdc,0x00,0x81,0x40,
       0xa1,0xc8,0xa8,0x7f,0xd5,0x50,0xd9,0x22,0xdb,0x35,0xb0,0xda,0x12,
       0xa4,0xa6,0xaf};
 
+const unsigned char oled64x128_initbuf[] PROGMEM ={
+0x00, 0xae, 0xd5, 0x51, 0x20, 0xa8, 0x3f, 0xdc, 0x00, 0xd3, 0x60, 0xad, 0x80, 0xa6, 0xa4, 0xa0, 0xc0, 0x81, 0x40, 0xd9, 0x22, 0xdb, 0x35, 0xaf
+};
+
 const unsigned char oled64_initbuf[] PROGMEM ={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x40,0xa1,0xc8,
       0xda,0x12,0x81,0xff,0xa4,0xa6,0xd5,0x80,0x8d,0x14,
       0xaf,0x20,0x02};
@@ -89,7 +93,6 @@ int iPitch;
    if (height > pOBDDest->height)
       height = pOBDDest->height;
    iPitch = pOBDSrc->width;
-   if (iPitch < 128) iPitch = 128;
    for (y=0; y<height; y+=8)
    {
       obdSetPosition(pOBDDest, destx, (desty+y)/8, 1);
@@ -311,6 +314,11 @@ int iLen;
     pOBD->width = 96;
     pOBD->height = 16;
   }
+  else if (iType == OLED_64x128)
+  {
+    pOBD->width = 64;
+    pOBD->height = 128;
+  }
   else if (iType == OLED_128x32)
     pOBD->height = 32;
   else if (iType == OLED_128x128)
@@ -329,6 +337,11 @@ int iLen;
   {
      s = (uint8_t *)oled32_initbuf;
      iLen = sizeof(oled32_initbuf);
+  }
+  else if (iType == OLED_64x128)
+  {
+     s = (uint8_t *)oled64x128_initbuf;
+     iLen = sizeof(oled64x128_initbuf);
   }
   else if (iType == OLED_128x128)
   {
@@ -495,6 +508,11 @@ int rc = OLED_NOT_FOUND;
       s = (uint8_t *)oled72_initbuf;
       u8Len = sizeof(oled72_initbuf);
   }
+  else if (iType == OLED_64x128)
+  {
+      s = (uint8_t *)oled64x128_initbuf;
+      u8Len = sizeof(oled64x128_initbuf);
+  }
   else // 132x64, 128x64 and 64x32
   {
       s = (uint8_t *)oled64_initbuf;
@@ -523,6 +541,11 @@ int rc = OLED_NOT_FOUND;
   {
     pOBD->width = 96;
     pOBD->height = 16;
+  }
+  else if (iType == OLED_64x128)
+  {
+    pOBD->width = 64;
+    pOBD->height = 128;
   }
   else if (iType == OLED_128x32)
     pOBD->height = 32;
@@ -777,8 +800,6 @@ uint8_t bNeedPos;
 uint8_t *pSrc = pOBD->ucScreen;
     
   iPitch = pOBD->width;
-  if (iPitch < 128)
-     iPitch = 128;
   if (pOBD->type == LCD_VIRTUAL) // wrong function for this type of display
     return;
   if (pBuffer == NULL) // dump the internal buffer if none is given

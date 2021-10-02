@@ -5,7 +5,8 @@
 
 // Proportional font data taken from Adafruit_GFX library
 /// Font data stored PER GLYPH
-#ifndef _ADAFRUIT_GFX_H
+#if !defined( _ADAFRUIT_GFX_H ) && !defined( _GFXFONT_H_ )
+#define _GFXFONT_H_
 typedef struct {
   uint16_t bitmapOffset; ///< Pointer into GFXfont->bitmap
   uint8_t width;         ///< Bitmap dimensions in pixels
@@ -67,17 +68,28 @@ typedef struct smenu {
 extern "C" {
 #endif
 
+#if !defined(BITBANK_LCD_MODES)
+#define BITBANK_LCD_MODES
 typedef enum
 {
  MODE_DATA = 0,
  MODE_COMMAND
 } DC_MODE;
+#endif
 
 typedef enum
 {
   COM_I2C = 0,
   COM_SPI,
 } COM_MODE;
+
+typedef enum
+{
+  ROT_0 = 0,
+  ROT_90,
+  ROT_180,
+  ROT_270
+} FONT_ROTATION;
 
 // These are defined the same in my SPI_LCD library
 #ifndef SPI_LCD_H
@@ -104,6 +116,7 @@ enum {
   OLED_128x32,
   OLED_128x64,
   OLED_132x64,
+  OLED_64x128,
   OLED_64x32,
   OLED_96x16,
   OLED_72x40,
@@ -238,8 +251,9 @@ int obdWriteString(OBDISP *pOBD, int iScrollX, int x, int y, char *szMsg, int iS
 // the scale is a 16-bit integer with and 8-bit fraction and 8-bit mantissa
 // To draw at 1x scale, set the scale factor to 256. To draw at 2x, use 512
 // The output must be drawn into a memory buffer, not directly to the display
+// The string can be drawn in one of 4 rotations (ROT_0, ROT_90, ROT_180, ROT_270)
 //
-int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int bInvert, int iXScale, int iYScale);
+int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int bInvert, int iXScale, int iYScale, int iRotation);
 //
 // Draw a string in a proportional font you supply
 // Requires a back buffer

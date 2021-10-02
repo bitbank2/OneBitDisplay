@@ -776,7 +776,6 @@ int obdScrollBuffer(OBDISP *pOBD, int iStartCol, int iEndCol, int iStartRow, int
     if (iStartRow < 0 || iStartRow >= (pOBD->height/8) || iEndRow < 0 || iEndRow >= (pOBD->height/8) || iStartRow > iEndRow)
         return -1;
     iPitch = pOBD->width;
-    if (iPitch < 128) iPitch = 128;
     if (bUp)
     {
         for (row=iStartRow; row<=iEndRow; row++)
@@ -820,7 +819,6 @@ int iPitch = pOBD->width;
 
   obdCachedFlush(pOBD, bRender); // flush any cached data first
     
-  if (iPitch < 128) iPitch = 128;
   pOBD->iScreenOffset = (y*iPitch)+x;
   
   if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
@@ -881,7 +879,6 @@ unsigned char ucTemp[196];
 int iPitch, iBufferSize;
 
   iPitch = pOBD->width;
-  if (iPitch < 128) iPitch = 128;
   iBufferSize = iPitch * (pOBD->height / 8);
 
 // Keep a copy in local buffer
@@ -1057,7 +1054,6 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
     int iLocalPitch;
 
     iLocalPitch = pOBD->width;
-    if (iLocalPitch < 128) iLocalPitch = 128;
     
     if (x+cx < 0 || y+cy < 0 || x >= pOBD->width || y >= pOBD->height || pOBD->ucScreen == NULL)
         return; // no backbuffer or out of bounds
@@ -1141,7 +1137,6 @@ void obdDrawTile(OBDISP *pOBD, const uint8_t *pTile, int x, int y, int iRotation
     int iPitch;
     
     iPitch = pOBD->width;
-    if (iPitch < 128) iPitch = 128;
     if (x < 0 || y < 0 || y > (pOBD->height/8)-2 || x > pOBD->width-16)
         return; // out of bounds
     if (pTile == NULL) return; // bad pointer; really? :(
@@ -1225,7 +1220,6 @@ unsigned char uc, ucOld;
 int iPitch, iSize;
 
   iPitch = pOBD->width;
-  if (iPitch < 128) iPitch = 128;
   iSize = iPitch * (pOBD->height/8);
 
   i = ((y >> 3) * iPitch) + x;
@@ -1304,7 +1298,6 @@ uint8_t dst_mask, src_mask;
 uint8_t bFlipped = false;
 
   iDestPitch = pOBD->width;
-  if (iDestPitch < 128 && pOBD->type != LCD_VIRTUAL) iDestPitch = 128;
   i16 = pgm_read_word(pBMP);
   if (i16 != 0x4d42) // must start with 'BM'
      return -1; // not a BMP file
@@ -1393,11 +1386,11 @@ void obdSetTextWrap(OBDISP *pOBD, int bWrap)
 // To draw at 1x scale, set the scale factor to 256. To draw at 2x, use 512
 // The output must be drawn into a memory buffer, not directly to the display
 //
-int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int bInvert, int iXScale, int iYScale)
+int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int bInvert, int iXScale, int iYScale, int iRotation)
 {
 uint32_t row, col, dx, dy;
 uint32_t sx, sy;
-uint8_t c, uc, *d;
+uint8_t c, uc, color, *d;
 const uint8_t *s;
 uint8_t ucTemp[16];
 int tx, ty, bit, iFontOff;
@@ -1411,12 +1404,11 @@ int iFontWidth;
    iFontWidth = (iSize == FONT_6x8) ? 6:8;
    s = (iSize == FONT_6x8) ? ucSmallFont : ucFont;
    iPitch = pOBD->width;
-   if (iPitch < 128) iPitch = 128;
    dx = (iFontWidth * iXScale) >> 8; // width of each character
    dy = (8 * iYScale) >> 8; // height of each character
    sx = 65536 / iXScale; // turn the scale into an accumulator value
    sy = 65536 / iYScale;
-   while (*szMsg && x < pOBD->width) {
+   while (*szMsg) {
       c = *szMsg++; // debug - start with normal font
       iFontOff = (int)(c-32) * (iFontWidth-1);
       // we can't directly use the pointer to FLASH memory, so copy to a local buffer
@@ -1424,24 +1416,58 @@ int iFontWidth;
       memcpy_P(&ucTemp[1], &s[iFontOff], iFontWidth-1);
       if (bInvert) InvertBytes(ucTemp, iFontWidth);
       col = 0;
-      if (x+dx >= (uint32_t)pOBD->width) // we've hit the right edge
-         dx = pOBD->width - x; // draw partial character
       for (tx=0; tx<(int)dx; tx++) {
          row = 0;
          uc = ucTemp[col >> 8];
-         d = &pOBD->ucScreen[(y >> 3) * iPitch + x + tx];
          for (ty=0; ty<(int)dy; ty++) {
+            int nx, ny;
             bit = row >> 8;
-            iOffset = (ty >> 3) * iPitch;
-            if (uc & (1 << bit))
-               d[iOffset] |= (1 << (ty & 7));
-            else
-               d[iOffset] &= ~(1 << (ty & 7));
+            color = (uc & (1 << bit)); // set or clear the pixel
+            switch (iRotation) {
+               case ROT_0:
+                  nx = x + tx;
+                  ny = y + ty;
+                  break;
+               case ROT_90:
+                  nx = x - ty;
+                  ny = y + tx;
+                  break;
+               case ROT_180:
+                  nx = x - tx;
+                  ny = y - ty;
+                  break;
+               case ROT_270:
+                  nx = x + ty;
+                  ny = y - tx;
+                  break;
+            } // switch on rotation direction
+            // plot the pixel if it's within the image boundaries
+            if (nx >= 0 && ny >= 0 && nx < pOBD->width && ny < pOBD->height) {
+               d = &pOBD->ucScreen[(ny >> 3) * iPitch + nx];
+               if (color)
+                  d[0] |= (1 << (ny & 7));
+               else
+                  d[0] &= ~(1 << (ny & 7));
+            }
             row += sy; // add fractional increment to source row of character
          } // for ty
          col += sx; // add fractional increment to source column
       } // for tx
-      x += dx;
+      // update the 'cursor' position
+      switch (iRotation) {
+         case ROT_0:
+            x += dx;
+            break;
+         case ROT_90:
+            y += dx;
+            break;
+         case ROT_180:
+            x -= dx;
+            break;
+         case ROT_270:
+            y -= dx;
+            break;
+      } // switch on rotation
    } // while (*szMsg)
    return 0;
 } /* obdScaledString() */
@@ -1824,7 +1850,6 @@ int iPitch;
    if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL || x < 0)
       return -1;
    iPitch = pOBD->width;
-   if (iPitch < 128) iPitch = 128;
    // in case of running on AVR, get copy of data from FLASH
    memcpy_P(&font, pFont, sizeof(font));
    pGlyph = &glyph;
@@ -1964,8 +1989,6 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
   int y, x;
   int iPitch = pOBD->width;
 
-  if (iPitch < 128 && pOBD->type != LCD_VIRTUAL) iPitch = 128; // use 128 for tiny displays too
-  
   if (x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 || x1 >= pOBD->width || x2 >= pOBD->width || y1 >= pOBD->height || y2 >= pOBD->height)
      return;
 
@@ -2099,7 +2122,6 @@ static void DrawScaledPixel(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_
     int iPitch;
 
     iPitch = pOBD->width;
-    if (iPitch < 128) iPitch = 128;
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
     x += iCX; y += iCY;
@@ -2122,7 +2144,6 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
     int iPitch;
 
     iPitch = pOBD->width;
-    if (iPitch < 128) iPitch = 128;
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
     iLen = x*2;
@@ -2228,7 +2249,6 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
     if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0 ||
        x1 >= pOBD->width || y1 >= pOBD->height || x2 >= pOBD->width || y2 >= pOBD->height) return; // invalid coordinates
     iPitch = pOBD->width;
-    if (iPitch < 128) iPitch = 128;
     // Make sure that X1/Y1 is above and to the left of X2/Y2
     // swap coordinates as needed to make this true
     if (x2 < x1)
@@ -2376,7 +2396,6 @@ int xStart, xEnd, yStart, yEnd, yDst, xDst, dx, dy;
 uint8_t ucSrcMask, ucDstMask, *s, *d;
     
     iPitch = pOBD->width;
-    if (iPitch < 128 && pOBD->type != LCD_VIRTUAL) iPitch = 128;
 
     if (pDestination == NULL || pOBD == NULL || pOBD->ucScreen == NULL)
         return -1;
