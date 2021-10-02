@@ -23,14 +23,14 @@ Features:<br>
 ---------<br>
 - Supports any number of simultaneous displays of any type (mix and match)<br>
 - Optionally detect the display address and type (I2C only)<br>
-- Supports 72x40, 96x16, 64x32, 128x32, 128x64, 128x128 (SH1107) and 132x64 (SH1106) OLED display sizes<br>
+- Supports 72x40, 96x16, 64x32, 128x32, 128x64, 64x128 (SH1107), 128x128 (SH1107) and 132x64 (SH1106) OLED display sizes<br>
 - Supports 96x68 HX1230, 84x48 Nokia 5110 and 128x64 ST7567/UC1701 mono LCDs<br>
 - Supports 144x168 and 400x240 Sharp Memory LCDs<br>
 - Virtual displays of any size which can be drawn across multiple physical displays
 - Flexible copy function can convert the internal pixel format to any output format and orientation
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
 - Includes 5 sizes of fixed fonts (6x8, 8x8, 12x16, 16x16, 16x32)<br>
-- Text drawing at any fractional scale (e.g. 1.25x)
+- Text drawing at any fractional scale (e.g. 1.25x), and any of 4 directions/rotations<br>
 - Can use Adafruit_GFX format bitmap fonts (proportional and fixed)<br>
 - Deferred rendering allows preparing a back buffer, then displaying it (usually faster)<br>
 - Text scrolling features (vertical and horizontal)<br>
@@ -40,7 +40,7 @@ Features:<br>
 - Optimized Bresenham line drawing<br>
 - Optimized Bresenham outline and filled ellipse drawing<br>
 - Optimized outline and filled rectangle drawing<br>
-- Optional backing RAM for drawing pixels for systems with enough RAM<br>
+- Optional backing RAM (needed for some text and drawing functions)<br>
 - 16x16 Tile/Sprite drawing at any angle.<br>
 - Run full frame animations at high frame rates with a simple API<br>
 <br>
@@ -72,7 +72,7 @@ After initializing the display you can begin drawing text or graphics on it. The
 The text drawing function now has a scroll offset parameter. This tells it how many pixels of the text to skip before drawing the text at the given destination coordinates. For example, if you pass a value of 20 for the scroll offset and are using an 8-pixel wide font (FONT_8x8), the first two and a half characters will not be drawn; the second half of the third and subsequent characters will be drawn starting at the x/y you specified. This allows you to create a scrolling text effect by repeatedly calling the oledWriteString() function with progressively larger scroll offset values to make the text scroll from right to left.<br> 
 <br>
 
-If you find this code useful, please consider sending a donation.
+If you find this code useful, please consider sending a donation or becomming a Github sponsor.
 
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=SR4F44J2UR8S4)
 
