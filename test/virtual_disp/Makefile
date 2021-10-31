@@ -5,7 +5,7 @@ all: obd_test
 obd_test: main.o
 	$(CC) main.o -o obd_test 
 
-main.o: main.c ../src/obd.inl ../src/OneBitDisplay.h
+main.o: main.c ../../src/obd.inl ../../src/OneBitDisplay.h
 	$(CC) $(CFLAGS) main.c
 
 clean:

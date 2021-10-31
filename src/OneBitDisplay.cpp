@@ -34,7 +34,7 @@
 #include <SPI.h>
 
 #endif // _LINUX_
-#include <OneBitDisplay.h>
+#include "OneBitDisplay.h"
 // All of the drawing code is in here
 #include "obd.inl"
 
@@ -574,6 +574,12 @@ void oledPower(OBDISP *pOBD, uint8_t bOn)
       obdWriteCommand(pOBD, 0xae); // turn off OLED
 } /* oledPower() */
 
+#ifdef _LINUX_
+void delayMicroseconds(int iDelay)
+{
+	usleep(iDelay);
+} /* delayMicroseconds() */
+#endif // _LINUX_
 //
 // Bit Bang the data on GPIO pins
 //
@@ -612,7 +618,7 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
           digitalWrite(iMOSIPin, (pOBD->mode == MODE_DATA));
           digitalWrite(iSCKPin, HIGH);
           delayMicroseconds(0);
-          digitalWrite(iSCKPin, LOW);
+	  digitalWrite(iSCKPin, LOW);
 #endif
       }
       if (c == 0 || c == 0xff) // quicker for all bits equal
@@ -842,6 +848,10 @@ uint8_t *pSrc = pOBD->ucScreen;
   obdCachedFlush(pOBD, 1);
 } /* obdDumpBuffer() */
 
+//
+// Menu functions are not (yet) supported on Linux
+//
+#ifndef _LINUX_
 // A valid CW or CCW move returns 1 or -1, invalid returns 0.
 static int obdMenuReadRotary(SIMPLEMENU *sm) {
 static int8_t rot_enc_table[] = {0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0};
@@ -1134,4 +1144,4 @@ int iDelta, rc = -1;
      obdMenuFlash(sm, sm->iMenuIndex);
   return rc;
 } /* obdMenuRun() */
-
+#endif // !_LINUX_

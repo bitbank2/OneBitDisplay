@@ -12,7 +12,6 @@
 #ifndef I2C_SLAVE
 #define I2C_SLAVE 0
 #endif
-static int file_i2c = 0;
 void digitalWrite(int iPin, int iState) {
 
 }
@@ -601,25 +600,25 @@ static void obdCachedWrite(OBDISP *pOBD, uint8_t *pData, uint8_t u8Len, int bRen
 } /* obdCachedWrite() */
 // wrapper/adapter functions to make the code work on Linux
 #ifdef _LINUX_
-static uint8_t pgm_read_byte(uint8_t *ptr)
+static uint8_t pgm_read_byte(const uint8_t *ptr)
 {
   return *ptr;
 }
-static int16_t pgm_read_word(uint8_t *ptr)
+static int16_t pgm_read_word(const uint8_t *ptr)
 {
   return ptr[0] + (ptr[1]<<8);
 }
 int I2CReadRegister(BBI2C *pI2C, uint8_t addr, uint8_t reg, uint8_t *pBuf, int iLen)
 {
 int rc;
-  rc = write(file_i2c, &reg, 1);
-  rc = read(file_i2c, pBuf, iLen);
+  rc = write(pI2C->file_i2c, &reg, 1);
+  rc = read(pI2C->file_i2c, pBuf, iLen);
   return (rc > 0);
 }
 int I2CRead(BBI2C *pI2C, uint8_t addr, uint8_t *pBuf, int iLen)
 {
 int rc;
-  rc = read(file_i2c, pBuf, iLen);
+  rc = read(pI2C->file_i2c, pBuf, iLen);
   return (rc > 0);
 }
 void I2CInit(BBI2C *pI2C, uint32_t iSpeed)
@@ -627,12 +626,12 @@ void I2CInit(BBI2C *pI2C, uint32_t iSpeed)
 char filename[32];
 
   sprintf(filename, "/dev/i2c-%d", pI2C->iSDA); // I2C bus number passed in SDA pin
-  if ((file_i2c = open(filename, O_RDWR)) < 0)
+  if ((pI2C->file_i2c = open(filename, O_RDWR)) < 0)
       return;// 1;
-  if (ioctl(file_i2c, I2C_SLAVE, pI2C->iSCL) < 0) // set slave address
+  if (ioctl(pI2C->file_i2c, I2C_SLAVE, pI2C->iSCL) < 0) // set slave address
   {
-     close(file_i2c);
-     file_i2c = 0;
+     close(pI2C->file_i2c);
+     pI2C->file_i2c = 0;
       return; // 1;
   }
     return; // 0;
@@ -641,7 +640,7 @@ char filename[32];
 // Wrapper function to write I2C data
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
-  write(file_i2c, pData, iLen);
+  write(pOBD->bbi2c.file_i2c, pData, iLen);
 }
 #else // Arduino
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
@@ -1134,9 +1133,7 @@ void obdDrawTile(OBDISP *pOBD, const uint8_t *pTile, int x, int y, int iRotation
     uint8_t ucTemp[32]; // prepare LCD data here
     uint8_t i, j, k, iOffset, ucMask, uc, ucPixels;
     uint8_t bFlipX=0, bFlipY=0;
-    int iPitch;
     
-    iPitch = pOBD->width;
     if (x < 0 || y < 0 || y > (pOBD->height/8)-2 || x > pOBD->width-16)
         return; // out of bounds
     if (pTile == NULL) return; // bad pointer; really? :(
@@ -1394,7 +1391,7 @@ uint8_t c, uc, color, *d;
 const uint8_t *s;
 uint8_t ucTemp[16];
 int tx, ty, bit, iFontOff;
-int iPitch, iOffset;
+int iPitch;
 int iFontWidth;
 
    if (iXScale == 0 || iYScale == 0 || szMsg == NULL || pOBD == NULL || pOBD->ucScreen == NULL || x < 0 || y < 0 || x >= pOBD->width-1 || y >= pOBD->height-1)
@@ -1420,7 +1417,7 @@ int iFontWidth;
          row = 0;
          uc = ucTemp[col >> 8];
          for (ty=0; ty<(int)dy; ty++) {
-            int nx, ny;
+            int nx=0, ny=0;
             bit = row >> 8;
             color = (uc & (1 << bit)); // set or clear the pixel
             switch (iRotation) {
