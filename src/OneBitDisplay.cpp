@@ -24,7 +24,14 @@
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 #include <math.h>
-
+#include <armbianio.h>
+// convert wire library constants into ArmbianIO values
+#define OUTPUT GPIO_OUT
+#define INPUT GPIO_IN
+#define INPUT_PULLUP GPIO_IN_PULLUP
+#define HIGH 1
+#define LOW 0
+void delay(int);
 #else // Arduino
 
 #include <Arduino.h>
@@ -179,7 +186,6 @@ uint8_t ucCMD;
     ucCMD = (bOn) ? 0xaf : 0xae;
   obdWriteCommand(pOBD, ucCMD);
 } /* obdPower() */
-#if !defined( _LINUX_ )
 
 // Controls the LED backlight
 void obdBacklight(OBDISP *pOBD, int bOn)
@@ -214,10 +220,14 @@ static void LCDPowerUp(OBDISP *pOBD)
         iLen = sizeof(nokia5110_initbuf);
     }
     memcpy_P(uc, s, iLen);
+#ifdef _LINUX_
+    AIOWriteSPI(pOBD->bbi2c.file_i2c, s, iLen);    
+#else
     if (pOBD->iMOSIPin == 0xff)
        SPI.transfer(s, iLen);
     else
        SPI_BitBang(pOBD, s, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
+#endif
     delay(100);
     obdWriteCommand(pOBD, 0xa5);
     delay(100);
@@ -272,9 +282,13 @@ int iLen;
 // Initialize SPI
     if (!bBitBang) {
         pOBD->iMOSIPin = 0xff; // mark it as hardware SPI
+#ifdef _LINUX_
+	pOBD->bbi2c.file_i2c = AIOOpenSPI(SPI_BUS_NUMBER, iSpeed);
+#else
         SPI.begin();
         SPI.beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
-        //  SPI.setClockDivider(16);
+#endif
+	//  SPI.setClockDivider(16);
         //  SPI.setBitOrder(MSBFIRST);
         //  SPI.setDataMode(SPI_MODE0);
     }
@@ -414,10 +428,9 @@ int iLen;
       {
          obdWriteCommand(pOBD, 0xa7); // set inverted pixel mode
       }
-
   }
 } /* obdSPIInit() */
-#endif
+
 //
 // Initializes the OLED controller into "page mode"
 //
@@ -575,6 +588,10 @@ void oledPower(OBDISP *pOBD, uint8_t bOn)
 } /* oledPower() */
 
 #ifdef _LINUX_
+void delay(int iDelay)
+{
+	usleep(iDelay * 1000);
+} /* delay() */
 void delayMicroseconds(int iDelay)
 {
 	usleep(iDelay);

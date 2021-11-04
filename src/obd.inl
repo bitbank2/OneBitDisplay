@@ -12,9 +12,18 @@
 #ifndef I2C_SLAVE
 #define I2C_SLAVE 0
 #endif
-void digitalWrite(int iPin, int iState) {
-
+static void digitalWrite(int iPin, int iState) {
+   AIOWriteGPIO(iPin, iState);
 }
+static void pinMode(int iPin, int iMode)
+{
+   AIOAddGPIO(iPin, iMode);
+} /* pinMode() */
+//static int digitalRead(int iPin)
+//{
+//  return AIOReadGPIO(iPin);
+//} /* digitalRead() */
+
 #endif
 void obdSetDCMode(OBDISP *pOBD, int iMode);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
@@ -697,16 +706,18 @@ unsigned char buf[4];
       buf[1] = c;
       _I2CWrite(pOBD, buf, 2);
   } else { // must be SPI
-#ifndef _LINUX_
       obdSetDCMode(pOBD, MODE_COMMAND);
       digitalWrite(pOBD->iCSPin, LOW);
+#ifdef _LINUX_
+      AIOWriteSPI(pOBD->bbi2c.file_i2c, &c, 1);
+#else
       if (pOBD->iMOSIPin == 0xff)
          SPI.transfer(c);
       else
          SPI_BitBang(pOBD, &c, 1, pOBD->iMOSIPin, pOBD->iCLKPin);
+#endif
       digitalWrite(pOBD->iCSPin, HIGH);
       obdSetDCMode(pOBD, MODE_DATA);
-#endif
   }
 } /* obdWriteCommand() */
 
@@ -897,7 +908,9 @@ if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
   {
       if (pOBD->com_mode == COM_SPI) // SPI/Bit Bang
       {
-#ifndef _LINUX_
+#ifdef _LINUX_
+	  AIOWriteSPI(pOBD->bbi2c.file_i2c, ucBuf, iLen);
+#else // Arduino
           digitalWrite(pOBD->iCSPin, LOW);
           if (pOBD->iMOSIPin != 0xff) // Bit Bang
             SPI_BitBang(pOBD, ucBuf, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
