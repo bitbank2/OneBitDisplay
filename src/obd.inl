@@ -649,7 +649,15 @@ char filename[32];
 // Wrapper function to write I2C data
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
-  write(pOBD->bbi2c.file_i2c, pData, iLen);
+  if (pOBD->com_mode == COM_I2C) {// I2C device
+      write(pOBD->bbi2c.file_i2c, pData, iLen);
+  } else { // must be SPI
+      obdSetDCMode(pOBD, MODE_COMMAND);
+      digitalWrite(pOBD->iCSPin, LOW);
+      AIOWriteSPI(pOBD->bbi2c.file_i2c, pData, iLen);
+      digitalWrite(pOBD->iCSPin, HIGH);
+      obdSetDCMode(pOBD, MODE_DATA);
+  }
 }
 #else // Arduino
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
