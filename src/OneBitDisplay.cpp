@@ -54,6 +54,8 @@ const unsigned char oled64x128_initbuf[] PROGMEM ={
 0x00, 0xae, 0xd5, 0x51, 0x20, 0xa8, 0x3f, 0xdc, 0x00, 0xd3, 0x60, 0xad, 0x80, 0xa6, 0xa4, 0xa0, 0xc0, 0x81, 0x40, 0xd9, 0x22, 0xdb, 0x35, 0xaf
 };
 
+const unsigned char oled132_initbuf[] PROGMEM = {0x00,0xae,0x02,0x10,0x40,0x81,0xa0,0xc0,0xa6,0xa8,0x3f,0xd3,0x00,0xd5,0x80,0xd9,0xf1,0xda,0x12,0xdb,0x40,0x20,0x02,0xa4,0xa6};
+
 const unsigned char oled64_initbuf[] PROGMEM ={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x40,0xa1,0xc8,
       0xda,0x12,0x81,0xff,0xa4,0xa6,0xd5,0x80,0x8d,0x14,
       0xaf,0x20,0x02};
@@ -257,9 +259,12 @@ int iLen;
   pOBD->wrap = 0; // default - disable text wrap
   pOBD->com_mode = COM_SPI; // communication mode
   if (pOBD->iDCPin != 0xff) // Note - not needed on Sharp Memory LCDs
-    pinMode(pOBD->iDCPin, OUTPUT);
+  {
+      pinMode(pOBD->iDCPin, OUTPUT);
+      digitalWrite(pOBD->iDCPin, 0); // for some reason, command mode must be set or some OLEDs/LCDs won't initialize correctly even if set later
+  }
   pinMode(pOBD->iCSPin, OUTPUT);
-  digitalWrite(pOBD->iCSPin, (pOBD->type < SHARP_144x168)); // set to not-active
+  digitalWrite(pOBD->iCSPin, 0); //(pOBD->type < SHARP_144x168)); // set to not-active
   if (bBitBang)
   {
       pinMode(iMOSI, OUTPUT);
@@ -271,9 +276,9 @@ int iLen;
   {
     pinMode(iReset, OUTPUT);
     digitalWrite(iReset, LOW);
-    delay(50);
+    delay(100);
     digitalWrite(iReset, HIGH);
-    delay(50);
+    delay(100);
   }
   if (iLED != -1)
   {
@@ -289,7 +294,7 @@ int iLen;
         SPI.beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
 #endif
 	//  SPI.setClockDivider(16);
-        //  SPI.setBitOrder(MSBFIRST);
+       //  SPI.setBitOrder(MSBFIRST);
         //  SPI.setDataMode(SPI_MODE0);
     }
 
@@ -362,7 +367,11 @@ int iLen;
      s = (uint8_t *)oled128_initbuf;
      iLen = sizeof(oled128_initbuf);
   }
-  else if (iType < LCD_UC1701)
+//  else if (iType == OLED_132x64) { // SH1106
+//     s = (uint8_t *)oled132_initbuf;
+//     iLen = sizeof(oled132_initbuf);
+//  }
+  else if (iType < LCD_UC1701) // 128x64 and 64x32
   {
      s = (uint8_t *)oled64_initbuf;
      iLen = sizeof(oled64_initbuf);
@@ -371,8 +380,7 @@ int iLen;
   if (iType < LCD_UC1701)
   {
       memcpy_P(uc, s, iLen); // do it from RAM
-      _I2CWrite(pOBD, s, iLen);
-
+      _I2CWrite(pOBD, uc, iLen);
       if (bInvert)
       {
         uc[0] = 0; // command
@@ -428,7 +436,7 @@ int iLen;
       {
          obdWriteCommand(pOBD, 0xa7); // set inverted pixel mode
       }
-  }
+  } // UC1609
 } /* obdSPIInit() */
 
 //

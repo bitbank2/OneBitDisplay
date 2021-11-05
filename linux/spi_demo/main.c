@@ -19,7 +19,8 @@
 
 volatile int iStop = 0;
 
-#define OLED_TYPE OLED_132x64
+//#define OLED_TYPE OLED_132x64
+#define OLED_TYPE LCD_UC1609
 #define FLIP180 0
 #define INVERT 0
 #define DC_PIN 22

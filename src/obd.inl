@@ -916,16 +916,16 @@ if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
   {
       if (pOBD->com_mode == COM_SPI) // SPI/Bit Bang
       {
+	  digitalWrite(pOBD->iCSPin, LOW);
 #ifdef _LINUX_
 	  AIOWriteSPI(pOBD->bbi2c.file_i2c, ucBuf, iLen);
 #else // Arduino
-          digitalWrite(pOBD->iCSPin, LOW);
           if (pOBD->iMOSIPin != 0xff) // Bit Bang
             SPI_BitBang(pOBD, ucBuf, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
           else
             SPI.transfer(ucBuf, iLen);
-          digitalWrite(pOBD->iCSPin, HIGH);
 #endif // _LINUX_
+          digitalWrite(pOBD->iCSPin, HIGH);
       }
       else // I2C
       {
