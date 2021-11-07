@@ -13,9 +13,9 @@
 #include <sys/ioctl.h>
 #include <math.h>
 
-#include "../src/OneBitDisplay.h"
-#include "../src/obd.inl"
-#include "../examples/prop_font_demo/FreeSerif12pt7b.h"
+#include "../../src/OneBitDisplay.h"
+#include "../../src/obd.inl"
+#include "../../examples/prop_font_demo/FreeSerif12pt7b.h"
 #include "notes.h"
 
 void WriteBMP(const char *name, uint8_t *pData, int width, int height, int bpp)
@@ -24,8 +24,8 @@ void WriteBMP(const char *name, uint8_t *pData, int width, int height, int bpp)
     uint8_t pBuf[128]; // holds BMP header
     FILE *outfile;
     
-    bsize = lsize = ((width * bpp) + 7)/8;
-    lsize = (lsize + 3) & 0xfffc; // DWORD aligned
+    bsize = width >> 3;
+    lsize = (bsize + 3) & 0xfffc; // DWORD aligned
     iHeaderSize = 54;
     iHeaderSize += (1<<(bpp+2));
     iBodySize = lsize * height;

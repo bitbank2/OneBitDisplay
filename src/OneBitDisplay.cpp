@@ -24,7 +24,14 @@
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 #include <math.h>
-
+#include <armbianio.h>
+// convert wire library constants into ArmbianIO values
+#define OUTPUT GPIO_OUT
+#define INPUT GPIO_IN
+#define INPUT_PULLUP GPIO_IN_PULLUP
+#define HIGH 1
+#define LOW 0
+void delay(int);
 #else // Arduino
 
 #include <Arduino.h>
@@ -34,7 +41,7 @@
 #include <SPI.h>
 
 #endif // _LINUX_
-#include <OneBitDisplay.h>
+#include "OneBitDisplay.h"
 // All of the drawing code is in here
 #include "obd.inl"
 
@@ -46,6 +53,8 @@ const unsigned char oled128_initbuf[] PROGMEM = {0x00, 0xae,0xdc,0x00,0x81,0x40,
 const unsigned char oled64x128_initbuf[] PROGMEM ={
 0x00, 0xae, 0xd5, 0x51, 0x20, 0xa8, 0x3f, 0xdc, 0x00, 0xd3, 0x60, 0xad, 0x80, 0xa6, 0xa4, 0xa0, 0xc0, 0x81, 0x40, 0xd9, 0x22, 0xdb, 0x35, 0xaf
 };
+
+const unsigned char oled132_initbuf[] PROGMEM = {0x00,0xae,0x02,0x10,0x40,0x81,0xa0,0xc0,0xa6,0xa8,0x3f,0xd3,0x00,0xd5,0x80,0xd9,0xf1,0xda,0x12,0xdb,0x40,0x20,0x02,0xa4,0xa6};
 
 const unsigned char oled64_initbuf[] PROGMEM ={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x40,0xa1,0xc8,
       0xda,0x12,0x81,0xff,0xa4,0xa6,0xd5,0x80,0x8d,0x14,
@@ -179,7 +188,6 @@ uint8_t ucCMD;
     ucCMD = (bOn) ? 0xaf : 0xae;
   obdWriteCommand(pOBD, ucCMD);
 } /* obdPower() */
-#if !defined( _LINUX_ )
 
 // Controls the LED backlight
 void obdBacklight(OBDISP *pOBD, int bOn)
@@ -214,10 +222,14 @@ static void LCDPowerUp(OBDISP *pOBD)
         iLen = sizeof(nokia5110_initbuf);
     }
     memcpy_P(uc, s, iLen);
+#ifdef _LINUX_
+    AIOWriteSPI(pOBD->bbi2c.file_i2c, s, iLen);    
+#else
     if (pOBD->iMOSIPin == 0xff)
        SPI.transfer(s, iLen);
     else
        SPI_BitBang(pOBD, s, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
+#endif
     delay(100);
     obdWriteCommand(pOBD, 0xa5);
     delay(100);
@@ -247,9 +259,12 @@ int iLen;
   pOBD->wrap = 0; // default - disable text wrap
   pOBD->com_mode = COM_SPI; // communication mode
   if (pOBD->iDCPin != 0xff) // Note - not needed on Sharp Memory LCDs
-    pinMode(pOBD->iDCPin, OUTPUT);
+  {
+      pinMode(pOBD->iDCPin, OUTPUT);
+      digitalWrite(pOBD->iDCPin, 0); // for some reason, command mode must be set or some OLEDs/LCDs won't initialize correctly even if set later
+  }
   pinMode(pOBD->iCSPin, OUTPUT);
-  digitalWrite(pOBD->iCSPin, (pOBD->type < SHARP_144x168)); // set to not-active
+  digitalWrite(pOBD->iCSPin, 0); //(pOBD->type < SHARP_144x168)); // set to not-active
   if (bBitBang)
   {
       pinMode(iMOSI, OUTPUT);
@@ -261,9 +276,9 @@ int iLen;
   {
     pinMode(iReset, OUTPUT);
     digitalWrite(iReset, LOW);
-    delay(50);
+    delay(100);
     digitalWrite(iReset, HIGH);
-    delay(50);
+    delay(100);
   }
   if (iLED != -1)
   {
@@ -272,10 +287,14 @@ int iLen;
 // Initialize SPI
     if (!bBitBang) {
         pOBD->iMOSIPin = 0xff; // mark it as hardware SPI
+#ifdef _LINUX_
+	pOBD->bbi2c.file_i2c = AIOOpenSPI(SPI_BUS_NUMBER, iSpeed);
+#else
         SPI.begin();
         SPI.beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
-        //  SPI.setClockDivider(16);
-        //  SPI.setBitOrder(MSBFIRST);
+#endif
+	//  SPI.setClockDivider(16);
+       //  SPI.setBitOrder(MSBFIRST);
         //  SPI.setDataMode(SPI_MODE0);
     }
 
@@ -348,7 +367,11 @@ int iLen;
      s = (uint8_t *)oled128_initbuf;
      iLen = sizeof(oled128_initbuf);
   }
-  else if (iType < LCD_UC1701)
+//  else if (iType == OLED_132x64) { // SH1106
+//     s = (uint8_t *)oled132_initbuf;
+//     iLen = sizeof(oled132_initbuf);
+//  }
+  else if (iType < LCD_UC1701) // 128x64 and 64x32
   {
      s = (uint8_t *)oled64_initbuf;
      iLen = sizeof(oled64_initbuf);
@@ -357,8 +380,7 @@ int iLen;
   if (iType < LCD_UC1701)
   {
       memcpy_P(uc, s, iLen); // do it from RAM
-      _I2CWrite(pOBD, s, iLen);
-
+      _I2CWrite(pOBD, uc, iLen);
       if (bInvert)
       {
         uc[0] = 0; // command
@@ -414,10 +436,9 @@ int iLen;
       {
          obdWriteCommand(pOBD, 0xa7); // set inverted pixel mode
       }
-
-  }
+  } // UC1609
 } /* obdSPIInit() */
-#endif
+
 //
 // Initializes the OLED controller into "page mode"
 //
@@ -574,6 +595,16 @@ void oledPower(OBDISP *pOBD, uint8_t bOn)
       obdWriteCommand(pOBD, 0xae); // turn off OLED
 } /* oledPower() */
 
+#ifdef _LINUX_
+void delay(int iDelay)
+{
+	usleep(iDelay * 1000);
+} /* delay() */
+void delayMicroseconds(int iDelay)
+{
+	usleep(iDelay);
+} /* delayMicroseconds() */
+#endif // _LINUX_
 //
 // Bit Bang the data on GPIO pins
 //
@@ -612,7 +643,7 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
           digitalWrite(iMOSIPin, (pOBD->mode == MODE_DATA));
           digitalWrite(iSCKPin, HIGH);
           delayMicroseconds(0);
-          digitalWrite(iSCKPin, LOW);
+	  digitalWrite(iSCKPin, LOW);
 #endif
       }
       if (c == 0 || c == 0xff) // quicker for all bits equal
@@ -842,6 +873,10 @@ uint8_t *pSrc = pOBD->ucScreen;
   obdCachedFlush(pOBD, 1);
 } /* obdDumpBuffer() */
 
+//
+// Menu functions are not (yet) supported on Linux
+//
+#ifndef _LINUX_
 // A valid CW or CCW move returns 1 or -1, invalid returns 0.
 static int obdMenuReadRotary(SIMPLEMENU *sm) {
 static int8_t rot_enc_table[] = {0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0};
@@ -1134,4 +1169,4 @@ int iDelta, rc = -1;
      obdMenuFlash(sm, sm->iMenuIndex);
   return rc;
 } /* obdMenuRun() */
-
+#endif // !_LINUX_
