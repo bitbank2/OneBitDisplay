@@ -381,6 +381,9 @@ int iLen;
   {
       memcpy_P(uc, s, iLen); // do it from RAM
       _I2CWrite(pOBD, uc, iLen);
+      delay(100); // on SPI display this delay is needed or the display
+      // never sees the "display on" command at the end of the sequence
+      obdWriteCommand(pOBD, 0xaf); // turn on display
       if (bInvert)
       {
         uc[0] = 0; // command
