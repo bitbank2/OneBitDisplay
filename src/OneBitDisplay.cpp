@@ -223,12 +223,12 @@ static void LCDPowerUp(OBDISP *pOBD)
     }
     memcpy_P(uc, s, iLen);
 #ifdef _LINUX_
-    AIOWriteSPI(pOBD->bbi2c.file_i2c, s, iLen);    
+    AIOWriteSPI(pOBD->bbi2c.file_i2c, uc, iLen);    
 #else
     if (pOBD->iMOSIPin == 0xff)
-       SPI.transfer(s, iLen);
+       SPI.transfer(uc, iLen);
     else
-       SPI_BitBang(pOBD, s, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
+       SPI_BitBang(pOBD, uc, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
 #endif
     delay(100);
     obdWriteCommand(pOBD, 0xa5);
@@ -264,7 +264,7 @@ int iLen;
       digitalWrite(pOBD->iDCPin, 0); // for some reason, command mode must be set or some OLEDs/LCDs won't initialize correctly even if set later
   }
   pinMode(pOBD->iCSPin, OUTPUT);
-  digitalWrite(pOBD->iCSPin, 0); //(pOBD->type < SHARP_144x168)); // set to not-active
+  digitalWrite(pOBD->iCSPin, (pOBD->type < SHARP_144x168)); // set to not-active
   if (bBitBang)
   {
       pinMode(iMOSI, OUTPUT);
@@ -275,8 +275,10 @@ int iLen;
   if (iReset != -1)
   {
     pinMode(iReset, OUTPUT);
-    digitalWrite(iReset, LOW);
+    digitalWrite(iReset, HIGH);
     delay(100);
+    digitalWrite(iReset, LOW);
+    delay(10);
     digitalWrite(iReset, HIGH);
     delay(100);
   }
