@@ -855,6 +855,10 @@ int iPitch = pOBD->width;
     if (pOBD->flip == 0) // non-flipped display starts from line 4
        y += 4;
   }
+  else if (pOBD->type == LCD_UC1701 && pOBD->flip)
+  {
+    x += 4;
+  }
   else if (pOBD->type == OLED_132x64) // SH1106 has 128 pixels centered in 132
   {
     x += 2;

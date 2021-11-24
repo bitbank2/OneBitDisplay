@@ -223,12 +223,12 @@ static void LCDPowerUp(OBDISP *pOBD)
     }
     memcpy_P(uc, s, iLen);
 #ifdef _LINUX_
-    AIOWriteSPI(pOBD->bbi2c.file_i2c, uc, iLen);    
+    AIOWriteSPI(pOBD->bbi2c.file_i2c, s, iLen);    
 #else
     if (pOBD->iMOSIPin == 0xff)
-       SPI.transfer(uc, iLen);
+       SPI.transfer(s, iLen);
     else
-       SPI_BitBang(pOBD, uc, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
+       SPI_BitBang(pOBD, s, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
 #endif
     delay(100);
     obdWriteCommand(pOBD, 0xa5);
@@ -264,7 +264,7 @@ int iLen;
       digitalWrite(pOBD->iDCPin, 0); // for some reason, command mode must be set or some OLEDs/LCDs won't initialize correctly even if set later
   }
   pinMode(pOBD->iCSPin, OUTPUT);
-  digitalWrite(pOBD->iCSPin, (pOBD->type < SHARP_144x168)); // set to not-active
+  digitalWrite(pOBD->iCSPin, 0); //(pOBD->type < SHARP_144x168)); // set to not-active
   if (bBitBang)
   {
       pinMode(iMOSI, OUTPUT);
@@ -369,10 +369,10 @@ int iLen;
      s = (uint8_t *)oled128_initbuf;
      iLen = sizeof(oled128_initbuf);
   }
-//  else if (iType == OLED_132x64) { // SH1106
-//     s = (uint8_t *)oled132_initbuf;
-//     iLen = sizeof(oled132_initbuf);
-//  }
+  else if (iType == OLED_132x64) { // SH1106
+     s = (uint8_t *)oled132_initbuf;
+     iLen = sizeof(oled132_initbuf);
+  }
   else if (iType < LCD_UC1701) // 128x64 and 64x32
   {
      s = (uint8_t *)oled64_initbuf;
@@ -424,13 +424,17 @@ int iLen;
   }
   if (iType == LCD_UC1609)
   {
+      LCDPowerUp(pOBD);
+      return;
       obdWriteCommand(pOBD, 0xe2); // system reset
+      delay(100);
       obdWriteCommand(pOBD, 0xa0); // set frame rate to 76fps
       obdWriteCommand(pOBD, 0xeb); // set BR
       obdWriteCommand(pOBD, 0x2f); // set Power Control
       obdWriteCommand(pOBD, 0xc4); // set LCD mapping control
       obdWriteCommand(pOBD, 0x81); // set PM
       obdWriteCommand(pOBD, 0x90); // set contrast to 144
+      delay(100);
       obdWriteCommand(pOBD, 0xaf); // display enable
       if (bFlip) // flip horizontal + vertical
       {  
@@ -443,7 +447,35 @@ int iLen;
       }
   } // UC1609
 } /* obdSPIInit() */
-
+//
+// Set the memory configuration to display the pixels at 0 or 180 degrees (flipped)
+// Pass true (1) to flip 180, false (0) to set to 0
+//
+void obdSetFlip(OBDISP *pOBD, int iOnOff)
+{
+   if (pOBD == NULL) return;
+   pOBD->flip = iOnOff;
+   if (pOBD->type == LCD_UC1701 || pOBD->type == LCD_UC1609)
+   {
+      if (iOnOff) // rotate display 180
+      {
+         obdWriteCommand(pOBD, 0xa1); // SEG direction (A1 to flip horizontal) 
+         obdWriteCommand(pOBD, 0xc0); // COM direction (C0 to flip vert)
+      } else { // non-rotated
+         obdWriteCommand(pOBD, 0xa0);       
+         obdWriteCommand(pOBD, 0xc8);
+      }
+   } else { // OLEDs
+      if (iOnOff)
+      {
+	 obdWriteCommand(pOBD, 0xa0);
+	 obdWriteCommand(pOBD, 0xc0);
+      } else {
+	 obdWriteCommand(pOBD, 0xa1);
+	 obdWriteCommand(pOBD, 0xc8);
+      }
+   }
+} /* obdSetFlip() */
 //
 // Initializes the OLED controller into "page mode"
 //

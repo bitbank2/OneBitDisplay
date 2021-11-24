@@ -198,6 +198,10 @@ int obdI2CInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int b
 void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI, int iCLK, int iLED, int bFlip, int bInvert, int iBitBang, int32_t iSpeed);
 
 //
+// Set the memory configuration to display the pixels at 0 or 180 degrees (flipped)
+// pass true (1) to flip 180, false (0) to set to 0
+void obdSetFlip(OBDISP *pOBD, int iOnOff);
+//
 // Provide or revoke a back buffer for your OLED graphics
 // This allows you to manage the RAM used by ss_oled on tiny
 // embedded platforms like the ATmega series
