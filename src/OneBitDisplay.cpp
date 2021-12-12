@@ -223,12 +223,12 @@ static void LCDPowerUp(OBDISP *pOBD)
     }
     memcpy_P(uc, s, iLen);
 #ifdef _LINUX_
-    AIOWriteSPI(pOBD->bbi2c.file_i2c, s, iLen);    
+    AIOWriteSPI(pOBD->bbi2c.file_i2c, uc, iLen);    
 #else
     if (pOBD->iMOSIPin == 0xff)
-       SPI.transfer(s, iLen);
+       SPI.transfer(uc, iLen);
     else
-       SPI_BitBang(pOBD, s, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
+       SPI_BitBang(pOBD, uc, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
 #endif
     delay(100);
     obdWriteCommand(pOBD, 0xa5);
