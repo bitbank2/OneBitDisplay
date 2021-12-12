@@ -653,9 +653,11 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
       obdSetDCMode(pOBD, MODE_COMMAND);
-      digitalWrite(pOBD->iCSPin, LOW);
-      AIOWriteSPI(pOBD->bbi2c.file_i2c, pData, iLen);
-      digitalWrite(pOBD->iCSPin, HIGH);
+      if (pOBD->type < SHARP_144x168)
+         digitalWrite(pOBD->iCSPin, LOW);
+      AIOWriteSPI(pOBD->bbi2c.file_i2c, &pData[1], iLen-1);
+      if (pOBD->type < SHARP_144x168)
+         digitalWrite(pOBD->iCSPin, HIGH);
       obdSetDCMode(pOBD, MODE_DATA);
   }
 }
