@@ -544,7 +544,7 @@ int rc = OLED_NOT_FOUND;
     rc = OLED_SH1106_3C;
     pOBD->type = OLED_132x64; // needs to be treated a little differently
   }
-  else if (u == 3 || u == 6 || u == 7) // 7=128x64(rare),6=128x64 display, 3=smaller
+  else if (u == 3 || u == 6 || u == 7 || u == 4) // 7=128x64(rare),6=128x64 display, 3=smaller, 4=SSD1315
   {
     rc = OLED_SSD1306_3C;
   }
