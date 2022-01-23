@@ -680,7 +680,7 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 #else
     SPI.transfer(&pData[1], iLen-1);
 #endif
-    if (pOBD->type < SHARP_144x168)
+    if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
       digitalWrite(pOBD->iCSPin, HIGH);
   }
   else // must be I2C
@@ -829,6 +829,124 @@ int obdScrollBuffer(OBDISP *pOBD, int iStartCol, int iEndCol, int iStartRow, int
     return 0;
 } /* obdScrollBuffer() */
 //
+// Return the number of bytes accumulated as commands
+//
+int obdGetCommandLen(OBDISP *pOBD)
+{
+   if (pOBD != NULL && pOBD->type == DISPLAY_COMMANDS)
+       return pOBD->iScreenOffset;
+   else
+       return 0;
+} /* obdGetCommandLen() */
+//
+// Execute a set of bytewise command bytes
+// and execute the drawing instructions on the current display/buffer
+// Optionally render on backbuffer or physical display
+//
+void obdExecCommands(OBDISP *pSrc, OBDISP *pOBD, int bRender)
+{
+uint8_t *s, *pEnd;
+uint8_t ucColor=1, ucFont=FONT_6x8;
+int iLen, x1, y1, x2, y2;
+int iTextLen, iPitch;
+uint8_t ucTemp[64];
+
+  if (pSrc == NULL || pOBD == NULL) return;
+
+  s = pSrc->ucScreen; // source of the command data
+  iLen = pSrc->iScreenOffset; // reused variable
+  pEnd = &s[iLen];
+  while (s < pEnd-1) {
+     switch (*s++) {
+        case OBD_FILL:
+           obdFill(pOBD, s[0], bRender);
+           s++;
+           break;
+        case OBD_SETCOLOR:
+           ucColor = *s++;
+           break;
+        case OBD_SETFONT:
+           ucFont = *s++;
+           break;
+        case OBD_DRAWTEXT:
+           iTextLen = *s++;
+           if (pEnd - s >= iTextLen+3) {
+              x1 = *s++ | (*s++ << 8); // column
+              y1 = *s++; // row
+              memcpy(ucTemp, s, iTextLen);
+              ucTemp[iTextLen] = 0; // terminate the string
+              s += iTextLen;
+              obdWriteString(pOBD, 0, x1, y1, (char *)ucTemp, ucFont, 1-ucColor, bRender);
+           } else {
+              return; // something went wrong!
+           }           
+           break;
+        case OBD_DRAWLINE:
+           if (pEnd - s >= 8) {
+              x1 = *s++ | (*s++ << 8);
+              y1 = *s++ | (*s++ << 8);
+              x2 = *s++ | (*s++ << 8);
+              y2 = *s++ | (*s++ << 8);
+              obdDrawLine(pOBD, x1, y1, x2, y2, ucColor, bRender); 
+           }
+           break;
+        case OBD_DRAWRECT:
+           if (pEnd - s >= 8) {
+              x1 = *s++ | (*s++ << 8);
+              y1 = *s++ | (*s++ << 8);
+              x2 = *s++ | (*s++ << 8);
+              y2 = *s++ | (*s++ << 8);
+              obdRectangle(pOBD, x1, y1, x2, y2, ucColor, 0);
+           }
+           break;
+        case OBD_DRAWRECTFILLED:
+           if (pEnd - s >= 8) {
+              x1 = *s++ | (*s++ << 8);
+              y1 = *s++ | (*s++ << 8); 
+              x2 = *s++ | (*s++ << 8);
+              y2 = *s++ | (*s++ << 8);      
+              obdRectangle(pOBD, x1, y1, x2, y2, ucColor, 1);
+           }
+           break;
+        case OBD_DRAWELLIPSE:
+           if (pEnd - s >= 8) {
+              x1 = *s++ | (*s++ << 8);
+              y1 = *s++ | (*s++ << 8);
+              x2 = *s++ | (*s++ << 8);
+              y2 = *s++ | (*s++ << 8);
+              obdEllipse(pOBD, x1, y1, x2, y2, ucColor, 0);
+           }
+           break;
+        case OBD_DRAWELLIPSEFILLED:
+           if (pEnd - s >= 8) { 
+              x1 = *s++ | (*s++ << 8); // center x/y 
+              y1 = *s++ | (*s++ << 8);
+              x2 = *s++ | (*s++ << 8); // radius x/y
+              y2 = *s++ | (*s++ << 8);
+              obdEllipse(pOBD, x1, y1, x2, y2, ucColor, 1);
+           }
+           break;
+        case OBD_DRAWSPRITE:
+           if (pEnd - s >= 8) {
+              x1 = *s++ | (*s++ << 8); // width / height
+              y1 = *s++ | (*s++ << 8);
+              x2 = *s++ | (*s++ << 8); // destination x/y
+              y2 = *s++ | (*s++ << 8);
+              iPitch = (x1 + 7) >> 3;
+              if (pEnd - s >= (iPitch * y1)) { // enough to hold the data
+                 obdDrawSprite(pOBD, s, x1, y1, iPitch, x2, y2, ucColor);
+                 s += (iPitch * y1);
+              } else {
+                 return; // error!
+              }  
+           }
+           break;
+        default:
+           return; // invalid command!
+     }
+  }
+} /* obdParseCommands() */
+//
 // Send commands to position the "cursor" (aka memory write address)
 // to the given row and column
 //
@@ -903,7 +1021,7 @@ unsigned char ucTemp[196];
 int iPitch, iBufferSize;
 
   iPitch = pOBD->width;
-  iBufferSize = iPitch * (pOBD->height / 8);
+  iBufferSize = iPitch * ((pOBD->height+7) / 8);
 
 // Keep a copy in local buffer
 if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= iBufferSize)
@@ -1078,9 +1196,36 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
     int tx, ty, dx, dy, iStartX;
     uint8_t *s, *d, uc, pix, ucSrcMask, ucDstMask;
     int iLocalPitch;
-
     iLocalPitch = pOBD->width;
-    
+
+    if (pOBD == NULL) return;
+    if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
+       uint8_t *d = pOBD->ucScreen;
+       int i = pOBD->iScreenOffset;
+       int iLocalPitch = (cx+7)>>3;
+       if (ucPriority != pOBD->invert) { // color changed
+          pOBD->invert = ucPriority;
+          d[i++] = OBD_SETCOLOR;
+          d[i++] = ucColor;
+       }
+       d[i++] = OBD_DRAWSPRITE;
+       d[i++] = (uint8_t)cx;
+       d[i++] = (uint8_t)(cx >> 8);
+       d[i++] = (uint8_t)cy;
+       d[i++] = (uint8_t)(cy >> 8);
+       d[i++] = (uint8_t)x;
+       d[i++] = (uint8_t)(x >> 8);
+       d[i++] = (uint8_t)y;
+       d[i++] = (uint8_t)(y >> 8);
+       s = pSprite;
+       for (ty=0; ty<cy; ty++) { // copy only the part we want to the output
+           memcpy(&d[i], s, iLocalPitch);
+           i += iLocalPitch;
+       }
+       pOBD->iScreenOffset = i; // store new length
+       return; // done
+    }
+
     if (x+cx < 0 || y+cy < 0 || x >= pOBD->width || y >= pOBD->height || pOBD->ucScreen == NULL)
         return; // no backbuffer or out of bounds
     dy = y; // destination y
@@ -1106,7 +1251,7 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
         cx = pOBD->width - x;
     for (ty=0; ty<cy; ty++)
     {
-        s = &pSprite[iStartX >> 3];
+        s = &pSprite[(iStartX >> 3)];
         d = &pOBD->ucScreen[(dy>>3) * iLocalPitch + dx];
         ucSrcMask = 0x80 >> (iStartX & 7);
         pix = *s++;
@@ -1398,6 +1543,14 @@ void obdSetCursor(OBDISP *pOBD, int x, int y)
   pOBD->iCursorY = y;
 } /* obdSetCursor() */
 //
+// Advance to the next line
+//
+void obdNextLine(OBDISP *pOBD)
+{
+   pOBD->iCursorX = 0;
+   pOBD->iCursorY++;
+} /* obdNextLine() */
+//
 // Turn text wrap on or off for the oldWriteString() function
 //
 void obdSetTextWrap(OBDISP *pOBD, int bWrap)
@@ -1504,6 +1657,32 @@ int obdWriteString(OBDISP *pOBD, int iScroll, int x, int y, char *szMsg, int iSi
 {
 int i, iFontOff, iLen, iFontSkip;
 unsigned char c, *s, ucTemp[40];
+
+  if (pOBD == NULL) return;
+  if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
+     uint8_t *d = pOBD->ucScreen;
+     i = pOBD->iScreenOffset;
+     if (bInvert != 1-pOBD->invert) { // color changed
+        pOBD->invert = 1-bInvert;
+        d[i++] = OBD_SETCOLOR;
+        d[i++] = ucColor;
+     }
+     if (iSize != pOBD->flip) { // set different font size
+        pOBD->flip = iSize;
+        d[i++] = OBD_SETFONT;
+        d[i++] = iFont;
+     }
+     iLen = (int)strlen(szMsg);
+     d[i++] = OBD_DRAWTEXT;
+     d[i++] = (uint8_t)iLen;
+     d[i++] = (uint8_t)x;
+     d[i++] = (uint8_t)(x >> 8);
+     d[i++] = (uint8_t)y;
+     memcpy(&d[i], szMsg, iLen);
+     i += iLen;
+     pOBD->iScreenOffset = i; // store new length
+     return; // done
+  }
 
     if (x == -1 || y == -1) // use the cursor position
     {
@@ -1971,14 +2150,24 @@ void obdFill(OBDISP *pOBD, unsigned char ucData, int bRender)
 uint8_t y;
 uint8_t iLines;
 
+   if (pOBD == NULL) return;
+   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
+      uint8_t *d = pOBD->ucScreen;
+      y = pOBD->iScreenOffset;
+      d[y++] = OBD_FILL;
+      d[y++] = ucData;
+      pOBD->iScreenOffset = y;
+      return;
+   }
+
   pOBD->iCursorX = pOBD->iCursorY = 0;
   if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168) // pure memory, handle it differently
   {
      if (pOBD->ucScreen)
-        memset(pOBD->ucScreen, ucData, pOBD->width * (pOBD->height/8));
+        memset(pOBD->ucScreen, ucData, pOBD->width * ((pOBD->height+7)/8));
      return;
   }
-  iLines = pOBD->height >> 3;
+  iLines = (pOBD->height+7) >> 3;
   memset(u8Cache, ucData, pOBD->width);
  
   for (y=0; y<iLines; y++)
@@ -1999,7 +2188,12 @@ uint8_t iLines;
 //
 void obdSetBackBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
+  if (pOBD == NULL || pBuffer == NULL) return;
+
   pOBD->ucScreen = pBuffer;
+  pOBD->iScreenOffset = 0;
+  if (pOBD->type >= LCD_COUNT) // invalid type, set to command output
+    pOBD->type = DISPLAY_COMMANDS;
 } /* obdSetBackBuffer() */
 
 void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, int bRender)
@@ -2012,6 +2206,28 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
   int xinc, yinc;
   int y, x;
   int iPitch = pOBD->width;
+
+  if (pOBD == NULL) return;
+  if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
+     uint8_t *d = pOBD->ucScreen;
+     int i = pOBD->iScreenOffset;
+     if (ucColor != pOBD->invert) { // color changed
+        pOBD->invert = ucColor;
+        d[i++] = OBD_SETCOLOR;
+        d[i++] = ucColor;
+     }
+     d[i++] = OBD_DRAWLINE;
+     d[i++] = (uint8_t)x1;
+     d[i++] = (uint8_t)(x1 >> 8);
+     d[i++] = (uint8_t)y1;
+     d[i++] = (uint8_t)(y1 >> 8);
+     d[i++] = (uint8_t)x2;
+     d[i++] = (uint8_t)(x2 >> 8);
+     d[i++] = (uint8_t)y2;
+     d[i++] = (uint8_t)(y2 >> 8);
+     pOBD->iScreenOffset = i; // store new length
+     return; // done
+  }
 
   if (x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 || x1 >= pOBD->width || x2 >= pOBD->width || y1 >= pOBD->height || y2 >= pOBD->height)
      return;
@@ -2228,6 +2444,27 @@ void obdEllipse(OBDISP *pOBD, int iCenterX, int iCenterY, int32_t iRadiusX, int3
     
     if (pOBD == NULL || pOBD->ucScreen == NULL)
         return; // must have back buffer defined
+  if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
+     uint8_t *d = pOBD->ucScreen;
+     int i = pOBD->iScreenOffset;
+     if (ucColor != pOBD->invert) { // color changed
+        pOBD->invert = ucColor;
+        d[i++] = OBD_SETCOLOR;
+        d[i++] = ucColor;
+     }
+     d[i++] = (bFilled) ? OBD_DRAWELLIPSEFILLED : OBD_DRAWELLIPSE;
+     d[i++] = (uint8_t)iCenterX;
+     d[i++] = (uint8_t)(iCenterX >> 8);
+     d[i++] = (uint8_t)iCenterY;
+     d[i++] = (uint8_t)(iCenterY >> 8);
+     d[i++] = (uint8_t)iRadiusX;
+     d[i++] = (uint8_t)(iRadiusX >> 8);
+     d[i++] = (uint8_t)iRadiusY;
+     d[i++] = (uint8_t)(iRadiusY >> 8);
+     pOBD->iScreenOffset = i; // store new length
+     return; // done
+  }
+
     if (iRadiusX <= 0 || iRadiusY <= 0) return; // invalid radii
     
     if (iRadiusX > iRadiusY) // use X as the primary radius
@@ -2270,6 +2507,27 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
 
     if (pOBD == NULL || pOBD->ucScreen == NULL)
         return; // only works with a back buffer
+  if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
+     uint8_t *d = pOBD->ucScreen;
+     int i = pOBD->iScreenOffset;
+     if (ucColor != pOBD->invert) { // color changed
+        pOBD->invert = ucColor;
+        d[i++] = OBD_SETCOLOR;
+        d[i++] = ucColor;
+     }
+     d[i++] = (bFilled) ? OBD_DRAWRECTFILLED : OBD_DRAWRECT;
+     d[i++] = (uint8_t)x1;
+     d[i++] = (uint8_t)(x1 >> 8);
+     d[i++] = (uint8_t)y1;
+     d[i++] = (uint8_t)(y1 >> 8);
+     d[i++] = (uint8_t)x2;
+     d[i++] = (uint8_t)(x2 >> 8);
+     d[i++] = (uint8_t)y2;
+     d[i++] = (uint8_t)(y2 >> 8);
+     pOBD->iScreenOffset = i; // store new length
+     return; // done
+  }
+
     if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0 ||
        x1 >= pOBD->width || y1 >= pOBD->height || x2 >= pOBD->width || y2 >= pOBD->height) return; // invalid coordinates
     iPitch = pOBD->width;
