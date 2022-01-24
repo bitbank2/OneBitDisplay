@@ -142,16 +142,14 @@ enum {
   ANGLE_FLIPY
 };
 // Bytewise commands for rendering scenes
+// stored in the lower 4 bits of the command byte
+// the upper 4 bits can hold single bit parameters
 #define OBD_FILL     0
-#define OBD_SETCOLOR 1
-#define OBD_SETFONT  2
-#define OBD_DRAWTEXT 3
-#define OBD_DRAWLINE 4
-#define OBD_DRAWRECT 5
-#define OBD_DRAWRECTFILLED    6
-#define OBD_DRAWELLIPSE       7
-#define OBD_DRAWELLIPSEFILLED 8
-#define OBD_DRAWSPRITE        9
+#define OBD_DRAWTEXT 1
+#define OBD_DRAWLINE 2
+#define OBD_DRAWRECT 3
+#define OBD_DRAWELLIPSE 4
+#define OBD_DRAWSPRITE  5
 
 // Return value from obd obdI2CInit()
 enum {
@@ -320,7 +318,7 @@ int obdDrawGFX(OBDISP *pOBD, uint8_t *pSrc, int iSrcCol, int iSrcRow, int iDestC
 // and execute the drawing instructions on the current display/buffer
 // Optionally render on backbuffer or physical display
 //
-void obdExecCommands(OBDISP *pSrc, OBDISP *pOBD, int bRender);
+void obdExecCommands(uint8_t *pData, int iLen, OBDISP *pOBD, int bRender);
 //
 // Return the number of bytes accumulated as commands
 //
