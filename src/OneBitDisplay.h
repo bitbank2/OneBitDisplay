@@ -1,7 +1,9 @@
 #ifndef __ONEBITDISPLAY__
 #define __ONEBITDISPLAY__
 
+#ifndef MEMORY_ONLY
 #include <BitBang_I2C.h>
+#endif
 
 // Proportional font data taken from Adafruit_GFX library
 /// Font data stored PER GLYPH
@@ -34,7 +36,9 @@ uint8_t *ucScreen;
 int iCursorX, iCursorY;
 int width, height;
 int iScreenOffset;
+#ifndef MEMORY_ONLY
 BBI2C bbi2c;
+#endif
 uint8_t com_mode; // communication mode (I2C / SPI)
 uint8_t mode; // data/command mode for 9-bit SPI
 uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;

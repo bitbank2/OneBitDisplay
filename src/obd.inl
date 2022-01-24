@@ -13,11 +13,15 @@
 #define I2C_SLAVE 0
 #endif
 static void digitalWrite(int iPin, int iState) {
+#ifndef MEMORY_ONLY
    AIOWriteGPIO(iPin, iState);
+#endif
 }
 static void pinMode(int iPin, int iMode)
 {
+#ifndef MEMORY_ONLY
    AIOAddGPIO(iPin, iMode);
+#endif
 } /* pinMode() */
 //static int digitalRead(int iPin)
 //{
@@ -617,6 +621,7 @@ static int16_t pgm_read_word(const uint8_t *ptr)
 {
   return ptr[0] + (ptr[1]<<8);
 }
+#ifndef MEMORY_ONLY
 int I2CReadRegister(BBI2C *pI2C, uint8_t addr, uint8_t reg, uint8_t *pBuf, int iLen)
 {
 int rc;
@@ -645,10 +650,11 @@ char filename[32];
   }
     return; // 0;
 }
-
+#endif // MEMORY_ONLY
 // Wrapper function to write I2C data
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
+#ifndef MEMORY_ONLY
   if (pOBD->com_mode == COM_I2C) {// I2C device
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
@@ -660,6 +666,7 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
          digitalWrite(pOBD->iCSPin, HIGH);
       obdSetDCMode(pOBD, MODE_DATA);
   }
+#endif // MEMORY_ONLY
 }
 #else // Arduino
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
@@ -709,6 +716,7 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 // Send a single byte command to the OLED controller
 void obdWriteCommand(OBDISP *pOBD, unsigned char c)
 {
+#ifndef MEMORY_ONLY
 unsigned char buf[4];
 
   if (pOBD->com_mode == COM_I2C) {// I2C device
@@ -729,6 +737,7 @@ unsigned char buf[4];
       digitalWrite(pOBD->iCSPin, HIGH);
       obdSetDCMode(pOBD, MODE_DATA);
   }
+#endif // MEMORY_ONLY
 } /* obdWriteCommand() */
 
 //
@@ -895,7 +904,7 @@ int i;
 void obdExecCommands(uint8_t *pData, int iLen, OBDISP *pOBD, int bRender)
 {
 uint8_t *s, *pEnd;
-uint8_t uc, ucColor, ucFill, ucFont;
+uint8_t uc, ucColor=1, ucFill, ucFont;
 int x1, y1, x2, y2;
 int iTextLen, iPitch;
 uint8_t ucTemp[64];
@@ -1066,6 +1075,7 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= iBufferSize)
 }
 if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
   return; // nothing else to do
+#ifndef MEMORY_ONLY
 // Copying the data has the benefit in SPI mode of not letting
 // the original data get overwritten by the SPI.transfer() function
   if (bRender)
@@ -1090,6 +1100,7 @@ if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
           _I2CWrite(pOBD, ucTemp, iLen+1);
       }
   }
+#endif // MEMORY_ONLY
 } /* obdWriteDataBlock() */
 //
 // Write a repeating byte to the display
@@ -1421,6 +1432,7 @@ int iPitch, iSize;
 
   if (pOBD->ucScreen)
     uc = ucOld = pOBD->ucScreen[i];
+#ifndef MEMORY_ONLY
   else if (pOBD->type == OLED_132x64 || pOBD->type == OLED_128x128) // SH1106/SH1107 can read data
   {
     uint8_t ucTemp[3];
@@ -1433,6 +1445,7 @@ int iPitch, iSize;
      I2CRead(&pOBD->bbi2c, pOBD->oled_addr, ucTemp, 2);
      uc = ucOld = ucTemp[1]; // first byte is garbage
   }
+#endif // MEMORY_ONLY
   else
      uc = ucOld = 0;
 
@@ -1485,7 +1498,7 @@ int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int dx, int dy, int bInvert)
 int16_t i16, cx, cy;
 int iOffBits; // offset to bitmap data
 int iPitch, iDestPitch;
-uint8_t x, y, b, *s, *d;
+uint8_t x, y, b=0, *s, *d;
 uint8_t dst_mask, src_mask;
 uint8_t bFlipped = false;
 

@@ -21,10 +21,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#ifndef MEMORY_ONLY
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 #include <math.h>
 #include <armbianio.h>
+#endif // MEMORY_ONLY
 // convert wire library constants into ArmbianIO values
 #define OUTPUT GPIO_OUT
 #define INPUT GPIO_IN
@@ -293,6 +295,7 @@ void obdBacklight(OBDISP *pOBD, int bOn)
 // Send the command sequence to power up the LCDs
 static void LCDPowerUp(OBDISP *pOBD)
 {
+#ifndef MEMORY_ONLY
     int iLen;
     uint8_t *s, uc[32];
     obdSetDCMode(pOBD, MODE_COMMAND);
@@ -328,6 +331,7 @@ static void LCDPowerUp(OBDISP *pOBD)
     obdWriteCommand(pOBD, 0xaf);
     digitalWrite(pOBD->iCSPin, HIGH);
     obdSetDCMode(pOBD, MODE_DATA);
+#endif // MEMORY_ONLY
 } /* LCDPowerUp() */
 
 //
@@ -335,6 +339,7 @@ static void LCDPowerUp(OBDISP *pOBD)
 //
 void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI, int iCLK, int iLED, int bFlip, int bInvert, int bBitBang, int32_t iSpeed)
 {
+#ifndef MEMORY_ONLY
 uint8_t uc[32], *s;
 int iLen;
 
@@ -547,6 +552,7 @@ int iLen;
          obdWriteCommand(pOBD, 0xa7); // set inverted pixel mode
       }
   } // UC1609
+#endif // MEMORY_ONLY
 } /* obdSPIInit() */
 //
 // Set the memory configuration to display the pixels at 0 or 180 degrees (flipped)
@@ -582,9 +588,10 @@ void obdSetFlip(OBDISP *pOBD, int iOnOff)
 //
 int obdI2CInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int bWire, int sda, int scl, int reset, int32_t iSpeed)
 {
+int rc = OLED_NOT_FOUND;
+#ifndef MEMORY_ONLY
 unsigned char uc[32];
 uint8_t u8Len, *s;
-int rc = OLED_NOT_FOUND;
 
   pOBD->ucScreen = NULL; // reset backbuffer; user must provide one later
   pOBD->type = iType;
@@ -720,6 +727,7 @@ int rc = OLED_NOT_FOUND;
     pOBD->width = 72;
     pOBD->height = 40;
   }
+#endif // MEMORY_ONLY
   return rc;
 } /* obdInit() */
 //
@@ -881,6 +889,7 @@ void obdSetContrast(OBDISP *pOBD, unsigned char ucContrast)
 
 static void EPDWaitBusy(OBDISP *pOBD)
 {
+#ifndef MEMORY_ONLY
 int iTimeout = 0;
 
   while (1) {
@@ -891,6 +900,7 @@ int iTimeout = 0;
          break; // DEBUG - timeout
      delay(10);
   }
+#endif // MEMORY_ONLY
 } /* EPDWaitBusy() */
 
 //
