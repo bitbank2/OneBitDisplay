@@ -969,6 +969,7 @@ uint8_t ucTemp[64];
            break;
         case OBD_DRAWSPRITE:
            if (pEnd - s >= 8) {
+               ucColor = (uc >> 4) & 1;
                s = obdReadCmdInt(s, &x1); // width / height
                s = obdReadCmdInt(s, &y1);
                s = obdReadCmdInt(s, &x2); // destination x/y
@@ -1254,6 +1255,7 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
        s = pSprite;
        for (ty=0; ty<cy; ty++) { // copy only the part we want to the output
            memcpy(&d[tx], s, iLocalPitch);
+           s += iPitch;
            tx += iLocalPitch;
        }
        pOBD->iScreenOffset = tx; // store new length
