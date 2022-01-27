@@ -897,6 +897,16 @@ int i;
     return pData;
 } /* obdReadCmdInt() */
 //
+// Set the current custom font pointers for playing back
+// bytewise commands
+//
+void obdSetCustomFont(OBDISP *pOBD, GFXfont *pFont, uint8_t ucFont)
+{
+    if (pOBD != NULL && pFont != NULL && ucFont >= FONT_CUSTOM0 && ucFont <= FONT_CUSTOM2) {
+        pOBD->pFont[ucFont-FONT_CUSTOM0] = (void *)pFont;
+    }
+} /* obdSetCustomFont() */ 
+//
 // Execute a set of bytewise command bytes
 // and execute the drawing instructions on the current display/buffer
 // Optionally render on backbuffer or physical display
@@ -930,7 +940,13 @@ uint8_t ucTemp[64];
               memcpy(ucTemp, s, iTextLen);
               ucTemp[iTextLen] = 0; // terminate the string
               s += iTextLen;
-              obdWriteString(pOBD, 0, x1, y1, (char *)ucTemp, ucFont, ucColor, bRender);
+               if (ucFont >= FONT_CUSTOM0) { // up to 3 custom fonts
+                   if (pOBD->pFont[ucFont-FONT_CUSTOM0] != NULL) {
+                       obdWriteStringCustom(pOBD, (GFXfont *)pOBD->pFont[ucFont-FONT_CUSTOM0], x1, y1, (char *)ucTemp, ucColor);
+                   }
+               } else {
+                   obdWriteString(pOBD, 0, x1, y1, (char *)ucTemp, ucFont, ucColor, bRender);
+               }
            } else {
               return; // something went wrong!
            }           
@@ -2079,6 +2095,24 @@ int iPitch;
    
    if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL || x < 0)
       return -1;
+  if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
+      uint8_t *d = pOBD->ucScreen;
+      dx = (int)strlen(szMsg);
+     // The font pointer is really the integer font index
+      i = (int)pFont;
+      if (i >= FONT_CUSTOM0) { // must be a valid index
+          obdWriteCmdByte(pOBD, OBD_DRAWTEXT | ((ucColor & 1) << 7) | ((i & 7) << 4));
+          obdWriteCmdByte(pOBD, (uint8_t) dx);
+          obdWriteCmdInt(pOBD, x);
+          obdWriteCmdInt(pOBD, y);
+          i = pOBD->iScreenOffset;
+          memcpy(&d[i], szMsg, dx);
+          i += dx;
+          pOBD->iScreenOffset = i; // store new length
+      }
+      return 0; // done
+  }
+
    iPitch = pOBD->width;
    // in case of running on AVR, get copy of data from FLASH
    memcpy_P(&font, pFont, sizeof(font));

@@ -39,6 +39,7 @@ int iScreenOffset;
 #ifndef MEMORY_ONLY
 BBI2C bbi2c;
 #endif
+void *pFont[3]; // up to 3 custom font pointers
 uint8_t com_mode; // communication mode (I2C / SPI)
 uint8_t mode; // data/command mode for 9-bit SPI
 uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
@@ -105,6 +106,9 @@ enum {
    FONT_12x16,
    FONT_16x16,
    FONT_16x32,
+   FONT_CUSTOM0,
+   FONT_CUSTOM1,
+   FONT_CUSTOM2,
    FONT_COUNT
 };
 // For backwards compatibility, keep the old names valid
@@ -317,6 +321,11 @@ void obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
 // returns 0 for success, -1 for invalid parameter
 //
 int obdDrawGFX(OBDISP *pOBD, uint8_t *pSrc, int iSrcCol, int iSrcRow, int iDestCol, int iDestRow, int iWidth, int iHeight, int iSrcPitch);
+//
+// Set the current custom font pointers for playing back
+// bytewise commands
+//
+void obdSetCustomFont(OBDISP *pOBD, GFXfont *pFont, uint8_t ucFont);
 //
 // Execute a set of bytewise command bytes
 // and execute the drawing instructions on the current display/buffer
