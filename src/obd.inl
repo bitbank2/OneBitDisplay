@@ -2112,9 +2112,8 @@ int iPitch;
       }
       return 0; // done
   }
-
    iPitch = pOBD->width;
-   // in case of running on AVR, get copy of data from FLASH
+   // in case of running on Harvard architecture, get copy of data from FLASH
    memcpy_P(&font, pFont, sizeof(font));
    pGlyph = &glyph;
 
@@ -2150,7 +2149,7 @@ int iPitch;
                iBitOff += bits; // because of a clipped line
                uc <<= (8-bits);
                if (tx >= pGlyph->width) {
-                  while(tx >= pGlyph->width) { // rolls into next line(s)
+                  while(tx >= pGlyph->width && ty < end_y) { // rolls into next line(s)
                      tx -= pGlyph->width;
                      ty++;
                   }
@@ -2164,7 +2163,7 @@ int iPitch;
                   d = &pOBD->ucScreen[(ty >> 3) * iPitch + dx]; // internal buffer dest
                }
             } // if we ran out of bits
-            if (uc & 0x80) { // set pixel
+            if (uc & 0x80 && (dx+tx) < pOBD->width) { // set pixel
                if (ucClr)
                   d[tx] |= ucMask;
                else
