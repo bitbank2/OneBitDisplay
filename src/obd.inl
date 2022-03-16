@@ -2092,7 +2092,7 @@ uint8_t *s, *d, bits, ucMask, ucClr, uc;
 GFXfont font;
 GFXglyph glyph, *pGlyph;
 int iPitch;
-   
+ 
    if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL || x < 0)
       return -1;
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
