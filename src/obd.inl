@@ -1027,6 +1027,10 @@ int iPitch = pOBD->width;
       obdWriteCommand(pOBD, 0x80 | x);
       return;
   }
+  if (pOBD->type == OLED_80x128) // visible portion starts at column 24, row 0
+  {
+    x += 24;
+  }
   if (pOBD->type == OLED_64x32) // visible display starts at column 32, row 4
   {
     x += 32; // display is centered in VRAM, so this is always true

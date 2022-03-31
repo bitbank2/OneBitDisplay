@@ -157,6 +157,9 @@ const unsigned char oled32_initbuf[] PROGMEM  = {
 0x00,0xae,0xd5,0x80,0xa8,0x1f,0xd3,0x00,0x40,0x8d,0x14,0xa1,0xc8,0xda,0x02,
 0x81,0x7f,0xd9,0xf1,0xdb,0x40,0xa4,0xa6,0xaf};
 
+const unsigned char oled80_initbuf[] PROGMEM = {0x00,0xae,0xa1,0xc8,0xaf
+};
+
 const unsigned char oled72_initbuf[] PROGMEM ={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x40,0xa1,0xc8,
       0xda,0x12,0x81,0xff,0xad,0x30,0xd9,0xf1,0xa4,0xa6,0xd5,0x80,0x8d,0x14,
       0xaf,0x20,0x02};
@@ -402,7 +405,12 @@ int iLen;
 
   pOBD->width = 128; // assume 128x64
   pOBD->height = 64;
-  if (iType == SHARP_144x168)
+  if (iType == OLED_80x128)
+  {
+      pOBD->width = 80;
+      pOBD->height = 128;
+  }
+  else if (iType == SHARP_144x168)
   {
       pOBD->width = 144;
       pOBD->height = 168;
@@ -460,7 +468,12 @@ int iLen;
     pOBD->width = 72;
     pOBD->height = 40;
   }
-  if (iType == OLED_128x32 || iType == OLED_96x16)
+  if (iType == OLED_80x128)
+  {
+     s = (uint8_t *)oled80_initbuf;
+     iLen = sizeof(oled80_initbuf);
+  }
+  else if (iType == OLED_128x32 || iType == OLED_96x16)
   {
      s = (uint8_t *)oled32_initbuf;
      iLen = sizeof(oled32_initbuf);
@@ -659,6 +672,11 @@ uint8_t u8Len, *s;
   if (pOBD->oled_addr == 0x3d)
      rc++; // return the '3D' version of the type
 
+  if (iType == OLED_80x128)
+  {
+      s = (uint8_t *)oled80_initbuf;
+      u8Len = sizeof(oled80_initbuf);
+  }
   if (iType == OLED_128x32 || iType == OLED_96x16)
   {
       s = (uint8_t *)oled32_initbuf;
@@ -707,6 +725,11 @@ uint8_t u8Len, *s;
   {
     pOBD->width = 96;
     pOBD->height = 16;
+  }
+  else if (iType == OLED_80x128)
+  {
+    pOBD->width = 80;
+    pOBD->height = 128;
   }
   else if (iType == OLED_64x128)
   {
@@ -1317,6 +1340,16 @@ uint8_t *pSrc = pOBD->ucScreen;
   }
   iLines = pOBD->height >> 3;
   iCols = pOBD->width >> 4;
+// different method for SPI displays
+  if (pOBD->com_mode == COM_SPI) {
+     for (y=0; y<iLines; y++) {
+         obdSetPosition(pOBD, 0, y, 1);
+         obdWriteDataBlock(pOBD, pBuffer, pOBD->width, 1);
+         pBuffer += pOBD->width;
+     }
+     return;
+  }
+
   for (y=0; y<iLines; y++)
   {
     bNeedPos = 1; // start of a new line means we need to set the position too
