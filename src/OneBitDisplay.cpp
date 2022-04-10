@@ -138,6 +138,76 @@ const unsigned char lut_bb_full[] =
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
+uint8_t st7302_hpm_init[] = {
+    0x02, 0xEB, 0x02, // Enable OTP
+    0x02, 0xD7, 0x68, // OTP Load Control
+    0x02, 0xD1, 0x01, // Auto Power Control
+    0x02, 0xC0, 0xF6, // Gate Voltage setting
+    0x07, 0xC1, 0x28, 0x28, 0x28, 0x28, 0x14, 0x00, // VSH Setting
+    0x05, 0xC2, 0x06, 0x06, 0x06, 0x06, // VSL Setting
+    0x02, 0xCB, 0x08, // VCOMH Setting
+    0x02, 0xB3, 0x94, // VCOM EQ Enable
+    0x0B, 0xB4, 0xE5, 0x66, 0xFD, 0xFF, 0xFF, 0x7F, 0xFD, 0xFF, 0xFF, 0x7F, // Gate EQ
+    0x03, 0xC7, 0xA6, 0xE9, // OSC Setting
+    0x02, 0xB0, 0x3F, // Duty Setting
+    0x03, 0xB2, 0x00, 0x05, // Frame Rate Setting
+    0x02, 0x36, 0x20, // Memory Access Mode
+    0x02, 0x3A, 0x01, // Data Format
+    0x02, 0xB9, 0x23, // Source Setting
+    0x02, 0xB8, 0x09, // Panel Setting
+    0x01, 0x11, // sleep out
+    0xFF, 100, // pause
+    0x03, 0xB2, 0x01, 0x05, // Frame Rate Setting
+//    0x01, 0x38, // high power mode
+    0x01, 0x29, // display on
+    0x00
+};
+
+const uint8_t st7302_wenting[] = {
+    0x02, 0xEB, 0x02, // Enable OTP
+    0x02, 0xD7, 0x68, // OTP Load Control
+    0x02, 0xD1, 0x01, // Auto Power Control
+    0x02, 0xC0, 0x40, // Gate Voltage setting
+    0x07, 0xC1, 0x22, 0x22, 0x22, 0x22, 0x14, 0x00, // VSH Setting
+    0x05, 0xC2, 0x00, 0x00, 0x00, 0x00, // VSL Setting
+    0x02, 0xCB, 0x0E, // VCOMH Setting
+    0x0B, 0xB4, 0xE5, 0x66, 0x85, 0xFF, 0xFF, 0x52, 0x85, 0xFF, 0xFF, 0x52, // Gate EQ
+    0x03, 0xC7, 0xA6, 0xE9, // OSC Setting
+    0x02, 0xB0, 0x3F, // Duty Setting
+    0x02, 0x36, 0x00, // Memory Access Mode
+    0x02, 0x3A, 0x11, // Data Format
+    0x02, 0xB9, 0x23, // Source Setting
+    0x02, 0xB8, 0x09, // Source Setting
+    0x00
+};
+
+const uint8_t st7302_lpm_init[] = {
+    0x02, 0xEB, 0x02, // Enable OTP
+//    0x02, 0xE4, 0x02, // single lane SPI data
+    0x02, 0xD7, 0x68, // OTP Load Control
+    0x02, 0xD1, 0x01, // Auto Power Control
+    0x02, 0xC0, 0x40, // Gate Voltage setting
+    0x07, 0xC1, 0x22, 0x28, 0x28, 0x22, 0x14, 0x00, // VSH Setting
+    0x05, 0xC2, 0x00, 0x00, 0x00, 0x00, // VSL Setting
+    0x02, 0xCB, 0x0E, // VCOMH Setting
+    0x02, 0xB3, 0x94, // VCOM EQ Enable
+    0x0B, 0xB4, 0xE5, 0x66, 0x85, 0xFF, 0xFF, 0x52, 0x85, 0xFF, 0xFF, 0x52, // Gate EQ
+//    0x0B, 0xB4, 0xA5, 0x66, 0x01, 0x00, 0x00, 0x40, 0x01, 0x00, 0x00, 0x40,
+//    0x01, 0x11, // sleep out
+//    0x01, 0xff, 100, // pause
+    0x03, 0xC7, 0xA6, 0xE9, // OSC Setting
+//    0x03, 0xB2, 0x00, 0x05, // Frame Rate Setting
+    0x02, 0x36, 0xfc, // Memory Access Mode
+    0x01, 0x39, // low power
+    0x02, 0x3A, 0x11, // Data Format
+    0x02, 0xB0, 0x3f, // Duty Setting
+//    0x02, 0xB0, 0x64, // Duty Setting
+    0x02, 0xB9, 0x23, // Source Setting
+    0x02, 0xB8, 0x09, // Panel Setting
+    0x01, 0x29, // display on
+    0x00
+};
+
 // Initialization sequences
 const unsigned char oled128_initbuf[] PROGMEM = {0x00, 0xae,0xdc,0x00,0x81,0x40,
       0xa1,0xc8,0xa8,0x7f,0xd5,0x50,0xd9,0x22,0xdb,0x35,0xb0,0xda,0x12,
@@ -346,6 +416,9 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
 uint8_t uc[32], *s;
 int iLen;
 
+    if (pOBD == NULL)
+        return;
+    memset(pOBD, 0, sizeof(OBDISP));
   pOBD->ucScreen = NULL; // start with no backbuffer; user must provide one later
   pOBD->iDCPin = iDC;
   pOBD->iCSPin = iCS;
@@ -405,6 +478,11 @@ int iLen;
 
   pOBD->width = 128; // assume 128x64
   pOBD->height = 64;
+  if (iType == LCD_ST7302)
+  {
+      pOBD->width = 250;
+      pOBD->height = 122;
+  }
   if (iType == OLED_80x128)
   {
       pOBD->width = 80;
@@ -521,6 +599,51 @@ int iLen;
         _I2CWrite(pOBD, uc, 2);
       }
   } // OLED
+  if (iType == LCD_ST7302)
+  {
+      uint8_t *s = (uint8_t *)st7302_wenting; //st7302_lpm_init;
+      iLen = 1;
+      obdWriteCommand(pOBD, 0x11); // sleep out
+      delay(100);
+
+      while (iLen) {
+          iLen = *s++; // parameter byte count
+          if (iLen) {
+              if (s[0] == 0xff) { // delay
+                  delay(s[1]);
+                  s += 2;
+              } else {
+                  obdWriteCommand(pOBD, s[0]);
+                  s++;
+                  iLen--;
+                  if (iLen) {
+                      obdWriteDataBlock(pOBD, s, iLen, 1);
+                      s += iLen;
+                  }
+              }
+          }
+      } // while commands to transmit
+//      obdWriteCommand(pOBD, 0x11); // sleep out
+//      delay(100);
+      obdWriteCommand(pOBD, 0x29); // Display on
+      obdWriteCommand(pOBD, 0x39); // Low power mode
+//      obdWriteCommand(pOBD, 0x13); // partial mode off
+//      obdWriteCommand(pOBD, 0x38); // high power mode
+
+      // Clear RAM
+//      obdWriteCommand(pOBD, 0xb9);
+//      uc[0] = 0x40;
+//      uc[1] = 0xe3;
+//      _I2CWrite(pOBD, uc, 2);
+//      delay(1000);
+//      obdWriteCommand(pOBD, 0xb9);
+//      uc[0] = 0x40;
+//      uc[1] = 0x23;
+//      _I2CWrite(pOBD, uc, 2);
+
+      return;
+  } /* ST7302 */
+    
   if (iType == LCD_UC1701 || iType == LCD_HX1230)
   {
       uint8_t cCOM = 0xc0;
@@ -606,7 +729,10 @@ int rc = OLED_NOT_FOUND;
 unsigned char uc[32];
 uint8_t u8Len, *s;
 
-  pOBD->ucScreen = NULL; // reset backbuffer; user must provide one later
+  if (pOBD == NULL)
+      return -1;
+    if (iType < 0 || iType >= LCD_COUNT)
+        return -1; // invalid display type
   pOBD->type = iType;
   pOBD->flip = bFlip;
   pOBD->invert = bInvert;
@@ -1221,7 +1347,68 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
   EPDWaitBusy(pOBD);
   EPDSleep(pOBD);
 } /* EPDDumpBuffer() */
-
+//
+// Special case for ST7302
+//
+static void ST7302DumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
+{
+uint8_t ucTemp[4], ucPixels[40];
+int i, x, y, odd, iPitch, count;
+uint8_t ucMask, ucMask2, uc1, uc2, *s, *d;
+    
+    iPitch = pOBD->width;
+    obdWriteCommand(pOBD, 0x2a); // Column set
+    ucTemp[0] = 0x40;
+    ucTemp[1] = 0x19; // start x
+    ucTemp[2] = 0x23; // end x
+    _I2CWrite(pOBD, ucTemp, 3);
+    obdWriteCommand(pOBD, 0x2b); // Row set
+    ucTemp[0] = 0x40;
+    ucTemp[1] = 0x0; // start y
+    ucTemp[2] = 0x40; // end y
+    _I2CWrite(pOBD, ucTemp, 3);
+    obdWriteCommand(pOBD, 0x2c); // memory write
+// Shift out the image in pairs of lines
+    ucPixels[0] = 0x40;
+    for (odd=0; odd<2; odd++) {
+    for (x=odd; x<pOBD->width; x+= 4) { // a pair of columns at a time
+        d = ucPixels+1;
+        ucMask = 1;
+        uc1 = 0;
+        count = 0;
+        s = &pBuffer[x];
+        for (y=0; y<pOBD->height+6; y++) {
+            uc1 <<= 2;
+            if (s[0] & ucMask) uc1 |= 2;
+            if (s[2] & ucMask) uc1 |= 1;
+            count++;
+            if (count == 3) { // finish the byte
+                uc1 <<= 2;
+                *d++ = uc1;
+                count = 0;
+                uc1 = 0;
+            }
+            ucMask <<= 1;
+            if (ucMask == 0) {
+                ucMask = 1;
+                s += iPitch;
+            } // for i
+        } // for y
+        obdWriteCommand(pOBD, 0x2a); // Column set
+        ucTemp[0] = 0x40;
+        ucTemp[1] = 0x19; // start x
+        ucTemp[2] = 0x27; // end x
+        _I2CWrite(pOBD, ucTemp, 3);
+        obdWriteCommand(pOBD, 0x2b); // Row set
+        ucTemp[0] = 0x40;
+        ucTemp[1] = (x/4) + (odd*120); // start y
+        ucTemp[2] = 0x80; // end y
+        _I2CWrite(pOBD, ucTemp, 3);
+        obdWriteCommand(pOBD, 0x2c); // memory write
+        _I2CWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
+    } // for x
+    } // for odd
+} /* ST7302DumpBuffer() */
 //
 // Special case for Sharp Memory LCD
 //
@@ -1333,17 +1520,22 @@ uint8_t *pSrc = pOBD->ucScreen;
      EPDDumpBuffer(pOBD, pBuffer);
      return;
   }
+  if (pOBD->type == LCD_ST7302) // special case for ST7302
+  {
+      ST7302DumpBuffer(pOBD, pBuffer);
+      return;
+  }
   if (pOBD->type >= SHARP_144x168) // special case for Sharp Memory LCDs
   {
     SharpDumpBuffer(pOBD, pBuffer);
     return;
   }
-  iLines = pOBD->height >> 3;
+  iLines = (pOBD->height+3) >> 3;
   iCols = pOBD->width >> 4;
 // different method for SPI displays
-  if (pOBD->com_mode == COM_SPI) {
+  if (1) { //pOBD->com_mode == COM_SPI) {
      for (y=0; y<iLines; y++) {
-         obdSetPosition(pOBD, 0, y, 1);
+         obdSetPosition(pOBD, 0, y*8, 1);
          obdWriteDataBlock(pOBD, pBuffer, pOBD->width, 1);
          pBuffer += pOBD->width;
      }
@@ -1675,3 +1867,251 @@ int iDelta, rc = -1;
   return rc;
 } /* obdMenuRun() */
 #endif // !_LINUX_
+//
+// C++ Class implementation
+//
+void ONE_BIT_DISPLAY::SPIbegin(int iType, int iDC, int iCS, int iReset, int iMOSI, int iCLK, int iLED, int bFlip, int bInvert, int bBitBang, int32_t iSpeed)
+{
+    obdSPIInit(&_obd, iType, iDC, iCS, iReset, iMOSI, iCLK, iLED, bFlip, bInvert, bBitBang, iSpeed);
+} /* SPIbegin() */
+
+void ONE_BIT_DISPLAY::setI2CPins(int iSDA, int iSCL, int iReset)
+{
+    _obd.iSDAPin = iSDA;
+    _obd.iSCLPin = iSCL;
+    _obd.iRSTPin = iReset;
+}
+void ONE_BIT_DISPLAY::setBitBang(bool bBitBang)
+{
+    _obd.bBitBang = bBitBang;
+}
+void ONE_BIT_DISPLAY::setFlags(int iFlags)
+{
+    _obd.invert = iFlags & OBD_INVERTED;
+    _obd.flip = iFlags & OBD_FLIP180;
+}
+
+int ONE_BIT_DISPLAY::I2Cbegin(int iType, int iAddr, int32_t iSpeed)
+{
+  return obdI2CInit(&_obd, iType, iAddr, _obd.flip, _obd.invert, !_obd.bBitBang, _obd.iSDAPin, _obd.iSCLPin, _obd.iRSTPin, iSpeed);
+} /* I2Cbegin() */
+
+void ONE_BIT_DISPLAY::setBuffer(uint8_t *pBuffer)
+{
+    _obd.ucScreen = pBuffer;
+}
+void ONE_BIT_DISPLAY::setScroll(bool bScroll)
+{
+    _obd.bScroll = bScroll;
+}
+
+void ONE_BIT_DISPLAY::setRotation(int iRotation)
+{
+
+  switch (iRotation) {
+    default: return;
+    case 0:
+      obdSetFlip(&_obd, 0);
+      break;
+    case 90:
+      break;
+    case 180:
+    case 2:
+      obdSetFlip(&_obd, 1);
+      break;
+    case 270:
+    case 3:
+      break;
+  }
+    _obd.iOrientation = iRotation;
+} /* setRotation() */
+
+void ONE_BIT_DISPLAY::fillScreen(int iColor)
+{
+  obdFill(&_obd, iColor, 1);
+} /* fillScreen() */
+
+void ONE_BIT_DISPLAY::drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
+{
+    obdRectangle(&_obd, x, y, x+w-1, y+h-1, color, 0);
+} /* drawRect() */
+
+void ONE_BIT_DISPLAY::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
+{
+    obdRectangle(&_obd, x, y, x+w-1, y+h-1, color, 1);
+} /* fillRect() */
+
+void ONE_BIT_DISPLAY::setTextColor(int iFG, int iBG)
+{
+  _obd.iFG = iFG;
+  _obd.iBG = (iBG == -1) ? iFG : iBG;
+} /* setTextColor() */
+
+void ONE_BIT_DISPLAY::setCursor(int x, int y)
+{
+    _obd.iCursorX = x;
+    _obd.iCursorY = y;
+} /* setCursor() */
+
+void ONE_BIT_DISPLAY::setFont(int iFont)
+{
+    _obd.iFont = iFont;
+    _obd.pFreeFont = NULL;
+} /* setFont() */
+
+void ONE_BIT_DISPLAY::setFreeFont(const GFXfont *pFont)
+{
+    _obd.pFreeFont = (GFXfont *)pFont;
+} /* setFreeFont() */
+
+void ONE_BIT_DISPLAY::drawLine(int x1, int y1, int x2, int y2, int iColor)
+{
+    obdDrawLine(&_obd, x1, y1, x2, y2, iColor, 1);
+} /* drawLine() */
+
+inline GFXglyph *pgm_read_glyph_ptr(const GFXfont *gfxFont, uint8_t c) {
+#ifdef __AVR__
+  return &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
+#else
+  // expression in __AVR__ section may generate "dereferencing type-punned
+  // pointer will break strict-aliasing rules" warning In fact, on other
+  // platforms (such as STM32) there is no need to do this pointer magic as
+  // program memory may be read in a usual way So expression may be simplified
+  return gfxFont->glyph + c;
+#endif //__AVR__
+}
+
+void obdScroll1Line(OBDISP *pOBD, int iAmount)
+{
+int y, iLines;
+
+    if (pOBD == NULL || pOBD->ucScreen == NULL)
+        return;
+    iLines = (pOBD->height+7)>>3;
+    for (y=0; y<iLines-iAmount; y+=iAmount) {
+        memcpy(&pOBD->ucScreen[y*pOBD->width], &pOBD->ucScreen[(y+iAmount)*pOBD->width], pOBD->width*iAmount);
+    }
+    memset(&pOBD->ucScreen[(iLines-iAmount) * pOBD->width], (char)pOBD->iBG, pOBD->width*iAmount);
+} /* obdScroll1Line() */
+//
+// write (Print friend class)
+//
+size_t ONE_BIT_DISPLAY::write(uint8_t c) {
+char szTemp[2]; // used to draw 1 character at a time to the C methods
+int w, h;
+
+  szTemp[0] = c; szTemp[1] = 0;
+  if (_obd.pFreeFont == NULL) { // use built-in fonts
+      if (_obd.iFont == FONT_8x8 || _obd.iFont == FONT_6x8) {
+        h = 8;
+        w = (_obd.iFont == FONT_8x8) ? 8 : 6;
+      } else if (_obd.iFont == FONT_12x16 || _obd.iFont == FONT_16x16) {
+        h = 16;
+        w = (_obd.iFont == FONT_12x16) ? 12 : 16;
+      } else { w = 16; h = 32; }
+
+    if (c == '\n') {              // Newline?
+      _obd.iCursorX = 0;          // Reset x to zero,
+      _obd.iCursorY += h; // advance y one line
+        // should we scroll the screen up 1 line?
+        if (_obd.iCursorY >= _obd.height && _obd.ucScreen && _obd.bScroll) {
+            obdScroll1Line(&_obd, h/8);
+            if (_obd.render) {
+                obdDumpBuffer(&_obd, NULL);
+            }
+            _obd.iCursorY -= h;
+        }
+    } else if (c != '\r') {       // Ignore carriage returns
+      if (_obd.wrap && ((_obd.iCursorX + w) > _obd.width)) { // Off right?
+        _obd.iCursorX = 0;               // Reset x to zero,
+        _obd.iCursorY += h; // advance y one line
+          // should we scroll the screen up 1 line?
+          if (_obd.iCursorY >= _obd.height && _obd.ucScreen && _obd.bScroll) {
+              obdScroll1Line(&_obd, h/8);
+              if (_obd.render) {
+                  obdDumpBuffer(&_obd, NULL);
+              }
+              _obd.iCursorY -= h;
+          }
+      }
+      obdWriteString(&_obd, 0, -1, -1, szTemp, _obd.iFont, !_obd.iFG, _obd.render);
+    }
+  } else { // Custom font
+    if (c == '\n') {
+      _obd.iCursorX = 0;
+      _obd.iCursorY += (uint8_t)pgm_read_byte(&_obd.pFreeFont->yAdvance);
+    } else if (c != '\r') {
+      uint8_t first = pgm_read_byte(&_obd.pFreeFont->first);
+      if ((c >= first) && (c <= (uint8_t)pgm_read_byte(&_obd.pFreeFont->last))) {
+        GFXglyph *glyph = pgm_read_glyph_ptr(_obd.pFreeFont, c - first);
+        w = pgm_read_byte(&glyph->width);
+        h = pgm_read_byte(&glyph->height);
+        if ((w > 0) && (h > 0)) { // Is there an associated bitmap?
+          int16_t xo = (int8_t)pgm_read_byte(&glyph->xOffset);
+          w += xo; // xadvance
+          h = (uint8_t)pgm_read_byte(&_obd.pFreeFont->yAdvance);
+          if (_obd.wrap && ((_obd.iCursorX + w) > _obd.width)) {
+            _obd.iCursorX = 0;
+            _obd.iCursorY += h;
+          }
+            obdWriteStringCustom(&_obd, _obd.pFreeFont, -1, -1, szTemp, _obd.iFG);
+        }
+      }
+    }
+  }
+  return 1;
+} /* write() */
+void ONE_BIT_DISPLAY::drawPixel(int16_t x, int16_t y, uint16_t color)
+{
+    obdSetPixel(&_obd, x, y, color, _obd.render);
+}
+int16_t ONE_BIT_DISPLAY::getCursorX(void)
+{
+  return _obd.iCursorX;
+}
+int16_t ONE_BIT_DISPLAY::getCursorY(void)
+{
+  return _obd.iCursorY;
+}
+uint8_t ONE_BIT_DISPLAY::getRotation(void)
+{
+  return _obd.iOrientation;
+}
+int16_t ONE_BIT_DISPLAY::width(void)
+{
+   return _obd.width;
+}
+int16_t ONE_BIT_DISPLAY::height(void)
+{
+   return _obd.height;
+}
+void ONE_BIT_DISPLAY::drawCircle(int32_t x, int32_t y, int32_t r, uint32_t color)
+{
+  obdEllipse(&_obd, x, y, r, r, color, 0);
+}
+void ONE_BIT_DISPLAY::fillCircle(int32_t x, int32_t y, int32_t r, uint32_t color)
+{
+    obdEllipse(&_obd, x, y, r, r, color, 1);
+}
+void ONE_BIT_DISPLAY::drawEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color)
+{
+    obdEllipse(&_obd, x, y, rx, ry, color, 0);
+}
+void ONE_BIT_DISPLAY::fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color)
+{
+    obdEllipse(&_obd, x, y, rx, ry, color, 1);
+}
+
+void ONE_BIT_DISPLAY::pushImage(int x, int y, int w, int h, uint16_t *pixels)
+{
+  
+}
+
+void ONE_BIT_DISPLAY::display(void)
+{
+    obdDumpBuffer(&_obd, NULL);
+}
+void ONE_BIT_DISPLAY::setRender(bool bRAMOnly)
+{
+    _obd.render = !bRAMOnly;
+}

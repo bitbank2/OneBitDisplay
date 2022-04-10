@@ -1013,14 +1013,14 @@ void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
 unsigned char buf[4];
 int iPitch = pOBD->width;
 
-  obdCachedFlush(pOBD, bRender); // flush any cached data first
-    
+    y >>= 3; // DEBUG - since we address the display by lines of 8 pixels
   pOBD->iScreenOffset = (y*iPitch)+x;
-  
+
   if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
     return; // nothing to do
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
+    obdCachedFlush(pOBD, bRender); // flush any cached data first
   if (pOBD->type == LCD_NOKIA5110)
   {
       obdWriteCommand(pOBD, 0x40 | y);
@@ -1733,13 +1733,11 @@ unsigned char c, *s, ucTemp[40];
 
     if (x == -1 || y == -1) // use the cursor position
     {
-      x = pOBD->iCursorX; y = pOBD->iCursorY;
+        x = pOBD->iCursorX; y = pOBD->iCursorY;
+    } else {
+        pOBD->iCursorX = x; pOBD->iCursorY = y;
     }
-    else
-    {
-      pOBD->iCursorX = x; pOBD->iCursorY = y; // set the new cursor position
-    }
-    if (pOBD->iCursorX >= pOBD->width || pOBD->iCursorY >= pOBD->height / 8)
+    if (pOBD->iCursorX >= pOBD->width || pOBD->iCursorY >= pOBD->height)
        return -1; // can't draw off the display
 
     obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
@@ -1775,7 +1773,9 @@ unsigned char c, *s, ucTemp[40];
          i++;
        } // while
        obdCachedFlush(pOBD, bRender); // write any remaining data
-       return 0;
+        pOBD->iCursorX = x+(i*8);
+        pOBD->iCursorY = y; // set the new cursor position
+        return 0;
     } // 8x8
 #ifndef __AVR__
     else if (iSize == FONT_16x32)
@@ -1795,20 +1795,20 @@ unsigned char c, *s, ucTemp[40];
               memcpy_P(ucTemp, s, 16);
               if (bInvert) InvertBytes(ucTemp, 16);
               obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
-              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+1, bRender);
+              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               memcpy_P(ucTemp, s+16, 16);
               if (bInvert) InvertBytes(ucTemp, 16);
               obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
 //              if (pOBD->iCursorY <= 5)
               {
-                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+2, bRender);
+                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+16, bRender);
                  memcpy_P(ucTemp, s+32, 16);
                  if (bInvert) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               }
 //              if (pOBD->iCursorY <= 4)
               {
-                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+3, bRender);
+                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+24, bRender);
                  memcpy_P(ucTemp, s+48, 16);
                  if (bInvert) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
@@ -1824,6 +1824,8 @@ unsigned char c, *s, ucTemp[40];
           iScroll -= 16;
           i++;
        } // while
+        pOBD->iCursorX = x+(i*16);
+        pOBD->iCursorY = y; // set the new cursor position
        return 0;
     } // 16x32
 #endif // !__AVR__
@@ -1831,7 +1833,7 @@ unsigned char c, *s, ucTemp[40];
     {
       i = 0;
       iFontSkip = iScroll & 15; // number of columns to initially skip
-      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height/8)-1 && szMsg[i] != 0)
+      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < pOBD->height && szMsg[i] != 0)
       {
 // stretch the 'normal' font instead of using the big font
           if (iScroll < 16) // if characters are visible
@@ -1870,13 +1872,13 @@ unsigned char c, *s, ucTemp[40];
                   iLen = pOBD->width - pOBD->iCursorX;
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[8+iFontSkip], iLen, bRender);
-              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+1, bRender);
+              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[24+iFontSkip], iLen, bRender);
               pOBD->iCursorX += iLen;
               if (pOBD->iCursorX >= pOBD->width-15 && pOBD->wrap) // word wrap enabled?
               {
                 pOBD->iCursorX = 0; // start at the beginning of the next line
-                pOBD->iCursorY += 2;
+                pOBD->iCursorY += 16;
                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               }
               iFontSkip = 0;
@@ -1884,13 +1886,15 @@ unsigned char c, *s, ucTemp[40];
           iScroll -= 16;
           i++;
       } // while
+        pOBD->iCursorX = x+(i*16);
+        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 16x16
     else if (iSize == FONT_12x16) // 6x8 stretched to 12x16
     {
       i = 0;
       iFontSkip = iScroll % 12; // number of columns to initially skip
-      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height/8)-1 && szMsg[i] != 0)
+      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < pOBD->height && szMsg[i] != 0)
       {
 // stretch the 'normal' font instead of using the big font
           if (iScroll < 12) // if characters are visible
@@ -2007,13 +2011,13 @@ unsigned char c, *s, ucTemp[40];
                   iLen = pOBD->width - pOBD->iCursorX;
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[6+iFontSkip], iLen, bRender);
-              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+1, bRender);
+              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[18+iFontSkip], iLen, bRender);
               pOBD->iCursorX += iLen;
               if (pOBD->iCursorX >= pOBD->width-11 && pOBD->wrap) // word wrap enabled?
               {
                 pOBD->iCursorX = 0; // start at the beginning of the next line
-                pOBD->iCursorY += 2;
+                pOBD->iCursorY += 16;
                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               }
               iFontSkip = 0;
@@ -2021,13 +2025,15 @@ unsigned char c, *s, ucTemp[40];
           iScroll -= 12;
           i++;
       } // while
+        pOBD->iCursorX = x+(i*12);
+        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 12x16
     else if (iSize == FONT_6x8)
     {
        i = 0;
        iFontSkip = iScroll % 6;
-       while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height/8) && szMsg[i] != 0)
+       while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < pOBD->height && szMsg[i] != 0)
        {
            if (iScroll < 6) // if characters are visible
            {
@@ -2054,6 +2060,8 @@ unsigned char c, *s, ucTemp[40];
          i++;
        }
       obdCachedFlush(pOBD, bRender); // write any remaining data
+        pOBD->iCursorX = x+(i*6);
+        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 6x8
   return -1; // invalid size
@@ -2097,8 +2105,12 @@ GFXfont font;
 GFXglyph glyph, *pGlyph;
 int iPitch;
  
-   if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL || x < 0)
+   if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL)
       return -1;
+    if (x == -1)
+        x = pOBD->iCursorX;
+    if (y == -1)
+        y = pOBD->iCursorY;
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
       uint8_t *d = pOBD->ucScreen;
       dx = (int)strlen(szMsg);
@@ -2179,6 +2191,8 @@ int iPitch;
       } // for y
       x += pGlyph->xAdvance; // width of this character
    } // while drawing characters
+    pOBD->iCursorX = x;
+    pOBD->iCursorY = y;
    return 0;
 } /* obdWriteStringCustom() */
 
@@ -2233,7 +2247,7 @@ uint8_t iLines;
  
   for (y=0; y<iLines; y++)
   {
-    obdSetPosition(pOBD, 0,y, bRender); // set to (0,Y)
+    obdSetPosition(pOBD, 0,y*8, bRender); // set to (0,Y)
     obdWriteDataBlock(pOBD, u8Cache, pOBD->width, bRender);
   } // for y
   if (pOBD->ucScreen)
@@ -2319,7 +2333,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
            mask >>= 1;
         if (mask == 0) // we've moved outside the current row, write the data we changed
         {
-           obdSetPosition(pOBD, x, y>>3, bRender);
+           obdSetPosition(pOBD, x, y, bRender);
            obdWriteDataBlock(pOBD, pStart,  (int)(p-pStart), bRender); // write the row we changed
            x = x1+1; // we've already written the byte at x1
            y1 = y+yinc;
@@ -2332,7 +2346,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
     } // for x1
    if (p != pStart) // some data needs to be written
    {
-     obdSetPosition(pOBD, x, y>>3, bRender);
+     obdSetPosition(pOBD, x, y, bRender);
      obdWriteDataBlock(pOBD, pStart, (int)(p-pStart), bRender);
    }
   }
@@ -2371,7 +2385,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
         if (bOld != bNew)
         {
           p[0] = bNew; // save to RAM
-          obdSetPosition(pOBD, x, y1>>3, bRender);
+          obdSetPosition(pOBD, x, y1, bRender);
           obdWriteDataBlock(pOBD, &bNew, 1, bRender);
         }
         p += iPitch; // next line
@@ -2384,7 +2398,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
         if (bOld != bNew) // write the last byte we modified if it changed
         {
           p[0] = bNew; // save to RAM
-          obdSetPosition(pOBD, x, y1>>3, bRender);
+          obdSetPosition(pOBD, x, y1, bRender);
           obdWriteDataBlock(pOBD, &bNew, 1, bRender);
         }
         p += xinc;
@@ -2395,7 +2409,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
     if (bOld != bNew) // write the last byte we modified if it changed
     {
       p[0] = bNew; // save to RAM
-      obdSetPosition(pOBD, x, y2>>3, bRender);
+      obdSetPosition(pOBD, x, y2, bRender);
       obdWriteDataBlock(pOBD, &bNew, 1, bRender);
     }
   } // y major case
