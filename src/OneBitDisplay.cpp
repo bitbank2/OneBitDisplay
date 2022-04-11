@@ -138,31 +138,6 @@ const unsigned char lut_bb_full[] =
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
-uint8_t st7302_hpm_init[] = {
-    0x02, 0xEB, 0x02, // Enable OTP
-    0x02, 0xD7, 0x68, // OTP Load Control
-    0x02, 0xD1, 0x01, // Auto Power Control
-    0x02, 0xC0, 0xF6, // Gate Voltage setting
-    0x07, 0xC1, 0x28, 0x28, 0x28, 0x28, 0x14, 0x00, // VSH Setting
-    0x05, 0xC2, 0x06, 0x06, 0x06, 0x06, // VSL Setting
-    0x02, 0xCB, 0x08, // VCOMH Setting
-    0x02, 0xB3, 0x94, // VCOM EQ Enable
-    0x0B, 0xB4, 0xE5, 0x66, 0xFD, 0xFF, 0xFF, 0x7F, 0xFD, 0xFF, 0xFF, 0x7F, // Gate EQ
-    0x03, 0xC7, 0xA6, 0xE9, // OSC Setting
-    0x02, 0xB0, 0x3F, // Duty Setting
-    0x03, 0xB2, 0x00, 0x05, // Frame Rate Setting
-    0x02, 0x36, 0x20, // Memory Access Mode
-    0x02, 0x3A, 0x01, // Data Format
-    0x02, 0xB9, 0x23, // Source Setting
-    0x02, 0xB8, 0x09, // Panel Setting
-    0x01, 0x11, // sleep out
-    0xFF, 100, // pause
-    0x03, 0xB2, 0x01, 0x05, // Frame Rate Setting
-//    0x01, 0x38, // high power mode
-    0x01, 0x29, // display on
-    0x00
-};
-
 const uint8_t st7302_wenting[] = {
     0x02, 0xEB, 0x02, // Enable OTP
     0x02, 0xD7, 0x68, // OTP Load Control
@@ -174,14 +149,51 @@ const uint8_t st7302_wenting[] = {
     0x0B, 0xB4, 0xE5, 0x66, 0x85, 0xFF, 0xFF, 0x52, 0x85, 0xFF, 0xFF, 0x52, // Gate EQ
     0x03, 0xC7, 0xA6, 0xE9, // OSC Setting
     0x02, 0xB0, 0x3F, // Duty Setting
+    0x03, 0xB2, 0x00, 0x00, // Frame Rate Setting (lowest for both HPM/LPM)
     0x02, 0x36, 0x00, // Memory Access Mode
     0x02, 0x3A, 0x11, // Data Format
     0x02, 0xB9, 0x23, // Source Setting
     0x02, 0xB8, 0x09, // Source Setting
+    0x01, 0x11, // Sleep out
+    0x02, 0xff, 100, // delay 100
+    0x02, 0xD0, 0x1F, // enable auto power down
+    0x01, 0x39, // Low power mode
+    0x01, 0x29, // display on
     0x00
 };
 
-const uint8_t st7302_lpm_init[] = {
+const uint8_t st7302_sitronix[] = {
+    0x02, 0xEB, 0x02, // Enable OTP
+    0x02, 0xD7, 0x68, // OTP Load Control
+    0x02, 0xD1, 0x01, // Booster Control
+    0x02, 0xC0, 0x46, // Gate Voltage setting VGH=10V, VGL=-8V
+    0x02, 0xCB, 0x14, // VCOMH Setting = 4V
+    0x03, 0xB2, 0x01, 0x02, // Frame Rate Control 32Hz/1Hz
+    0x0B, 0xB4, 0xE5, 0x66, 0xFD, 0xBF, 0x42, 0x55, 0x81, 0xBE, 0x42, 0x55, // Gate EQ
+    0x02, 0xB7, 0x01, // Source EQ enable
+    0x01, 0x11, // Sleep out
+    0x02, 0xff, 100, // delay 100
+    0x02, 0x72, 0x13, // ??
+    0x02, 0xB0, 0x50, // Gate Line setting = 320 lines
+//    0x02, 0xB0, 0x3F, // Duty Setting
+    0x03, 0xC7, 0xA6, 0xE9, // OSC Setting
+    0x02, 0xD6, 0x00, // source voltage select VSH1/VSL1
+    0x02, 0x36, 0x00, // Memory Access Mode
+    0x02, 0x3A, 0x11, // Data Format
+    0x02, 0xB9, 0x23, // Source Setting
+    0x02, 0xB8, 0x05, // Panel Setting = 1 line interlace and 1 line panel layout
+//    0x07, 0xC1, 0x22, 0x22, 0x22, 0x22, 0x14, 0x00, // VSH Setting
+//    0x05, 0xC2, 0x00, 0x00, 0x00, 0x00, // VSL Setting
+//    0x03, 0x2A, 0x14, 0x27, // col address
+//    0x03, 0x2B, 0x00, 0x9f, // row address
+    0x02, 0x35, 0x00, // TE setting off
+    0x02, 0xD0, 0x1F, // enable auto power down
+    0x01, 0x39, // Low power mode
+    0x01, 0x29, // display on
+    0x00
+};
+
+const uint8_t st7302_lpm_init2[] = {
     0x02, 0xEB, 0x02, // Enable OTP
 //    0x02, 0xE4, 0x02, // single lane SPI data
     0x02, 0xD7, 0x68, // OTP Load Control
@@ -603,8 +615,6 @@ int iLen;
   {
       uint8_t *s = (uint8_t *)st7302_wenting; //st7302_lpm_init;
       iLen = 1;
-      obdWriteCommand(pOBD, 0x11); // sleep out
-      delay(100);
 
       while (iLen) {
           iLen = *s++; // parameter byte count
@@ -614,22 +624,15 @@ int iLen;
                   s += 2;
               } else {
                   obdWriteCommand(pOBD, s[0]);
-                  s++;
-                  iLen--;
-                  if (iLen) {
-                      obdWriteDataBlock(pOBD, s, iLen, 1);
-                      s += iLen;
+                  if (iLen > 1) {
+                      _I2CWrite(pOBD, s, iLen);
                   }
+                  s += iLen;
               }
           }
       } // while commands to transmit
-//      obdWriteCommand(pOBD, 0x11); // sleep out
-//      delay(100);
-      obdWriteCommand(pOBD, 0x29); // Display on
-      obdWriteCommand(pOBD, 0x39); // Low power mode
-//      obdWriteCommand(pOBD, 0x13); // partial mode off
-//      obdWriteCommand(pOBD, 0x38); // high power mode
-
+      if (pOBD->invert)
+          obdWriteCommand(pOBD, 0x21); // inversion on
       // Clear RAM
 //      obdWriteCommand(pOBD, 0xb9);
 //      uc[0] = 0x40;
@@ -1353,8 +1356,8 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
 static void ST7302DumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
 uint8_t ucTemp[4], ucPixels[40];
-int i, x, y, odd, iPitch, count;
-uint8_t ucMask, ucMask2, uc1, uc2, *s, *d;
+int x, y, iPitch, count;
+uint8_t ucMask, uc1, *s, *d;
     
     iPitch = pOBD->width;
     obdWriteCommand(pOBD, 0x2a); // Column set
@@ -1370,30 +1373,53 @@ uint8_t ucMask, ucMask2, uc1, uc2, *s, *d;
     obdWriteCommand(pOBD, 0x2c); // memory write
 // Shift out the image in pairs of lines
     ucPixels[0] = 0x40;
-    for (odd=0; odd<2; odd++) {
-    for (x=odd; x<pOBD->width; x+= 4) { // a pair of columns at a time
+    for (x = 0; x < pOBD->width; x += 2) { // a pair of columns at a time
         d = ucPixels+1;
         ucMask = 1;
         uc1 = 0;
         count = 0;
-        s = &pBuffer[x];
-        for (y=0; y<pOBD->height+6; y++) {
-            uc1 <<= 2;
-            if (s[0] & ucMask) uc1 |= 2;
-            if (s[2] & ucMask) uc1 |= 1;
-            count++;
-            if (count == 3) { // finish the byte
+        if (pOBD->flip) {
+            ucMask = 1<<((pOBD->height-1) & 7);
+            s = &pBuffer[x + ((pOBD->height-1)>>3)*iPitch];
+            for (y = pOBD->height-1; y >= 0; y--) {
                 uc1 <<= 2;
+                if (s[0] & ucMask) uc1 |= 1;
+                if (s[1] & ucMask) uc1 |= 2;
+                count++;
+                if (count == 4) { // finish the byte
+                    *d++ = uc1;
+                    count = 0;
+                    uc1 = 0;
+                }
+                ucMask >>= 1;
+                if (ucMask == 0) {
+                    ucMask = 0x80;
+                    s -= iPitch;
+                } // next line
+            } // for y
+            if (count) {
+                uc1 <<= (count*2);
                 *d++ = uc1;
-                count = 0;
-                uc1 = 0;
             }
-            ucMask <<= 1;
-            if (ucMask == 0) {
-                ucMask = 1;
-                s += iPitch;
-            } // for i
-        } // for y
+        } else {
+            s = &pBuffer[x];
+            for (y=0; y < pOBD->height+3; y++) {
+                uc1 <<= 2;
+                if (s[0] & ucMask) uc1 |= 2;
+                if (s[1] & ucMask) uc1 |= 1;
+                count++;
+                if (count == 4) { // finish the byte
+                    *d++ = uc1;
+                    count = 0;
+                    uc1 = 0;
+                }
+                ucMask <<= 1;
+                if (ucMask == 0) {
+                    ucMask = 1;
+                    s += iPitch;
+                } // next line
+            } // for y
+        } // flipped
         obdWriteCommand(pOBD, 0x2a); // Column set
         ucTemp[0] = 0x40;
         ucTemp[1] = 0x19; // start x
@@ -1401,13 +1427,16 @@ uint8_t ucMask, ucMask2, uc1, uc2, *s, *d;
         _I2CWrite(pOBD, ucTemp, 3);
         obdWriteCommand(pOBD, 0x2b); // Row set
         ucTemp[0] = 0x40;
-        ucTemp[1] = (x/4) + (odd*120); // start y
+        if (pOBD->flip)
+            ucTemp[1] = 124-(x/2); // start y
+        else
+            ucTemp[1] = (x/2); // start y
         ucTemp[2] = 0x80; // end y
         _I2CWrite(pOBD, ucTemp, 3);
         obdWriteCommand(pOBD, 0x2c); // memory write
         _I2CWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
     } // for x
-    } // for odd
+//    } // for odd
 } /* ST7302DumpBuffer() */
 //
 // Special case for Sharp Memory LCD
