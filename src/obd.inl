@@ -13,11 +13,15 @@
 #define I2C_SLAVE 0
 #endif
 static void digitalWrite(int iPin, int iState) {
+#ifndef MEMORY_ONLY
    AIOWriteGPIO(iPin, iState);
+#endif
 }
 static void pinMode(int iPin, int iMode)
 {
+#ifndef MEMORY_ONLY
    AIOAddGPIO(iPin, iMode);
+#endif
 } /* pinMode() */
 //static int digitalRead(int iPin)
 //{
@@ -617,6 +621,7 @@ static int16_t pgm_read_word(const uint8_t *ptr)
 {
   return ptr[0] + (ptr[1]<<8);
 }
+#ifndef MEMORY_ONLY
 int I2CReadRegister(BBI2C *pI2C, uint8_t addr, uint8_t reg, uint8_t *pBuf, int iLen)
 {
 int rc;
@@ -645,10 +650,11 @@ char filename[32];
   }
     return; // 0;
 }
-
+#endif // MEMORY_ONLY
 // Wrapper function to write I2C data
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
+#ifndef MEMORY_ONLY
   if (pOBD->com_mode == COM_I2C) {// I2C device
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
@@ -660,6 +666,7 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
          digitalWrite(pOBD->iCSPin, HIGH);
       obdSetDCMode(pOBD, MODE_DATA);
   }
+#endif // MEMORY_ONLY
 }
 #else // Arduino
 static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
@@ -709,6 +716,7 @@ static void _I2CWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 // Send a single byte command to the OLED controller
 void obdWriteCommand(OBDISP *pOBD, unsigned char c)
 {
+#ifndef MEMORY_ONLY
 unsigned char buf[4];
 
   if (pOBD->com_mode == COM_I2C) {// I2C device
@@ -729,6 +737,7 @@ unsigned char buf[4];
       digitalWrite(pOBD->iCSPin, HIGH);
       obdSetDCMode(pOBD, MODE_DATA);
   }
+#endif // MEMORY_ONLY
 } /* obdWriteCommand() */
 
 //
@@ -888,6 +897,16 @@ int i;
     return pData;
 } /* obdReadCmdInt() */
 //
+// Set the current custom font pointers for playing back
+// bytewise commands
+//
+void obdSetCustomFont(OBDISP *pOBD, GFXfont *pFont, uint8_t ucFont)
+{
+    if (pOBD != NULL && pFont != NULL && ucFont >= FONT_CUSTOM0 && ucFont <= FONT_CUSTOM2) {
+        pOBD->pFont[ucFont-FONT_CUSTOM0] = (void *)pFont;
+    }
+} /* obdSetCustomFont() */ 
+//
 // Execute a set of bytewise command bytes
 // and execute the drawing instructions on the current display/buffer
 // Optionally render on backbuffer or physical display
@@ -895,7 +914,7 @@ int i;
 void obdExecCommands(uint8_t *pData, int iLen, OBDISP *pOBD, int bRender)
 {
 uint8_t *s, *pEnd;
-uint8_t uc, ucColor, ucFill, ucFont;
+uint8_t uc, ucColor=1, ucFill, ucFont;
 int x1, y1, x2, y2;
 int iTextLen, iPitch;
 uint8_t ucTemp[64];
@@ -921,7 +940,13 @@ uint8_t ucTemp[64];
               memcpy(ucTemp, s, iTextLen);
               ucTemp[iTextLen] = 0; // terminate the string
               s += iTextLen;
-              obdWriteString(pOBD, 0, x1, y1, (char *)ucTemp, ucFont, ucColor, bRender);
+               if (ucFont >= FONT_CUSTOM0) { // up to 3 custom fonts
+                   if (pOBD->pFont[ucFont-FONT_CUSTOM0] != NULL) {
+                       obdWriteStringCustom(pOBD, (GFXfont *)pOBD->pFont[ucFont-FONT_CUSTOM0], x1, y1, (char *)ucTemp, ucColor);
+                   }
+               } else {
+                   obdWriteString(pOBD, 0, x1, y1, (char *)ucTemp, ucFont, ucColor, bRender);
+               }
            } else {
               return; // something went wrong!
            }           
@@ -960,6 +985,7 @@ uint8_t ucTemp[64];
            break;
         case OBD_DRAWSPRITE:
            if (pEnd - s >= 8) {
+               ucColor = (uc >> 4) & 1;
                s = obdReadCmdInt(s, &x1); // width / height
                s = obdReadCmdInt(s, &y1);
                s = obdReadCmdInt(s, &x2); // destination x/y
@@ -987,19 +1013,23 @@ void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
 unsigned char buf[4];
 int iPitch = pOBD->width;
 
-  obdCachedFlush(pOBD, bRender); // flush any cached data first
-    
+    y >>= 3; // DEBUG - since we address the display by lines of 8 pixels
   pOBD->iScreenOffset = (y*iPitch)+x;
-  
+
   if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
     return; // nothing to do
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
+    obdCachedFlush(pOBD, bRender); // flush any cached data first
   if (pOBD->type == LCD_NOKIA5110)
   {
       obdWriteCommand(pOBD, 0x40 | y);
       obdWriteCommand(pOBD, 0x80 | x);
       return;
+  }
+  if (pOBD->type == OLED_80x128) // visible portion starts at column 24, row 0
+  {
+    x += 24;
   }
   if (pOBD->type == OLED_64x32) // visible display starts at column 32, row 4
   {
@@ -1066,6 +1096,7 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= iBufferSize)
 }
 if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
   return; // nothing else to do
+#ifndef MEMORY_ONLY
 // Copying the data has the benefit in SPI mode of not letting
 // the original data get overwritten by the SPI.transfer() function
   if (bRender)
@@ -1090,6 +1121,7 @@ if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
           _I2CWrite(pOBD, ucTemp, iLen+1);
       }
   }
+#endif // MEMORY_ONLY
 } /* obdWriteDataBlock() */
 //
 // Write a repeating byte to the display
@@ -1243,6 +1275,7 @@ void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, i
        s = pSprite;
        for (ty=0; ty<cy; ty++) { // copy only the part we want to the output
            memcpy(&d[tx], s, iLocalPitch);
+           s += iPitch;
            tx += iLocalPitch;
        }
        pOBD->iScreenOffset = tx; // store new length
@@ -1421,6 +1454,7 @@ int iPitch, iSize;
 
   if (pOBD->ucScreen)
     uc = ucOld = pOBD->ucScreen[i];
+#ifndef MEMORY_ONLY
   else if (pOBD->type == OLED_132x64 || pOBD->type == OLED_128x128) // SH1106/SH1107 can read data
   {
     uint8_t ucTemp[3];
@@ -1433,6 +1467,7 @@ int iPitch, iSize;
      I2CRead(&pOBD->bbi2c, pOBD->oled_addr, ucTemp, 2);
      uc = ucOld = ucTemp[1]; // first byte is garbage
   }
+#endif // MEMORY_ONLY
   else
      uc = ucOld = 0;
 
@@ -1485,7 +1520,7 @@ int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int dx, int dy, int bInvert)
 int16_t i16, cx, cy;
 int iOffBits; // offset to bitmap data
 int iPitch, iDestPitch;
-uint8_t x, y, b, *s, *d;
+uint8_t x, y, b=0, *s, *d;
 uint8_t dst_mask, src_mask;
 uint8_t bFlipped = false;
 
@@ -1698,13 +1733,11 @@ unsigned char c, *s, ucTemp[40];
 
     if (x == -1 || y == -1) // use the cursor position
     {
-      x = pOBD->iCursorX; y = pOBD->iCursorY;
+        x = pOBD->iCursorX; y = pOBD->iCursorY;
+    } else {
+        pOBD->iCursorX = x; pOBD->iCursorY = y;
     }
-    else
-    {
-      pOBD->iCursorX = x; pOBD->iCursorY = y; // set the new cursor position
-    }
-    if (pOBD->iCursorX >= pOBD->width || pOBD->iCursorY >= pOBD->height / 8)
+    if (pOBD->iCursorX >= pOBD->width || pOBD->iCursorY >= pOBD->height)
        return -1; // can't draw off the display
 
     obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
@@ -1740,7 +1773,9 @@ unsigned char c, *s, ucTemp[40];
          i++;
        } // while
        obdCachedFlush(pOBD, bRender); // write any remaining data
-       return 0;
+        pOBD->iCursorX = x+(i*8);
+        pOBD->iCursorY = y; // set the new cursor position
+        return 0;
     } // 8x8
 #ifndef __AVR__
     else if (iSize == FONT_16x32)
@@ -1760,20 +1795,20 @@ unsigned char c, *s, ucTemp[40];
               memcpy_P(ucTemp, s, 16);
               if (bInvert) InvertBytes(ucTemp, 16);
               obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
-              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+1, bRender);
+              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               memcpy_P(ucTemp, s+16, 16);
               if (bInvert) InvertBytes(ucTemp, 16);
               obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
 //              if (pOBD->iCursorY <= 5)
               {
-                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+2, bRender);
+                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+16, bRender);
                  memcpy_P(ucTemp, s+32, 16);
                  if (bInvert) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               }
 //              if (pOBD->iCursorY <= 4)
               {
-                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+3, bRender);
+                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+24, bRender);
                  memcpy_P(ucTemp, s+48, 16);
                  if (bInvert) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
@@ -1789,6 +1824,8 @@ unsigned char c, *s, ucTemp[40];
           iScroll -= 16;
           i++;
        } // while
+        pOBD->iCursorX = x+(i*16);
+        pOBD->iCursorY = y; // set the new cursor position
        return 0;
     } // 16x32
 #endif // !__AVR__
@@ -1796,7 +1833,7 @@ unsigned char c, *s, ucTemp[40];
     {
       i = 0;
       iFontSkip = iScroll & 15; // number of columns to initially skip
-      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height/8)-1 && szMsg[i] != 0)
+      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < pOBD->height && szMsg[i] != 0)
       {
 // stretch the 'normal' font instead of using the big font
           if (iScroll < 16) // if characters are visible
@@ -1835,13 +1872,13 @@ unsigned char c, *s, ucTemp[40];
                   iLen = pOBD->width - pOBD->iCursorX;
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[8+iFontSkip], iLen, bRender);
-              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+1, bRender);
+              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[24+iFontSkip], iLen, bRender);
               pOBD->iCursorX += iLen;
               if (pOBD->iCursorX >= pOBD->width-15 && pOBD->wrap) // word wrap enabled?
               {
                 pOBD->iCursorX = 0; // start at the beginning of the next line
-                pOBD->iCursorY += 2;
+                pOBD->iCursorY += 16;
                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               }
               iFontSkip = 0;
@@ -1849,13 +1886,15 @@ unsigned char c, *s, ucTemp[40];
           iScroll -= 16;
           i++;
       } // while
+        pOBD->iCursorX = x+(i*16);
+        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 16x16
     else if (iSize == FONT_12x16) // 6x8 stretched to 12x16
     {
       i = 0;
       iFontSkip = iScroll % 12; // number of columns to initially skip
-      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height/8)-1 && szMsg[i] != 0)
+      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < pOBD->height && szMsg[i] != 0)
       {
 // stretch the 'normal' font instead of using the big font
           if (iScroll < 12) // if characters are visible
@@ -1972,13 +2011,13 @@ unsigned char c, *s, ucTemp[40];
                   iLen = pOBD->width - pOBD->iCursorX;
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[6+iFontSkip], iLen, bRender);
-              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+1, bRender);
+              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               obdWriteDataBlock(pOBD, &ucTemp[18+iFontSkip], iLen, bRender);
               pOBD->iCursorX += iLen;
               if (pOBD->iCursorX >= pOBD->width-11 && pOBD->wrap) // word wrap enabled?
               {
                 pOBD->iCursorX = 0; // start at the beginning of the next line
-                pOBD->iCursorY += 2;
+                pOBD->iCursorY += 16;
                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               }
               iFontSkip = 0;
@@ -1986,13 +2025,15 @@ unsigned char c, *s, ucTemp[40];
           iScroll -= 12;
           i++;
       } // while
+        pOBD->iCursorX = x+(i*12);
+        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 12x16
     else if (iSize == FONT_6x8)
     {
        i = 0;
        iFontSkip = iScroll % 6;
-       while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height/8) && szMsg[i] != 0)
+       while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < pOBD->height && szMsg[i] != 0)
        {
            if (iScroll < 6) // if characters are visible
            {
@@ -2019,6 +2060,8 @@ unsigned char c, *s, ucTemp[40];
          i++;
        }
       obdCachedFlush(pOBD, bRender); // write any remaining data
+        pOBD->iCursorX = x+(i*6);
+        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 6x8
   return -1; // invalid size
@@ -2061,11 +2104,32 @@ uint8_t *s, *d, bits, ucMask, ucClr, uc;
 GFXfont font;
 GFXglyph glyph, *pGlyph;
 int iPitch;
-   
-   if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL || x < 0)
+ 
+   if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL)
       return -1;
+    if (x == -1)
+        x = pOBD->iCursorX;
+    if (y == -1)
+        y = pOBD->iCursorY;
+  if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
+      uint8_t *d = pOBD->ucScreen;
+      dx = (int)strlen(szMsg);
+     // The font pointer is really the integer font index
+      i = (int)pFont;
+      if (i >= FONT_CUSTOM0) { // must be a valid index
+          obdWriteCmdByte(pOBD, OBD_DRAWTEXT | ((ucColor & 1) << 7) | ((i & 7) << 4));
+          obdWriteCmdByte(pOBD, (uint8_t) dx);
+          obdWriteCmdInt(pOBD, x);
+          obdWriteCmdInt(pOBD, y);
+          i = pOBD->iScreenOffset;
+          memcpy(&d[i], szMsg, dx);
+          i += dx;
+          pOBD->iScreenOffset = i; // store new length
+      }
+      return 0; // done
+  }
    iPitch = pOBD->width;
-   // in case of running on AVR, get copy of data from FLASH
+   // in case of running on Harvard architecture, get copy of data from FLASH
    memcpy_P(&font, pFont, sizeof(font));
    pGlyph = &glyph;
 
@@ -2101,7 +2165,7 @@ int iPitch;
                iBitOff += bits; // because of a clipped line
                uc <<= (8-bits);
                if (tx >= pGlyph->width) {
-                  while(tx >= pGlyph->width) { // rolls into next line(s)
+                  while(tx >= pGlyph->width && ty < end_y) { // rolls into next line(s)
                      tx -= pGlyph->width;
                      ty++;
                   }
@@ -2115,7 +2179,7 @@ int iPitch;
                   d = &pOBD->ucScreen[(ty >> 3) * iPitch + dx]; // internal buffer dest
                }
             } // if we ran out of bits
-            if (uc & 0x80) { // set pixel
+            if (uc & 0x80 && (dx+tx) < pOBD->width) { // set pixel
                if (ucClr)
                   d[tx] |= ucMask;
                else
@@ -2127,6 +2191,8 @@ int iPitch;
       } // for y
       x += pGlyph->xAdvance; // width of this character
    } // while drawing characters
+    pOBD->iCursorX = x;
+    pOBD->iCursorY = y;
    return 0;
 } /* obdWriteStringCustom() */
 
@@ -2181,7 +2247,7 @@ uint8_t iLines;
  
   for (y=0; y<iLines; y++)
   {
-    obdSetPosition(pOBD, 0,y, bRender); // set to (0,Y)
+    obdSetPosition(pOBD, 0,y*8, bRender); // set to (0,Y)
     obdWriteDataBlock(pOBD, u8Cache, pOBD->width, bRender);
   } // for y
   if (pOBD->ucScreen)
@@ -2267,7 +2333,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
            mask >>= 1;
         if (mask == 0) // we've moved outside the current row, write the data we changed
         {
-           obdSetPosition(pOBD, x, y>>3, bRender);
+           obdSetPosition(pOBD, x, y, bRender);
            obdWriteDataBlock(pOBD, pStart,  (int)(p-pStart), bRender); // write the row we changed
            x = x1+1; // we've already written the byte at x1
            y1 = y+yinc;
@@ -2280,7 +2346,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
     } // for x1
    if (p != pStart) // some data needs to be written
    {
-     obdSetPosition(pOBD, x, y>>3, bRender);
+     obdSetPosition(pOBD, x, y, bRender);
      obdWriteDataBlock(pOBD, pStart, (int)(p-pStart), bRender);
    }
   }
@@ -2319,7 +2385,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
         if (bOld != bNew)
         {
           p[0] = bNew; // save to RAM
-          obdSetPosition(pOBD, x, y1>>3, bRender);
+          obdSetPosition(pOBD, x, y1, bRender);
           obdWriteDataBlock(pOBD, &bNew, 1, bRender);
         }
         p += iPitch; // next line
@@ -2332,7 +2398,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
         if (bOld != bNew) // write the last byte we modified if it changed
         {
           p[0] = bNew; // save to RAM
-          obdSetPosition(pOBD, x, y1>>3, bRender);
+          obdSetPosition(pOBD, x, y1, bRender);
           obdWriteDataBlock(pOBD, &bNew, 1, bRender);
         }
         p += xinc;
@@ -2343,7 +2409,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
     if (bOld != bNew) // write the last byte we modified if it changed
     {
       p[0] = bNew; // save to RAM
-      obdSetPosition(pOBD, x, y2>>3, bRender);
+      obdSetPosition(pOBD, x, y2, bRender);
       obdWriteDataBlock(pOBD, &bNew, 1, bRender);
     }
   } // y major case

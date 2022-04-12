@@ -1,7 +1,67 @@
 #ifndef __ONEBITDISPLAY__
 #define __ONEBITDISPLAY__
 
+#ifndef MEMORY_ONLY
 #include <BitBang_I2C.h>
+#endif
+
+// 5 possible font sizes: 8x8, 16x32, 6x8, 12x16 (stretched from 6x8 with smoothing), 16x16 (stretched from 8x8)
+enum {
+   FONT_6x8 = 0,
+   FONT_8x8,
+   FONT_12x16,
+   FONT_16x16,
+   FONT_16x32,
+   FONT_CUSTOM0,
+   FONT_CUSTOM1,
+   FONT_CUSTOM2,
+   FONT_COUNT
+};
+// For backwards compatibility, keep the old names valid
+#define FONT_NORMAL FONT_8x8
+#define FONT_SMALL FONT_6x8
+#define FONT_STRETCHED FONT_16x16
+#define FONT_LARGE FONT_16x32
+#endif
+
+// Display type for init function
+enum {
+  DISPLAY_COMMANDS = 0,
+  OLED_128x128,
+  OLED_128x32,
+  OLED_128x64,
+  OLED_132x64,
+  OLED_64x128,
+  OLED_64x32,
+  OLED_96x16,
+  OLED_72x40,
+  OLED_80x128,
+  LCD_UC1701,
+  LCD_UC1609,
+  LCD_HX1230,
+  LCD_NOKIA5110,
+  LCD_VIRTUAL,
+  SHARP_144x168,
+  SHARP_400x240,
+  LCD_ST7302,
+  EPD42_400x300,
+  LCD_COUNT
+};
+
+#define OBD_INVERTED 1
+#define OBD_FLIP180 2
+#define OBD_BITBANG 4
+
+#define OBD_ANY_ADDRESS -1
+// Rotation and flip angles to draw tiles
+enum {
+  ANGLE_0=0,
+  ANGLE_90,
+  ANGLE_180,
+  ANGLE_270,
+  ANGLE_FLIPX,
+  ANGLE_FLIPY
+};
 
 // Proportional font data taken from Adafruit_GFX library
 /// Font data stored PER GLYPH
@@ -20,8 +80,8 @@ typedef struct {
 typedef struct {
   uint8_t *bitmap;  ///< Glyph bitmaps, concatenated
   GFXglyph *glyph;  ///< Glyph array
-  uint8_t first;    ///< ASCII extents (first char)
-  uint8_t last;     ///< ASCII extents (last char)
+  uint16_t first;    ///< ASCII extents (first char)
+  uint16_t last;     ///< ASCII extents (last char)
   uint8_t yAdvance; ///< Newline distance (y axis)
 } GFXfont;
 #endif // _ADAFRUIT_GFX_H
@@ -29,18 +89,72 @@ typedef struct {
 typedef struct obdstruct
 {
 uint8_t oled_addr; // requested address or 0xff for automatic detection
-uint8_t wrap, flip, invert, type;
+uint8_t wrap, flip, invert, type, render;
 uint8_t *ucScreen;
 int iCursorX, iCursorY;
 int width, height;
-int iScreenOffset;
+bool bScroll;
+int iScreenOffset, iOrientation;
+int iFG, iBG; //current color
+#ifndef MEMORY_ONLY
 BBI2C bbi2c;
+#endif
+int iFont;
+int iSpeed;
+GFXfont *pFreeFont;
+void *pFont[3]; // up to 3 custom font pointers
 uint8_t com_mode; // communication mode (I2C / SPI)
 uint8_t mode; // data/command mode for 9-bit SPI
-uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
-uint8_t iLEDPin; // backlight
+int iSDAPin, iSCLPin;
+int iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
+int iLEDPin; // backlight
 uint8_t bBitBang;
 } OBDISP;
+
+class ONE_BIT_DISPLAY : public Print
+{
+  public:
+    ONE_BIT_DISPLAY() { memset(&_obd, 0, sizeof(_obd)); _obd.iFG = 1; _obd.render = 1; _obd.type = OLED_128x64; _obd.iSpeed = 400000;}
+    void SPIbegin(int iType, int32_t iSpeed); 
+    void setSPIPins(int iCS, int iMOSI, int iSCLK, int iDC, int iReset=-1, int iLED=-1);
+    void setI2CPins(int iSDA, int iSCL, int iReset=-1);
+    void setFlags(int iFlags);
+    void display(void);
+    void setBitBang(bool bBitBang);
+    void setRender(bool bRAMOnly);
+    int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
+    void setRotation(int iAngle);
+    uint8_t getRotation(void);
+    void fillScreen(int iColor);
+    void setBuffer(uint8_t *pBuffer);
+    bool allocBuffer(void);
+    void * getBuffer(void);
+    void freeBuffer(void);
+    void setScroll(bool bScroll);
+    void drawPixel(int16_t x, int16_t y, uint16_t color);
+    void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+    void setTextColor(int iFG, int iBG = -1);
+    void setCursor(int x, int y);
+    int16_t getCursorX(void);
+    int16_t getCursorY(void);
+    void setTextSize(int iSize) {}; // empty for now
+    void setFont(int iFont);
+    void setFreeFont(const GFXfont *pFont);
+    int16_t height(void);
+    int16_t width(void);
+    void pushImage(int x, int y, int w, int h, uint16_t *pixels);
+    void drawLine(int x1, int y1, int x2, int y2, int iColor);
+    void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+    void drawCircle(int32_t x, int32_t y, int32_t r, uint32_t color);
+    void fillCircle(int32_t x, int32_t y, int32_t r, uint32_t color);
+    void drawEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
+    void fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
+    using Print::write;
+    virtual size_t write(uint8_t);
+
+  private:
+    OBDISP _obd;
+}; // class BB_SPI_LCD
 
 typedef char * (*SIMPLECALLBACK)(int iMenuItem);
 
@@ -94,53 +208,6 @@ typedef enum
 // These are defined the same in my SPI_LCD library
 #ifndef SPI_LCD_H
 
-// 5 possible font sizes: 8x8, 16x32, 6x8, 12x16 (stretched from 6x8 with smoothing), 16x16 (stretched from 8x8)
-enum {
-   FONT_6x8 = 0,
-   FONT_8x8,
-   FONT_12x16,
-   FONT_16x16,
-   FONT_16x32,
-   FONT_COUNT
-};
-// For backwards compatibility, keep the old names valid
-#define FONT_NORMAL FONT_8x8
-#define FONT_SMALL FONT_6x8
-#define FONT_STRETCHED FONT_16x16
-#define FONT_LARGE FONT_16x32
-#endif
-
-// Display type for init function
-enum {
-  DISPLAY_COMMANDS = 0,
-  OLED_128x128,
-  OLED_128x32,
-  OLED_128x64,
-  OLED_132x64,
-  OLED_64x128,
-  OLED_64x32,
-  OLED_96x16,
-  OLED_72x40,
-  LCD_UC1701,
-  LCD_UC1609,
-  LCD_HX1230,
-  LCD_NOKIA5110,
-  LCD_VIRTUAL,
-  SHARP_144x168,
-  SHARP_400x240,
-  EPD42_400x300,
-  LCD_COUNT
-};
-
-// Rotation and flip angles to draw tiles
-enum {
-  ANGLE_0=0,
-  ANGLE_90,
-  ANGLE_180,
-  ANGLE_270,
-  ANGLE_FLIPX,
-  ANGLE_FLIPY
-};
 // Bytewise commands for rendering scenes
 // stored in the lower 4 bits of the command byte
 // the upper 4 bits can hold single bit parameters
@@ -313,6 +380,11 @@ void obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
 // returns 0 for success, -1 for invalid parameter
 //
 int obdDrawGFX(OBDISP *pOBD, uint8_t *pSrc, int iSrcCol, int iSrcRow, int iDestCol, int iDestRow, int iWidth, int iHeight, int iSrcPitch);
+//
+// Set the current custom font pointers for playing back
+// bytewise commands
+//
+void obdSetCustomFont(OBDISP *pOBD, GFXfont *pFont, uint8_t ucFont);
 //
 // Execute a set of bytewise command bytes
 // and execute the drawing instructions on the current display/buffer
