@@ -1745,7 +1745,7 @@ unsigned char c, *s, ucTemp[40];
     {
        i = 0;
        iFontSkip = iScroll & 7; // number of columns to initially skip
-       while (pOBD->iCursorX < pOBD->width && szMsg[i] != 0 && pOBD->iCursorY < pOBD->height / 8)
+       while (pOBD->iCursorX < pOBD->width && szMsg[i] != 0 && pOBD->iCursorY < pOBD->height)
        {
          if (iScroll < 8) // only display visible characters
          {
@@ -1764,7 +1764,7 @@ unsigned char c, *s, ucTemp[40];
              if (pOBD->iCursorX >= pOBD->width-7 && pOBD->wrap) // word wrap enabled?
              {
                pOBD->iCursorX = 0; // start at the beginning of the next line
-               pOBD->iCursorY++;
+               pOBD->iCursorY+=8;
                obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
              }
              iFontSkip = 0;
@@ -1773,16 +1773,14 @@ unsigned char c, *s, ucTemp[40];
          i++;
        } // while
        obdCachedFlush(pOBD, bRender); // write any remaining data
-        pOBD->iCursorX = x+(i*8);
-        pOBD->iCursorY = y; // set the new cursor position
-        return 0;
+       return 0;
     } // 8x8
 #ifndef __AVR__
     else if (iSize == FONT_16x32)
     {
       i = 0;
       iFontSkip = iScroll & 15; // number of columns to initially skip
-      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < (pOBD->height / 8)-3 && szMsg[i] != 0)
+      while (pOBD->iCursorX < pOBD->width && pOBD->iCursorY < pOBD->height && szMsg[i] != 0)
       {
           if (iScroll < 16) // if characters are visible
           {
@@ -1798,34 +1796,26 @@ unsigned char c, *s, ucTemp[40];
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               memcpy_P(ucTemp, s+16, 16);
               if (bInvert) InvertBytes(ucTemp, 16);
-              obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
-//              if (pOBD->iCursorY <= 5)
-              {
-                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+16, bRender);
-                 memcpy_P(ucTemp, s+32, 16);
-                 if (bInvert) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
-              }
-//              if (pOBD->iCursorY <= 4)
-              {
-                 obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+24, bRender);
-                 memcpy_P(ucTemp, s+48, 16);
-                 if (bInvert) InvertBytes(ucTemp, 16);
+              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+16, bRender);
+              memcpy_P(ucTemp, s+32, 16);
+              if (bInvert) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
-              }
+              obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+24, bRender);
+              memcpy_P(ucTemp, s+48, 16);
+              if (bInvert) InvertBytes(ucTemp, 16);
+                 obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               pOBD->iCursorX += iLen;
               if (pOBD->iCursorX >= pOBD->width-15 && pOBD->wrap) // word wrap enabled?
               {
                 pOBD->iCursorX = 0; // start at the beginning of the next line
-                pOBD->iCursorY+=4;
+                pOBD->iCursorY+=32;
               }
               iFontSkip = 0;
           } // if character visible from scrolling
           iScroll -= 16;
           i++;
        } // while
-        pOBD->iCursorX = x+(i*16);
-        pOBD->iCursorY = y; // set the new cursor position
        return 0;
     } // 16x32
 #endif // !__AVR__
@@ -1886,8 +1876,6 @@ unsigned char c, *s, ucTemp[40];
           iScroll -= 16;
           i++;
       } // while
-        pOBD->iCursorX = x+(i*16);
-        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 16x16
     else if (iSize == FONT_12x16) // 6x8 stretched to 12x16
@@ -2025,8 +2013,6 @@ unsigned char c, *s, ucTemp[40];
           iScroll -= 12;
           i++;
       } // while
-        pOBD->iCursorX = x+(i*12);
-        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 12x16
     else if (iSize == FONT_6x8)
@@ -2052,7 +2038,7 @@ unsigned char c, *s, ucTemp[40];
                if (pOBD->iCursorX >= pOBD->width-5 && pOBD->wrap) // word wrap enabled?
                {
                  pOBD->iCursorX = 0; // start at the beginning of the next line
-                 pOBD->iCursorY++;
+                 pOBD->iCursorY +=8;
                  obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
                }
            } // if characters are visible
@@ -2060,8 +2046,6 @@ unsigned char c, *s, ucTemp[40];
          i++;
        }
       obdCachedFlush(pOBD, bRender); // write any remaining data
-        pOBD->iCursorX = x+(i*6);
-        pOBD->iCursorY = y; // set the new cursor position
       return 0;
     } // 6x8
   return -1; // invalid size
