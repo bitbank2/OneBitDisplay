@@ -92,7 +92,7 @@ uint8_t oled_addr; // requested address or 0xff for automatic detection
 uint8_t wrap, flip, invert, type, render;
 uint8_t *ucScreen;
 int iCursorX, iCursorY;
-int width, height;
+int width, height, native_width, native_height;
 bool bScroll;
 int iScreenOffset, iOrientation;
 int iFG, iBG; //current color
@@ -275,7 +275,10 @@ int obdI2CInit(OBDISP *pOBD, int iType, int iAddr, int bFlip, int bInvert, int b
 // Initialize an SPI version of the display
 //
 void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI, int iCLK, int iLED, int bFlip, int bInvert, int iBitBang, int32_t iSpeed);
-
+//
+// Set the drawing direction in 90 degree increments
+//
+void obdSetRotation(OBDISP *pOBD, int iRotation);
 //
 // Set the memory configuration to display the pixels at 0 or 180 degrees (flipped)
 // pass true (1) to flip 180, false (0) to set to 0

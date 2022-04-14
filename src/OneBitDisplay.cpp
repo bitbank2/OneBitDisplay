@@ -487,75 +487,75 @@ int iLen;
         //  SPI.setDataMode(SPI_MODE0);
     }
 
-  pOBD->width = 128; // assume 128x64
+    pOBD->native_width = pOBD->width = 128; // assume 128x64
   pOBD->height = 64;
   if (iType == LCD_ST7302)
   {
-      pOBD->width = 250;
-      pOBD->height = 122;
+      pOBD->native_width = pOBD->width = 250;
+      pOBD->native_height = pOBD->height = 122;
   }
   if (iType == OLED_80x128)
   {
-      pOBD->width = 80;
-      pOBD->height = 128;
+      pOBD->native_width = pOBD->width = 80;
+      pOBD->native_height = pOBD->height = 128;
   }
   else if (iType == SHARP_144x168)
   {
-      pOBD->width = 144;
-      pOBD->height = 168;
+      pOBD->native_width = pOBD->width = 144;
+      pOBD->native_height = pOBD->height = 168;
       pOBD->iDCPin = 0xff; // no D/C wire on this display
   }
   else if (iType == SHARP_400x240)
   {
-      pOBD->width = 400;
-      pOBD->height = 240;
+      pOBD->native_width = pOBD->width = 400;
+      pOBD->native_height = pOBD->height = 240;
       pOBD->iDCPin = 0xff; // no D/C wire on this display
   }
   else if (iType == EPD42_400x300)
   {
-      pOBD->width = 400;
-      pOBD->height = 300;
+      pOBD->native_width = pOBD->width = 400;
+      pOBD->native_height = pOBD->height = 300;
       return; // nothing else to do yet
   }
   else if (iType == LCD_UC1609)
   {
-      pOBD->width = 192;
-      pOBD->height = 64;
+      pOBD->native_width = pOBD->width = 192;
+      pOBD->native_height = pOBD->height = 64;
   }
   else if (iType == LCD_HX1230)
   {
-      pOBD->width = 96;
-      pOBD->height = 68;
+      pOBD->native_width = pOBD->width = 96;
+      pOBD->native_height = pOBD->height = 68;
       pOBD->iDCPin = 0xff; // flag this as being 3-wire SPI
   }
   else if (iType == LCD_NOKIA5110)
   {
-      pOBD->width = 84;
-      pOBD->height = 48;
+      pOBD->native_width = pOBD->width = 84;
+      pOBD->native_height = pOBD->height = 48;
   }
   else if (iType == OLED_96x16)
   {
-    pOBD->width = 96;
-    pOBD->height = 16;
+      pOBD->native_width = pOBD->width = 96;
+      pOBD->native_height = pOBD->height = 16;
   }
   else if (iType == OLED_64x128)
   {
-    pOBD->width = 64;
-    pOBD->height = 128;
+      pOBD->native_width = pOBD->width = 64;
+      pOBD->native_height = pOBD->height = 128;
   }
   else if (iType == OLED_128x32)
-    pOBD->height = 32;
+      pOBD->native_height = pOBD->height = 32;
   else if (iType == OLED_128x128)
-    pOBD->height = 128;
+      pOBD->native_height = pOBD->height = 128;
   else if (iType == OLED_64x32)
   {
-    pOBD->width = 64;
-    pOBD->height = 32;
+      pOBD->native_width = pOBD->width = 64;
+      pOBD->native_height = pOBD->height = 32;
   }
   else if (iType == OLED_72x40)
   {
-    pOBD->width = 72;
-    pOBD->height = 40;
+      pOBD->native_width = pOBD->width = 72;
+      pOBD->native_height = pOBD->height = 40;
   }
   if (iType == OLED_80x128)
   {
@@ -692,6 +692,41 @@ int iLen;
   } // UC1609
 #endif // MEMORY_ONLY
 } /* obdSPIInit() */
+void obdSetRotation(OBDISP *pOBD, int iRotation)
+{
+    pOBD->iScreenOffset = 0;
+    
+    switch (iRotation) {
+        default: return;
+        case 0:
+            obdSetFlip(pOBD, 0);
+            pOBD->iOrientation = 0;
+            pOBD->width = pOBD->native_width;
+            pOBD->height = pOBD->native_height;
+            break;
+        case 1:
+        case 90:
+            obdSetFlip(pOBD, 0);
+            pOBD->iOrientation = 90;
+            pOBD->width = pOBD->native_height;
+            pOBD->height = pOBD->native_width;
+            break;
+        case 2:
+        case 180:
+            pOBD->iOrientation = 180;
+            obdSetFlip(pOBD, 1);
+            pOBD->width = pOBD->native_width;
+            pOBD->height = pOBD->native_height;
+            break;
+        case 3:
+        case 270:
+            pOBD->iOrientation = 270;
+            obdSetFlip(pOBD, 1);
+            pOBD->width = pOBD->native_height;
+            pOBD->height = pOBD->native_width;
+            break;
+  }
+} /* obdSetRotation() */
 //
 // Set the memory configuration to display the pixels at 0 or 180 degrees (flipped)
 // Pass true (1) to flip 180, false (0) to set to 0
@@ -847,36 +882,36 @@ uint8_t u8Len, *s;
     uc[1] = 0xc0;
     _I2CWrite(pOBD,uc, 2);
   }
-  pOBD->width = 128; // assume 128x64
-  pOBD->height = 64;
+  pOBD->native_width = pOBD->width = 128; // assume 128x64
+    pOBD->native_height = pOBD->height = 64;
   if (iType == OLED_96x16)
   {
-    pOBD->width = 96;
-    pOBD->height = 16;
+      pOBD->native_width = pOBD->width = 96;
+      pOBD->native_height = pOBD->height = 16;
   }
   else if (iType == OLED_80x128)
   {
-    pOBD->width = 80;
-    pOBD->height = 128;
+      pOBD->native_width = pOBD->width = 80;
+      pOBD->native_height = pOBD->height = 128;
   }
   else if (iType == OLED_64x128)
   {
-    pOBD->width = 64;
-    pOBD->height = 128;
+      pOBD->native_width = pOBD->width = 64;
+      pOBD->native_height = pOBD->height = 128;
   }
   else if (iType == OLED_128x32)
-    pOBD->height = 32;
+      pOBD->native_height = pOBD->height = 32;
   else if (iType == OLED_128x128)
-    pOBD->height = 128;
+      pOBD->native_height = pOBD->height = 128;
   else if (iType == OLED_64x32)
   {
-    pOBD->width = 64;
-    pOBD->height = 32;
+      pOBD->native_width = pOBD->width = 64;
+      pOBD->native_height = pOBD->height = 32;
   }
   else if (iType == OLED_72x40)
   {
-    pOBD->width = 72;
-    pOBD->height = 40;
+      pOBD->native_width = pOBD->width = 72;
+      pOBD->native_height = pOBD->height = 40;
   }
 #endif // MEMORY_ONLY
   return rc;
@@ -1359,83 +1394,138 @@ int x, y, iPitch, count;
 uint8_t ucMask, uc1, *s, *d;
     
     iPitch = pOBD->width;
-    obdWriteCommand(pOBD, 0x2a); // Column set
-    ucTemp[0] = 0x40;
-    ucTemp[1] = 0x19; // start x
-    ucTemp[2] = 0x23; // end x
-    _I2CWrite(pOBD, ucTemp, 3);
-    obdWriteCommand(pOBD, 0x2b); // Row set
-    ucTemp[0] = 0x40;
-    ucTemp[1] = 0x0; // start y
-    ucTemp[2] = 0x40; // end y
-    _I2CWrite(pOBD, ucTemp, 3);
-    obdWriteCommand(pOBD, 0x2c); // memory write
 // Shift out the image in pairs of lines
     ucPixels[0] = 0x40;
-    for (x = 0; x < pOBD->width; x += 2) { // a pair of columns at a time
-        d = ucPixels+1;
-        ucMask = 1;
-        uc1 = 0;
-        count = 0;
-        if (pOBD->flip) {
-            ucMask = 1<<((pOBD->height-1) & 7);
-            s = &pBuffer[x + ((pOBD->height-1)>>3)*iPitch];
-            for (y = pOBD->height-1; y >= 0; y--) {
-                uc1 <<= 2;
-                if (s[0] & ucMask) uc1 |= 1;
-                if (s[1] & ucMask) uc1 |= 2;
-                count++;
-                if (count == 4) { // finish the byte
-                    *d++ = uc1;
+    switch (pOBD->iOrientation) {
+        case 0:
+        case 180:
+            for (x = 0; x < pOBD->width; x += 2) { // a pair of columns at a time
+                d = ucPixels+1;
+                ucMask = 1;
+                uc1 = 0;
+                count = 0;
+                if (pOBD->iOrientation == 180) {
+                    ucMask = 1<<((pOBD->height-1) & 7);
+                    s = &pBuffer[x + ((pOBD->height-1)>>3)*iPitch];
+                    for (y = pOBD->height-1; y >= 0; y--) {
+                        uc1 <<= 2;
+                        if (s[0] & ucMask) uc1 |= 1;
+                        if (s[1] & ucMask) uc1 |= 2;
+                        count++;
+                        if (count == 4) { // finish the byte
+                            *d++ = uc1;
+                            count = 0;
+                            uc1 = 0;
+                        }
+                        ucMask >>= 1;
+                        if (ucMask == 0) {
+                            ucMask = 0x80;
+                            s -= iPitch;
+                        } // next line
+                    } // for y
+                    if (count) {
+                        uc1 <<= (count*2);
+                        *d++ = uc1;
+                    }
+                } else {
+                    s = &pBuffer[x];
+                    for (y=0; y < pOBD->height+3; y++) {
+                        uc1 <<= 2;
+                        if (s[0] & ucMask) uc1 |= 2;
+                        if (s[1] & ucMask) uc1 |= 1;
+                        count++;
+                        if (count == 4) { // finish the byte
+                            *d++ = uc1;
+                            count = 0;
+                            uc1 = 0;
+                        }
+                        ucMask <<= 1;
+                        if (ucMask == 0) {
+                            ucMask = 1;
+                            s += iPitch;
+                        } // next line
+                    } // for y
+                } // flipped
+                obdWriteCommand(pOBD, 0x2a); // Column set
+                ucTemp[0] = 0x40;
+                ucTemp[1] = 0x19; // start x
+                ucTemp[2] = 0x27; // end x
+                _I2CWrite(pOBD, ucTemp, 3);
+                obdWriteCommand(pOBD, 0x2b); // Row set
+                ucTemp[0] = 0x40;
+                if (pOBD->flip)
+                    ucTemp[1] = 124-(x/2); // start y
+                else
+                    ucTemp[1] = (x/2); // start y
+                ucTemp[2] = 0x80; // end y
+                _I2CWrite(pOBD, ucTemp, 3);
+                obdWriteCommand(pOBD, 0x2c); // memory write
+                _I2CWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
+            } // for x
+            break;
+        case 90:
+        case 270: // x/y swapped
+            if (pOBD->iOrientation == 270) {
+                for (y=pOBD->height-2; y >= 0; y-=2) {
+                    ucMask = 1<<(y & 7);
+                    s = &pBuffer[(y>>3)*pOBD->width];
                     count = 0;
-                    uc1 = 0;
-                }
-                ucMask >>= 1;
-                if (ucMask == 0) {
-                    ucMask = 0x80;
-                    s -= iPitch;
-                } // next line
-            } // for y
-            if (count) {
-                uc1 <<= (count*2);
-                *d++ = uc1;
-            }
-        } else {
-            s = &pBuffer[x];
-            for (y=0; y < pOBD->height+3; y++) {
-                uc1 <<= 2;
-                if (s[0] & ucMask) uc1 |= 2;
-                if (s[1] & ucMask) uc1 |= 1;
-                count++;
-                if (count == 4) { // finish the byte
-                    *d++ = uc1;
+                    d = ucPixels+1;
+                    for (x=0; x<pOBD->width; x++) {
+                        uc1 <<= 2;
+                        if (s[x] & ucMask) uc1 |= 1;
+                        if (s[x] & (ucMask << 1)) uc1 |= 2;
+                        count++;
+                        if (count == 4) { // finish the byte
+                            *d++ = uc1;
+                            count = 0;
+                        }
+                    } // for x
+                    obdWriteCommand(pOBD, 0x2a); // Column set
+                    ucTemp[0] = 0x40;
+                    ucTemp[1] = 0x19; // start x
+                    ucTemp[2] = 0x27; // end x
+                    _I2CWrite(pOBD, ucTemp, 3);
+                    obdWriteCommand(pOBD, 0x2b); // Row set
+                    ucTemp[0] = 0x40;
+                    ucTemp[1] = ((pOBD->height-2)/2) - (y/2);
+                    ucTemp[2] = 0x80; // end y
+                    _I2CWrite(pOBD, ucTemp, 3);
+                    obdWriteCommand(pOBD, 0x2c); // memory write
+                    _I2CWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
+                } // for y
+            } else { // 90
+                for (y=0; y < pOBD->height; y+=2) {
+                    ucMask = 1<<(y & 7);
+                    s = &pBuffer[(y>>3)*pOBD->width];
                     count = 0;
-                    uc1 = 0;
-                }
-                ucMask <<= 1;
-                if (ucMask == 0) {
-                    ucMask = 1;
-                    s += iPitch;
-                } // next line
-            } // for y
-        } // flipped
-        obdWriteCommand(pOBD, 0x2a); // Column set
-        ucTemp[0] = 0x40;
-        ucTemp[1] = 0x19; // start x
-        ucTemp[2] = 0x27; // end x
-        _I2CWrite(pOBD, ucTemp, 3);
-        obdWriteCommand(pOBD, 0x2b); // Row set
-        ucTemp[0] = 0x40;
-        if (pOBD->flip)
-            ucTemp[1] = 124-(x/2); // start y
-        else
-            ucTemp[1] = (x/2); // start y
-        ucTemp[2] = 0x80; // end y
-        _I2CWrite(pOBD, ucTemp, 3);
-        obdWriteCommand(pOBD, 0x2c); // memory write
-        _I2CWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
-    } // for x
-//    } // for odd
+                    d = ucPixels+1;
+                    for (x=pOBD->width-1; x>=0; x--) {
+                        uc1 <<= 2;
+                        if (s[x] & ucMask) uc1 |= 2;
+                        if (s[x] & (ucMask << 1)) uc1 |= 1;
+                        count++;
+                        if (count == 4) { // finish the byte
+                            *d++ = uc1;
+                            count = 0;
+                        }
+                    } // for x
+                    obdWriteCommand(pOBD, 0x2a); // Column set
+                    ucTemp[0] = 0x40;
+                    ucTemp[1] = 0x19; // start x
+                    ucTemp[2] = 0x27; // end x
+                    _I2CWrite(pOBD, ucTemp, 3);
+                    obdWriteCommand(pOBD, 0x2b); // Row set
+                    ucTemp[0] = 0x40;
+                    ucTemp[1] = (y/2);
+                    ucTemp[2] = 0x80; // end y
+                    _I2CWrite(pOBD, ucTemp, 3);
+                    obdWriteCommand(pOBD, 0x2c); // memory write
+                    _I2CWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
+                } // for y
+            } // flipped
+            break;
+    } // switch
 } /* ST7302DumpBuffer() */
 //
 // Special case for Sharp Memory LCD
@@ -1558,44 +1648,42 @@ uint8_t *pSrc = pOBD->ucScreen;
     SharpDumpBuffer(pOBD, pBuffer);
     return;
   }
-  iLines = (pOBD->height+3) >> 3;
+  iLines = (pOBD->height+7) >> 3;
   iCols = pOBD->width >> 4;
-// different method for SPI displays
-  if (1) { //pOBD->com_mode == COM_SPI) {
+    // 0/180 we can send the 8 lines of pixels straight through
+    if (pOBD->iOrientation == 0 || pOBD->iOrientation == 180) {
      for (y=0; y<iLines; y++) {
          obdSetPosition(pOBD, 0, y*8, 1);
          obdWriteDataBlock(pOBD, pBuffer, pOBD->width, 1);
          pBuffer += pOBD->width;
      }
      return;
-  }
+  } else { // must be 90/270
+      // Capture the pixels 'sideways' and send a line at a time
+      for (x=0; x<pOBD->width; x+=8) {
+          uint8_t j, *s, *d, uc, ucMask, ucTemp[132];
+          d = ucTemp;
+          *d++ = 0x40;
+          s = &pBuffer[x + (((pOBD->height-1)>>3) * pOBD->width)];
+          ucMask = 0x80;
+          for (y=0; y<pOBD->height; y++) {
+              uc = 0;
+              for (j=0; j<8; j++) {
+                  uc >>= 1;
+                  if (s[j] & ucMask) uc |= 0x80;
+              } // for j
+              *d++ = uc;
+              ucMask >>= 1;
+              if (ucMask == 0) {
+                  ucMask = 0x80;
+                  s -= pOBD->width;
+              }
+          } // for y
+          obdSetPosition(pOBD, 0, x, 1);
+          _I2CWrite(pOBD, ucTemp, pOBD->height + 1);
+      } // for x
+  } // 90/270 degrees rotated
 
-  for (y=0; y<iLines; y++)
-  {
-    bNeedPos = 1; // start of a new line means we need to set the position too
-    for (x=0; x<iCols; x++) // wiring library has a 32-byte buffer, so send 16 bytes so that the data prefix (0x40) can fit
-    {
-      if (pOBD->ucScreen == NULL || pBuffer == pSrc || memcmp(pSrc, pBuffer, 16) != 0) // doesn't match, need to send it
-      {
-        if (bNeedPos) // need to reposition output cursor?
-        {
-           bNeedPos = 0;
-           obdCachedFlush(pOBD, 1);
-           obdSetPosition(pOBD, x*16, y, 1);
-        }
-        obdCachedWrite(pOBD, pBuffer, 16, 1);
-      }
-      else
-      {
-         bNeedPos = 1; // we're skipping a block, so next time will need to set the new position
-      }
-      pSrc += 16;
-      pBuffer += 16;
-    } // for x
-    pSrc += (iPitch - pOBD->width); // for narrow displays, skip to the next line
-    pBuffer += (iPitch - pOBD->width);
-  } // for y
-  obdCachedFlush(pOBD, 1);
 } /* obdDumpBuffer() */
 
 //
@@ -1966,23 +2054,7 @@ void ONE_BIT_DISPLAY::setScroll(bool bScroll)
 
 void ONE_BIT_DISPLAY::setRotation(int iRotation)
 {
-
-  switch (iRotation) {
-    default: return;
-    case 0:
-      obdSetFlip(&_obd, 0);
-      break;
-    case 90:
-      break;
-    case 180:
-    case 2:
-      obdSetFlip(&_obd, 1);
-      break;
-    case 270:
-    case 3:
-      break;
-  }
-    _obd.iOrientation = iRotation;
+    obdSetRotation(&_obd, iRotation);
 } /* setRotation() */
 
 void ONE_BIT_DISPLAY::fillScreen(int iColor)
