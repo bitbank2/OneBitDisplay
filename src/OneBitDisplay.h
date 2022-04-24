@@ -52,6 +52,9 @@ enum {
 #define OBD_FLIP180 2
 #define OBD_BITBANG 4
 
+#define OLED_BLACK 0x00
+#define OLED_WHITE 0xff
+
 #define OBD_ANY_ADDRESS -1
 // Rotation and flip angles to draw tiles
 enum {
@@ -89,7 +92,7 @@ typedef struct {
 typedef struct obdstruct
 {
 uint8_t oled_addr; // requested address or 0xff for automatic detection
-uint8_t wrap, flip, invert, type, render;
+uint8_t wrap, flip, invert, type, render, can_flip;
 uint8_t *ucScreen;
 int iCursorX, iCursorY;
 int width, height, native_width, native_height;

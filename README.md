@@ -21,11 +21,13 @@ It uses the SH1107 controller and behaves very similarly to the SH1106.
 
 Features:<br>
 ---------<br>
+- C API and C++ wrapper class which mimics the Adafruit_GFX API
 - Supports any number of simultaneous displays of any type (mix and match)<br>
 - Optionally detect the display address and type (I2C only)<br>
 - Supports 72x40, 96x16, 64x32, 128x32, 128x64, 64x128 (SH1107), 128x128 (SH1107) and 132x64 (SH1106) OLED display sizes<br>
 - Supports 96x68 HX1230, 84x48 Nokia 5110 and 128x64 ST7567/UC1701 mono LCDs<br>
 - Supports 144x168 and 400x240 Sharp Memory LCDs<br>
+- *NEW* supports the ST7302 low power LCD (250x122, 2.13")
 - Virtual displays of any size which can be drawn across multiple physical displays
 - Flexible copy function can convert the internal pixel format to any output format and orientation
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
