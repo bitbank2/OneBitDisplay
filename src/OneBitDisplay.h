@@ -122,6 +122,7 @@ class ONE_BIT_DISPLAY : public Print
     void setSPIPins(int iCS, int iMOSI, int iSCLK, int iDC, int iReset=-1, int iLED=-1);
     void setI2CPins(int iSDA, int iSCL, int iReset=-1);
     void setFlags(int iFlags);
+    void setContrast(uint8_t ucContrast);
     void display(void);
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
@@ -140,7 +141,7 @@ class ONE_BIT_DISPLAY : public Print
     void setCursor(int x, int y);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
-    void setTextSize(int iSize) {}; // empty for now
+    void setTextSize(int iSize);
     void setFont(int iFont);
     void setFreeFont(const GFXfont *pFont);
     int16_t height(void);

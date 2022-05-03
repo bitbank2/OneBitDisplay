@@ -992,7 +992,6 @@ int iLen;
        //  SPI.setBitOrder(MSBFIRST);
         //  SPI.setDataMode(SPI_MODE0);
     }
-
     pOBD->native_width = pOBD->width = 128; // assume 128x64
   pOBD->height = 64;
   if (iType == LCD_ST7302)
@@ -1945,6 +1944,7 @@ uint8_t ucMask, uc1, *s, *d;
                     }
                 } else {
                     s = &pBuffer[x];
+                    uc1 = 0;
                     for (y=0; y < pOBD->height+3; y++) {
                         uc1 <<= 2;
                         if (s[0] & ucMask) uc1 |= 2;
@@ -1987,6 +1987,7 @@ uint8_t ucMask, uc1, *s, *d;
                     s = &pBuffer[(y>>3)*pOBD->width];
                     count = 0;
                     d = ucPixels+1;
+                    uc1 = 0;
                     for (x=0; x<pOBD->width; x++) {
                         uc1 <<= 2;
                         if (s[x] & ucMask) uc1 |= 1;
@@ -2016,6 +2017,7 @@ uint8_t ucMask, uc1, *s, *d;
                     s = &pBuffer[(y>>3)*pOBD->width];
                     count = 0;
                     d = ucPixels+1;
+                    uc1 = 0;
                     for (x=pOBD->width-1; x>=0; x--) {
                         uc1 <<= 2;
                         if (s[x] & ucMask) uc1 |= 2;
@@ -2136,12 +2138,9 @@ void obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height)
 //
 void obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
-int x, y, iPitch;
-int iLines, iCols;
-uint8_t bNeedPos;
-uint8_t *pSrc = pOBD->ucScreen;
+int x, y;
+int iLines;
     
-  iPitch = pOBD->width;
   if (pOBD->type == LCD_VIRTUAL) // wrong function for this type of display
     return;
   if (pBuffer == NULL) // dump the internal buffer if none is given
@@ -2165,7 +2164,6 @@ uint8_t *pSrc = pOBD->ucScreen;
     return;
   }
   iLines = (pOBD->height+7) >> 3;
-  iCols = pOBD->width >> 4;
     // 0/180 we can send the 8 lines of pixels straight through
     if (pOBD->iOrientation == 0 || pOBD->iOrientation == 180) {
         if (pOBD->iOrientation == 0 || (pOBD->iOrientation == 180 && pOBD->can_flip)) {
@@ -2235,7 +2233,6 @@ uint8_t *pSrc = pOBD->ucScreen;
           } // for x
       }
   } // 90/270 degrees rotated
-
 } /* obdDumpBuffer() */
 
 //
@@ -2609,7 +2606,9 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
         SPI.transferBytes(&pData[1], ucTemp, iLen-1);
    }
 #else
-    SPI.transfer(&pData[1], iLen-1);
+    for (int i=1; i<iLen; i++) {
+       SPI.transfer(pData[i]);
+    }
 #endif
     if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
       digitalWrite(pOBD->iCSPin, HIGH);
