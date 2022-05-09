@@ -175,7 +175,7 @@ void ONE_BIT_DISPLAY::drawLine(int x1, int y1, int x2, int y2, int iColor)
 
 inline GFXglyph *pgm_read_glyph_ptr(const GFXfont *gfxFont, uint8_t c) {
 #ifdef __AVR__
-  return &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
+  return &(((GFXglyph *)pgm_read_ptr(&gfxFont->glyph))[c]);
 #else
   // expression in __AVR__ section may generate "dereferencing type-punned
   // pointer will break strict-aliasing rules" warning In fact, on other
