@@ -91,6 +91,9 @@ typedef struct {
 
 typedef struct obdstruct
 {
+#ifndef MEMORY_ONLY
+BBI2C bbi2c;
+#endif
 uint8_t oled_addr; // requested address or 0xff for automatic detection
 uint8_t wrap, flip, invert, type, render, can_flip;
 uint8_t *ucScreen;
@@ -99,17 +102,14 @@ int width, height, native_width, native_height;
 bool bScroll;
 int iScreenOffset, iOrientation;
 int iFG, iBG; //current color
-#ifndef MEMORY_ONLY
-BBI2C bbi2c;
-#endif
 int iFont;
-int iSpeed;
+uint32_t iSpeed;
 GFXfont *pFreeFont;
 void *pFont[3]; // up to 3 custom font pointers
 uint8_t com_mode; // communication mode (I2C / SPI)
 uint8_t mode; // data/command mode for 9-bit SPI
-int iSDAPin, iSCLPin;
-int iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
+uint8_t iSDAPin, iSCLPin;
+uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
 int iLEDPin; // backlight
 uint8_t bBitBang;
 } OBDISP;

@@ -953,8 +953,11 @@ int iLen;
       pinMode(pOBD->iDCPin, OUTPUT);
       digitalWrite(pOBD->iDCPin, 0); // for some reason, command mode must be set or some OLEDs/LCDs won't initialize correctly even if set later
   }
-  pinMode(pOBD->iCSPin, OUTPUT);
-  digitalWrite(pOBD->iCSPin, 0); //(pOBD->type < SHARP_144x168)); // set to not-active
+  if (pOBD->iCSPin != 0xff)
+  {
+      pinMode(pOBD->iCSPin, OUTPUT);
+      digitalWrite(pOBD->iCSPin, 0); //(pOBD->type < SHARP_144x168)); // set to not-active
+  }
   if (bBitBang)
   {
       pinMode(iMOSI, OUTPUT);
@@ -1157,7 +1160,6 @@ int iLen;
   if (iType == LCD_UC1701 || iType == LCD_HX1230)
   {
       uint8_t cCOM = 0xc0;
-      
       LCDPowerUp(pOBD);
       if (iType == LCD_HX1230)
       {
@@ -1459,6 +1461,7 @@ void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8
 {
 int i;
 uint8_t c;
+
 // We can access the GPIO ports much quicker on AVR by directly manipulating
 // the port registers
 #ifdef __AVR__
@@ -1536,7 +1539,6 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
 #endif
         }
       }
-      iLen--;
    }
 } /* SPI_BitBang() */
 
@@ -1641,7 +1643,7 @@ static void EPDWakeUp(OBDISP *pOBD)
 uint8_t ucTemp[8];
 
   ucTemp[0] = 0x40; // tell I2CWrite that it's a data write, not command
-  if (pOBD->iRSTPin != -1)
+  if (pOBD->iRSTPin != 0xff)
   {
     digitalWrite(pOBD->iRSTPin, LOW);
     delay(10);
@@ -1697,7 +1699,7 @@ uint8_t ucTemp[4];
   RawWrite(pOBD, ucTemp, 2);
   obdWriteCommand(pOBD, 0x02); // power off
   EPDWaitBusy(pOBD);
-  if (pOBD->iRSTPin != -1)
+  if (pOBD->iRSTPin != 0xff)
   {
     obdWriteCommand(pOBD, 0x07); // deep sleep
     ucTemp[1] = 0xa5;
@@ -3982,7 +3984,7 @@ unsigned char c, *s, ucTemp[40];
 void obdGetStringBox(GFXfont *pFont, char *szMsg, int *width, int *top, int *bottom)
 {
 int cx = 0;
-int c, i = 0;
+unsigned int c, i = 0;
 GFXglyph *pGlyph;
 int miny, maxy;
 
@@ -4009,7 +4011,8 @@ int miny, maxy;
 //
 int obdWriteStringCustom(OBDISP *pOBD, GFXfont *pFont, int x, int y, char *szMsg, uint8_t ucColor)
 {
-int i, end_y, dx, dy, tx, ty, c, iBitOff;
+int i, end_y, dx, dy, tx, ty, iBitOff;
+unsigned int c;
 uint8_t *s, *d, bits, ucMask, ucClr, uc;
 GFXfont font;
 GFXglyph glyph, *pGlyph;
