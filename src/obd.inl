@@ -1300,7 +1300,7 @@ uint8_t u8Len, *s;
   pOBD->oled_addr = (uint8_t)scl;
 #else
   // Reset it
-  if (reset != -1)
+  if (reset != 0xff && reset != -1)
   {
     pinMode(reset, OUTPUT);
     digitalWrite(reset, HIGH);
@@ -1328,6 +1328,7 @@ uint8_t u8Len, *s;
     if (!I2CTest(&pOBD->bbi2c, iAddr))
        return rc; // no display found
   }
+
 #endif
   // Detect the display controller (SSD1306, SH1107 or SH1106)
   uint8_t u = 0;
@@ -1904,9 +1905,28 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
 //
 // Special case for ST7302
 //
+void obdST7302SetPos(OBDISP *pOBD, int x, int y)
+{
+uint8_t ucTemp[4];
+    
+    obdWriteCommand(pOBD, 0x2a); // Column set
+    ucTemp[0] = 0x40;
+    ucTemp[1] = 0x19 + (y/12); // start x (we treat it as y)
+    ucTemp[2] = 0x27; // end x
+    RawWrite(pOBD, ucTemp, 3);
+    obdWriteCommand(pOBD, 0x2b); // Row set
+    ucTemp[0] = 0x40;
+    ucTemp[1] = (x/2); // start y (we treat it as x)
+    ucTemp[2] = 0x80; // end y
+    RawWrite(pOBD, ucTemp, 3);
+    obdWriteCommand(pOBD, 0x2c); // memory write
+} /* obdST7302SetPos() */
+//
+// Special case for ST7302
+//
 static void ST7302DumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
-uint8_t ucTemp[4], ucPixels[40];
+uint8_t ucPixels[40];
 int x, y, iPitch, count;
 uint8_t ucMask, uc1, *s, *d;
     
@@ -1964,20 +1984,7 @@ uint8_t ucMask, uc1, *s, *d;
                         } // next line
                     } // for y
                 } // flipped
-                obdWriteCommand(pOBD, 0x2a); // Column set
-                ucTemp[0] = 0x40;
-                ucTemp[1] = 0x19; // start x
-                ucTemp[2] = 0x27; // end x
-                RawWrite(pOBD, ucTemp, 3);
-                obdWriteCommand(pOBD, 0x2b); // Row set
-                ucTemp[0] = 0x40;
-                if (pOBD->flip)
-                    ucTemp[1] = 124-(x/2); // start y
-                else
-                    ucTemp[1] = (x/2); // start y
-                ucTemp[2] = 0x80; // end y
-                RawWrite(pOBD, ucTemp, 3);
-                obdWriteCommand(pOBD, 0x2c); // memory write
+                obdSetPosition(pOBD, (pOBD->flip) ? 248-x : x, 0, 1);
                 RawWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
             } // for x
             break;
@@ -2000,17 +2007,7 @@ uint8_t ucMask, uc1, *s, *d;
                             count = 0;
                         }
                     } // for x
-                    obdWriteCommand(pOBD, 0x2a); // Column set
-                    ucTemp[0] = 0x40;
-                    ucTemp[1] = 0x19; // start x
-                    ucTemp[2] = 0x27; // end x
-                    RawWrite(pOBD, ucTemp, 3);
-                    obdWriteCommand(pOBD, 0x2b); // Row set
-                    ucTemp[0] = 0x40;
-                    ucTemp[1] = ((pOBD->height-2)/2) - (y/2);
-                    ucTemp[2] = 0x80; // end y
-                    RawWrite(pOBD, ucTemp, 3);
-                    obdWriteCommand(pOBD, 0x2c); // memory write
+                    obdSetPosition(pOBD, pOBD->height - 2 - y, 0, 1);
                     RawWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
                 } // for y
             } else { // 90
@@ -2030,17 +2027,7 @@ uint8_t ucMask, uc1, *s, *d;
                             count = 0;
                         }
                     } // for x
-                    obdWriteCommand(pOBD, 0x2a); // Column set
-                    ucTemp[0] = 0x40;
-                    ucTemp[1] = 0x19; // start x
-                    ucTemp[2] = 0x27; // end x
-                    RawWrite(pOBD, ucTemp, 3);
-                    obdWriteCommand(pOBD, 0x2b); // Row set
-                    ucTemp[0] = 0x40;
-                    ucTemp[1] = (y/2);
-                    ucTemp[2] = 0x80; // end y
-                    RawWrite(pOBD, ucTemp, 3);
-                    obdWriteCommand(pOBD, 0x2c); // memory write
+                    obdSetPosition(pOBD, y, 0, 1);
                     RawWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
                 } // for y
             } // flipped
@@ -2938,6 +2925,9 @@ void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender)
 unsigned char buf[4];
 int iPitch = pOBD->width;
 
+    if (pOBD->type == LCD_ST7302) { // special case for ST7302
+        obdST7302SetPos(pOBD, x, y);
+    }
     y >>= 3; // DEBUG - since we address the display by lines of 8 pixels
   pOBD->iScreenOffset = (y*iPitch)+x;
 
@@ -4139,7 +4129,7 @@ int obdDrawGFX(OBDISP *pOBD, uint8_t *pBuffer, int iSrcCol, int iSrcRow, int iDe
 void obdFill(OBDISP *pOBD, unsigned char ucData, int bRender)
 {
 uint8_t y;
-uint8_t iLines;
+uint8_t iCols, iLines;
 
    if (pOBD == NULL) return;
    if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
@@ -4155,14 +4145,22 @@ uint8_t iLines;
         memset(pOBD->ucScreen, ucData, pOBD->width * ((pOBD->height+7)/8));
      return;
   }
-  iLines = (pOBD->height+7) >> 3;
-  memset(u8Cache, ucData, pOBD->width);
+  if (pOBD->iOrientation == 0 || pOBD->iOrientation == 180) {
+    iLines = (pOBD->height+7) >> 3;
+    iCols = pOBD->width;
+  } else { // rotated
+    iLines = (pOBD->width+7) >> 3;
+    iCols = pOBD->height;
+  }
+  memset(u8Cache, ucData, iCols);
  
-  for (y=0; y<iLines; y++)
-  {
-    obdSetPosition(pOBD, 0,y*8, bRender); // set to (0,Y)
-    obdWriteDataBlock(pOBD, u8Cache, pOBD->width, bRender);
-  } // for y
+  if (bRender) { // write to the physical display if render = true
+    for (y=0; y<iLines; y++)
+    {
+      obdSetPosition(pOBD, 0,y*8, bRender); // set to (0,Y)
+      obdWriteDataBlock(pOBD, u8Cache, iCols, bRender);
+    } // for y
+  }
   if (pOBD->ucScreen)
     memset(pOBD->ucScreen, ucData, (pOBD->width * pOBD->height)/8);
 } /* obdFill() */

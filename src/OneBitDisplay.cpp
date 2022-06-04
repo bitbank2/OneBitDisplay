@@ -132,7 +132,7 @@ void ONE_BIT_DISPLAY::setRotation(int iRotation)
 
 void ONE_BIT_DISPLAY::fillScreen(int iColor)
 {
-  obdFill(&_obd, iColor, 1);
+  obdFill(&_obd, iColor, (_obd.ucScreen == NULL));
 } /* fillScreen() */
 
 void ONE_BIT_DISPLAY::drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
@@ -153,9 +153,16 @@ void ONE_BIT_DISPLAY::setTextColor(int iFG, int iBG)
 
 void ONE_BIT_DISPLAY::setCursor(int x, int y)
 {
-    _obd.iCursorX = x;
+    if (x >= 0)
+       _obd.iCursorX = x;
+    if (y >= 0)
     _obd.iCursorY = y;
 } /* setCursor() */
+
+int ONE_BIT_DISPLAY::loadBMP(uint8_t *pBMP, int x, int y, int bInvert)
+{
+    return obdLoadBMP(&_obd, pBMP, x, y, bInvert);
+} /* loadBMP() */
 
 void ONE_BIT_DISPLAY::setFont(int iFont)
 {

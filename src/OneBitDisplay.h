@@ -139,6 +139,7 @@ class ONE_BIT_DISPLAY : public Print
     void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void setTextColor(int iFG, int iBG = -1);
     void setCursor(int x, int y);
+    int loadBMP(uint8_t *pBMP, int x, int y, int bInvert);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
     void setTextSize(int iSize);
