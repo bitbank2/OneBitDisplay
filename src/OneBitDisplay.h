@@ -45,6 +45,7 @@ enum {
   SHARP_400x240,
   LCD_ST7302,
   EPD42_400x300,
+  EPD29_296x128,
   LCD_COUNT
 };
 
@@ -65,6 +66,52 @@ enum {
   ANGLE_FLIPX,
   ANGLE_FLIPY
 };
+
+// EPD29_296x128 commands
+// (UC8151)
+enum reg {
+    UC8151_PSR      = 0x00,
+    UC8151_PWR      = 0x01,
+    UC8151_POF      = 0x02,
+    UC8151_PFS      = 0x03,
+    UC8151_PON      = 0x04,
+    UC8151_PMES     = 0x05,
+    UC8151_BTST     = 0x06,
+    UC8151_DSLP     = 0x07,
+    UC8151_DTM1     = 0x10,
+    UC8151_DSP      = 0x11,
+    UC8151_DRF      = 0x12,
+    UC8151_DTM2     = 0x13,
+    UC8151_LUT_VCOM = 0x20,
+    UC8151_LUT_WW   = 0x21,
+    UC8151_LUT_BW   = 0x22,
+    UC8151_LUT_WB   = 0x23,
+    UC8151_LUT_BB   = 0x24,
+    UC8151_PLL      = 0x30,
+    UC8151_TSC      = 0x40,
+    UC8151_TSE      = 0x41,
+    UC8151_TSR      = 0x43,
+    UC8151_TSW      = 0x42,
+    UC8151_CDI      = 0x50,
+    UC8151_LPD      = 0x51,
+    UC8151_TCON     = 0x60,
+    UC8151_TRES     = 0x61,
+    UC8151_REV      = 0x70,
+    UC8151_FLG      = 0x71,
+    UC8151_AMV      = 0x80,
+    UC8151_VV       = 0x81,
+    UC8151_VDCS     = 0x82,
+    UC8151_PTL      = 0x90,
+    UC8151_PTIN     = 0x91,
+    UC8151_PTOU     = 0x92,
+    UC8151_PGM      = 0xa0,
+    UC8151_APG      = 0xa1,
+    UC8151_ROTP     = 0xa2,
+    UC8151_CCSET    = 0xe0,
+    UC8151_PWS      = 0xe3,
+    UC8151_TSSET    = 0xe5
+  };
+#define BUSY_WAIT 0xff
 
 // Proportional font data taken from Adafruit_GFX library
 /// Font data stored PER GLYPH
@@ -121,9 +168,12 @@ class ONE_BIT_DISPLAY : public Print
     void SPIbegin(int iType, int32_t iSpeed); 
     void setSPIPins(int iCS, int iMOSI, int iSCLK, int iDC, int iReset=-1, int iLED=-1);
     void setI2CPins(int iSDA, int iSCL, int iReset=-1);
+    BBI2C *getBB();
+    void setBB(BBI2C *pBB);
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
     void display(void);
+    void display(int x, int y, int w, int h);
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);

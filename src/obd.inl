@@ -29,6 +29,7 @@ static void pinMode(int iPin, int iMode)
 //} /* digitalRead() */
 
 #endif
+static void EPDWaitBusy(OBDISP *pOBD);
 void obdSetDCMode(OBDISP *pOBD, int iMode);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
 void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin);
@@ -122,6 +123,23 @@ const unsigned char lut_bb_full[] =
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+
+// initialization sequence for 2.9" 296x128 e-paper
+const uint8_t epd29_init_sequence[] = {
+    0x02, UC8151_PSR, 0x80 | 0x10 | 0x00 | 0x02 | 0x01, // RES_128x296, LUT_OTP, FORMAT_BW, SHIFT_LEFT, BOOSTER_ON, RESET_NONE
+    0x06, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x2b,
+    0x01, UC8151_PON, // power on
+    BUSY_WAIT,
+    0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
+    0x02, UC8151_PFS, 0x00, // FRAMES_1
+    0x02, UC8151_TSE, 0x00, // TEMP_INTERNAL | OFFSET_0
+    0x02, UC8151_TCON, 0x22,
+    0x02, UC8151_CDI, 0x5c, // inverted
+    0x02, UC8151_PLL, 0x3a, // HZ_100
+    0x01, UC8151_POF, // power off
+    BUSY_WAIT,
+    0x00
 };
 
 const uint8_t st7302_wenting[] = {
@@ -924,6 +942,27 @@ static void LCDPowerUp(OBDISP *pOBD)
 #endif // MEMORY_ONLY
 } /* LCDPowerUp() */
 
+void EPD29_Init(OBDISP *pOBD)
+{
+    int iLen;
+    uint8_t ucTemp[16], *s;
+    
+    ucTemp[0] = 0x40; // for data blocks given to RawWrite()
+    s = (uint8_t *)epd29_init_sequence;
+    while (s[0] != 0) {
+        iLen = *s++;
+        if (iLen == BUSY_WAIT) {
+            EPDWaitBusy(pOBD);
+        } else {
+            obdWriteCommand(pOBD, s[0]);
+            s++;
+            memcpy(&ucTemp[1], s, iLen-1);
+            s += (iLen-1);
+            RawWrite(pOBD, ucTemp, iLen);
+            digitalWrite(pOBD->iCSPin, HIGH);
+        }
+    }
+} /* EPD29_Init() */
 //
 // Initialize the display controller on an SPI bus
 //
@@ -1024,6 +1063,14 @@ int iLen;
       pOBD->native_width = pOBD->width = 400;
       pOBD->native_height = pOBD->height = 300;
       return; // nothing else to do yet
+  }
+  else if (iType == EPD29_296x128)
+  {
+      pOBD->native_width = pOBD->width = 128;
+      pOBD->native_height = pOBD->height = 296;
+      pOBD->can_flip = 0; // flip display commands don't exist
+      EPD29_Init(pOBD);
+      return;
   }
   else if (iType == LCD_UC1609)
   {
@@ -1643,6 +1690,10 @@ static void EPDWakeUp(OBDISP *pOBD)
 {
 uint8_t ucTemp[8];
 
+    if (pOBD->type == EPD29_296x128) {
+        obdWriteCommand(pOBD, UC8151_PON);
+        return;
+    }
   ucTemp[0] = 0x40; // tell I2CWrite that it's a data write, not command
   if (pOBD->iRSTPin != 0xff)
   {
@@ -1694,6 +1745,10 @@ static void EPDSleep(OBDISP *pOBD)
 {
 uint8_t ucTemp[4];
 
+    if (pOBD->type == EPD29_296x128) {
+        obdWriteCommand(pOBD, UC8151_POF); // power off
+        return;
+    }
   ucTemp[0] = 0x40;
   obdWriteCommand(pOBD, 0x50); // border floating
   ucTemp[1] = 0x17; // power off
@@ -1767,100 +1822,57 @@ uint8_t ucTemp[12];
 //
 // Special case for e-ink displays
 //
-static void EPDDumpPartial(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int cx, int cy)
+static void EPDDumpPartial(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, int h)
 {
-uint8_t ucLine[52];
-int tx, ty;
-uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
+uint8_t ucLine[132];
+int cols, rows, x1, y1, tx, ty;
 
    if (pBuffer == NULL)
       pBuffer = pOBD->ucScreen;
+    if (pOBD->type != EPD29_296x128)
+        return; // DEBUG - only supports the 2.9" 128x296 for now
+    
+    EPDWaitBusy(pOBD);
 
-   x &= 0xfff8; // must start on a byte boundary
-   cx = (cx+7) & 0xfff8; // must be whole bytes
-   EPDWakeUp(pOBD);
-   EPDInitPartialUpdate(pOBD);
-
-#ifdef EXPERIMENT
-// DEBUG - erase both RAM areas and refresh first
-   obdWriteCommand(pOBD, 0x91); // partial in
-   EPDSetPartialArea(pOBD, 0, 0, 399, 299);
-   obdWriteCommand(pOBD, 0x13); // write white data
-   ucLine[0] = 0x40; // data
-   memset(&ucLine[1], 0xff, 50);
-   for (ty=0; ty<400; ty++) {
-      RawWrite(pOBD, ucLine, 51);
-   }
-   obdWriteCommand(pOBD, 0x10); // write "old" RAM area to same color
-   for (ty=0; ty<400; ty++) {
-      RawWrite(pOBD, ucLine, 51);
-   }
-   obdWriteCommand(pOBD, 0x12); // refresh
-   EPDWaitBusy(pOBD);
-   obdWriteCommand(pOBD, 0x92); // partial out
-
-// end of experiment
-#endif
-
-   obdWriteCommand(pOBD, 0x91); // partial in
-   EPDSetPartialArea(pOBD, x, y, x+cx-1, y+cy-1);
-   obdWriteCommand(pOBD, 0x13); // write image data
-   // Convert the bit direction and write the data to the EPD
-   ucLine[0] = 0x40;
-   for (ty=y; ty<y+cy; ty++) {
-     ucSrcMask = 1 << (ty & 7);
-     ucDstMask = 0x80;
-     uc = 0xff;
-     d = &ucLine[1];
-     s = &pBuffer[(ty >> 3) * pOBD->width];
-     for (tx=x; tx<x+cx; tx++) {
-        if (s[tx] & ucSrcMask) // src pixel set
-           uc &= ~ucDstMask;
-        ucDstMask >>= 1;
-        if (ucDstMask == 0) { // completed byte
-           *d++ = uc;
-           uc = 0xff;
-           ucDstMask = 0x80;
+    if (pOBD->iOrientation == 0) {
+        cols = w / 8;
+        y1 = x/8;
+        x1 = y;
+        rows = h;
+    } else if (pOBD->iOrientation == 90) {
+        cols = h / 8;
+        y1 = y/8;
+        x1 = x;
+        rows = w;
+    }
+    ucLine[0] = 0x40; // data
+    ucLine[1] = y;
+    ucLine[2] = (y + h - 1);
+    ucLine[3] = (x >> 8);
+    ucLine[4] = x & 0xff;
+    ucLine[5] = (x + w - 1) >> 8;
+    ucLine[6] = (x + w - 1) & 0xff;
+    ucLine[7] = 1;
+    obdWriteCommand(pOBD, UC8151_PON); // power on
+    obdWriteCommand(pOBD, UC8151_PTIN); // partial mode
+    obdWriteCommand(pOBD, UC8151_PTL); // partial window
+    RawWrite(pOBD, ucLine, 8); // boundaries
+    obdWriteCommand(pOBD, UC8151_DTM2); // start of data
+    for (tx = 0; tx < rows; tx++) {
+        uint8_t *s, *d;
+        ucLine[0] = 0x40; // data
+        d = &ucLine[1];
+        s = &pBuffer[x1 + tx + ((y1 + cols - 1) * pOBD->width)];
+        for (ty = 0; ty < cols; ty++) {
+            *d++ = ~s[0];
+            s -= pOBD->width;
         }
-     } // for tx
-     // this code assumes I2C, so the first byte sets the D/C mode
-     RawWrite(pOBD, ucLine, 51);
-   } // for ty
-   delay(2);
-   obdWriteCommand(pOBD, 0x92); // partial out
-   obdWriteCommand(pOBD, 0x12); // display refresh
-   EPDWaitBusy(pOBD);
-
-// do it again
-   obdWriteCommand(pOBD, 0x91); // partial in
-   EPDSetPartialArea(pOBD, x, y, x+cx-1, y+cy-1);
-   obdWriteCommand(pOBD, 0x13); // write image data
-   // Convert the bit direction and write the data to the EPD
-   ucLine[0] = 0x40;
-   for (ty=y; ty<y+cy; ty++) {
-     ucSrcMask = 1 << (ty & 7);
-     ucDstMask = 0x80;
-     uc = 0;
-     d = &ucLine[1];
-     s = &pBuffer[(ty >> 3) * pOBD->width];
-     for (tx=x; tx<x+cx; tx++) {
-        if (s[tx] & ucSrcMask) // src pixel set
-           uc |= ucDstMask;
-        ucDstMask >>= 1;
-        if (ucDstMask == 0) { // completed byte
-           *d++ = uc;
-           uc = 0xff;
-           ucDstMask = 0x80;
-        }
-     } // for tx
-     // this code assumes I2C, so the first byte sets the D/C mode
-     RawWrite(pOBD, ucLine, 51);
-   } // for ty
-   obdWriteCommand(pOBD, 0x92); // partial out
-   obdWriteCommand(pOBD, 0x12); // display refresh
-   EPDWaitBusy(pOBD);
-
-   EPDSleep(pOBD);
+        RawWrite(pOBD, ucLine, cols+1);
+    }
+    obdWriteCommand(pOBD, UC8151_DSP); // stop data
+    obdWriteCommand(pOBD, UC8151_DRF); // start display refresh
+    EPDWaitBusy(pOBD);
+    obdWriteCommand(pOBD, UC8151_POF); // power off
 } /* EPDDumpPartial() */
 
 //
@@ -1868,7 +1880,7 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
 //
 static void EPDDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
-uint8_t ucLine[52]; // send the data one line at a time
+uint8_t ucLine[132]; // send the data one line at a time
 int x, y;
 uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
 
@@ -1876,28 +1888,47 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
      pBuffer = pOBD->ucScreen;
 
   EPDWakeUp(pOBD);
+  if (pOBD->type == EPD29_296x128) {
+      obdWriteCommand(pOBD, UC8151_PTOU); // disable partial mode
+  }
   obdWriteCommand(pOBD, 0x13); // send buffer
   ucLine[0] = 0x40; // tell RawWrite that it's data
   // Convert the bit direction and write the data to the EPD
-  for (y=0; y<pOBD->height; y++) {
-     ucSrcMask = 1 << (y & 7);
-     ucDstMask = 0x80;
-     uc = 0xff;
-     d = &ucLine[1];
-     s = &pBuffer[(y >> 3) * pOBD->width];
-     for (x=0; x<pOBD->width; x++) {
-        if (s[x] & ucSrcMask) // src pixel set
-           uc &= ~ucDstMask;
-        ucDstMask >>= 1;
-        if (ucDstMask == 0) { // completed byte
-           *d++ = uc;
-           uc = 0xff;
-           ucDstMask = 0x80;
-        }
-     } // for x
-     // this code assumes I2C, so the first byte sets the D/C mode
-     RawWrite(pOBD, ucLine, 51);
-  } // for y
+  if (pOBD->iOrientation == 0) {
+      for (y=0; y<pOBD->height; y++) {
+         ucSrcMask = 1 << (y & 7);
+         ucDstMask = 0x80;
+         uc = 0xff;
+         d = &ucLine[1];
+         s = &pBuffer[(y >> 3) * pOBD->width];
+         for (x=0; x<pOBD->width; x++) {
+            if (s[x] & ucSrcMask) // src pixel set
+               uc &= ~ucDstMask;
+            ucDstMask >>= 1;
+            if (ucDstMask == 0) { // completed byte
+               *d++ = uc;
+               uc = 0xff;
+               ucDstMask = 0x80;
+            }
+         } // for x
+         // this code assumes I2C, so the first byte sets the D/C mode
+         RawWrite(pOBD, ucLine, (pOBD->width/8) + 1);
+      } // for y
+  } else if (pOBD->iOrientation == 90) {
+      for (x=0; x<pOBD->width; x++) {
+         d = &ucLine[1];
+          s = &pBuffer[x + (((pOBD->height-1)>>3) * pOBD->width)];
+         for (y=pOBD->height; y>0; y-=8) {
+               *d++ = ~s[0];
+                s -= pOBD->width;
+         } // for y
+         // this code assumes I2C, so the first byte sets the D/C mode
+         RawWrite(pOBD, ucLine, (pOBD->height/8) + 1);
+      } // for x
+  }
+    if (pOBD->type == EPD29_296x128) {
+        obdWriteCommand(pOBD, UC8151_DSP); // data stop
+    }
   obdWriteCommand(pOBD, 0x12); // display refresh
   EPDWaitBusy(pOBD);
   EPDSleep(pOBD);
@@ -2137,7 +2168,7 @@ int iLines;
   if (pBuffer == NULL)
     return; // no backbuffer and no provided buffer
   
-  if (pOBD->type == EPD42_400x300)
+  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_296x128)
   {
      EPDDumpBuffer(pOBD, pBuffer);
      return;

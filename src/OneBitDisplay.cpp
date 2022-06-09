@@ -50,6 +50,16 @@ void delay(int);
 //
 // C++ Class implementation
 //
+BBI2C * ONE_BIT_DISPLAY::getBB()
+{
+    return &_obd.bbi2c;
+} /* getBB() */
+
+void ONE_BIT_DISPLAY::setBB(BBI2C *pBB)
+{
+   memcpy(&_obd.bbi2c, pBB, sizeof(BBI2C));
+} /* setBB() */
+
 void ONE_BIT_DISPLAY::SPIbegin(int iType, int32_t iSpeed)
 {
     obdSPIInit(&_obd, iType, _obd.iDCPin, _obd.iCSPin, _obd.iRSTPin, _obd.iMOSIPin, _obd.iCLKPin, _obd.iLEDPin, _obd.flip, _obd.invert, _obd.bBitBang, iSpeed);
@@ -317,6 +327,11 @@ void ONE_BIT_DISPLAY::pushImage(int x, int y, int w, int h, uint16_t *pixels)
 {
     // DEBUG
     (void)x; (void)y; (void)w; (void)h; (void)pixels;
+}
+
+void ONE_BIT_DISPLAY::display(int x, int y, int w, int h)
+{
+    obdDumpPartial(&_obd, x, y, w, h);
 }
 
 void ONE_BIT_DISPLAY::display(void)
