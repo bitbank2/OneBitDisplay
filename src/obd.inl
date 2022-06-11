@@ -12,6 +12,7 @@
 #ifndef I2C_SLAVE
 #define I2C_SLAVE 0
 #endif
+static uint8_t pgm_read_byte(const uint8_t *ptr);
 static void digitalWrite(int iPin, int iState) {
 #ifndef MEMORY_ONLY
    AIOWriteGPIO(iPin, iState);
@@ -23,10 +24,10 @@ static void pinMode(int iPin, int iMode)
    AIOAddGPIO(iPin, iMode);
 #endif
 } /* pinMode() */
-//static int digitalRead(int iPin)
-//{
-//  return AIOReadGPIO(iPin);
-//} /* digitalRead() */
+static int digitalRead(int iPin)
+{
+  return AIOReadGPIO(iPin);
+} /* digitalRead() */
 
 #endif
 static void EPDWaitBusy(OBDISP *pOBD);
@@ -964,58 +965,30 @@ void EPD29_Init(OBDISP *pOBD)
     }
 } /* EPD29_Init() */
 
-const unsigned char epd213_lut_full_update[] =
+const unsigned char epd213_lut[] =
 {
-    0x22, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x11,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x1E, 0x1E, 0x1E, 0x1E, 0x1E, 0x1E, 0x1E, 0x1E,
-    0x01, 0x00, 0x00, 0x00, 0x00, 0x00
-};
+	// black
+	0x48, 0x50, 0x10, 0x10, 0x13, 0x00, 0x00,
+	0x48, 0x50, 0x80, 0x00, 0x03, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x48, 0x55, 0x00, 0xbb, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
-const unsigned char epd213_lut_partial_update[] =
-{
-    0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x0F, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+	0x10, 0x04, 0x04, 0x04, 0x04,
+	0x10, 0x04, 0x04, 0x04, 0x04,
+	0x04, 0x08, 0x08, 0x10, 0x10,
+	0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00
 };
 
 
 void EPD213_Init(OBDISP *pOBD)
 {
-uint8_t ucTemp[8];
     
     obdWriteCommand(pOBD, SSD1608_SW_RESET); // Soft Reset
-    delay(1000);
     EPDWaitBusy(pOBD);
-    obdWriteCommand(pOBD, SSD1608_DRIVER_CONTROL);
-    ucTemp[0] = 0x40; // data
-    ucTemp[1] = (uint8_t)(pOBD->height-1);
-    ucTemp[2] = (uint8_t)((pOBD->height-1)>>8);
-    ucTemp[3] = 0; // GD = 0; SM = 0; TB = 0;
-    RawWrite(pOBD, ucTemp, 4);
-    obdWriteCommand(pOBD, SSD1608_BOOSTER_SOFT_START);
-    ucTemp[0] = 0x40; // data
-    ucTemp[1] = 0xd7;
-    ucTemp[2] = 0xd6;
-    ucTemp[3] = 0x9d;
-    RawWrite(pOBD, ucTemp, 4);
-    // VCOM Voltage
-    obdWriteCommand(pOBD, SSD1608_WRITE_VCOM);
-    ucTemp[1] = 0xA8;
-    RawWrite(pOBD, ucTemp, 2);
-    // Set dummy line period
-    obdWriteCommand(pOBD, SSD1608_WRITE_DUMMY);
-    ucTemp[1] = 0x1A; // 4 dummy lines per gate
-    RawWrite(pOBD, ucTemp, 2);
-    // Set Line Width
-    obdWriteCommand(pOBD, SSD1608_WRITE_GATELINE);
-    ucTemp[1] = 0x08; // 2us per line
-    RawWrite(pOBD, ucTemp, 2);
-    // Data entry squence (scan direction leftward and downward)
-    obdWriteCommand(pOBD, SSD1608_DATA_MODE);
-    ucTemp[1] = 0x03; // x increment, y increment
-    RawWrite(pOBD, ucTemp, 2);
 
 } /* EPD213_Init() */
 //
@@ -1119,10 +1092,10 @@ int iLen;
       pOBD->native_height = pOBD->height = 300;
       return; // nothing else to do yet
   }
-  else if (iType == EPD213_122x250)
+  else if (iType == EPD213_104x212)
   {
-      pOBD->native_width = pOBD->width = 122;
-      pOBD->native_height = pOBD->height = 250;
+      pOBD->native_width = pOBD->width = 104;
+      pOBD->native_height = pOBD->height = 212;
       pOBD->can_flip = 0; // flip display commands don't exist
       EPD213_Init(pOBD);
       return;
@@ -1705,9 +1678,14 @@ static void EPDWaitBusy(OBDISP *pOBD)
 {
 #ifndef MEMORY_ONLY
 int iTimeout = 0;
+int state;
 
+  if (pOBD->type == EPD213_104x212)
+	  state = LOW;
+  else
+	  state = HIGH;
   while (1) {
-     if (digitalRead(pOBD->iLEDPin) == HIGH)
+     if (digitalRead(pOBD->iLEDPin) == state)
          break;
      iTimeout += 10;
      if (iTimeout > EPD_BUSY_TIMEOUT)
@@ -1757,7 +1735,7 @@ uint8_t ucTemp[8];
         obdWriteCommand(pOBD, UC8151_PON);
         return;
     }
-    if (pOBD->type == EPD213_122x250)
+    if (pOBD->type == EPD213_104x212)
         return; // nothing to do - yet
     // The following is for the 4.2" 400x300 e-ink
   ucTemp[0] = 0x40; // tell I2CWrite that it's a data write, not command
@@ -1814,6 +1792,9 @@ uint8_t ucTemp[4];
     if (pOBD->type == EPD29_128x296) {
         obdWriteCommand(pOBD, UC8151_POF); // power off
         return;
+    }
+    if (pOBD->type == EPD213_104x212) {
+	    return; // nothing for now
     }
   ucTemp[0] = 0x40;
   obdWriteCommand(pOBD, 0x50); // border floating
@@ -1941,6 +1922,14 @@ int cols=0, rows=0, x1=0, y1=0, tx, ty;
     obdWriteCommand(pOBD, UC8151_POF); // power off
 } /* EPDDumpPartial() */
 
+void EPD213_CMD(OBDISP *pOBD, uint8_t cmd, uint8_t param)
+{
+uint8_t ucTemp[4];
+	obdWriteCommand(pOBD, cmd);
+	ucTemp[0] = 0x40; // data
+	ucTemp[1] = param;
+	RawWrite(pOBD, ucTemp, 2);
+} /* EPD213_CMD() */
 //
 // Special case for e-ink displays
 //
@@ -1957,43 +1946,51 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
   if (pOBD->type == EPD29_128x296) {
       obdWriteCommand(pOBD, UC8151_PTOU); // disable partial mode
   }
-    if (pOBD->type == EPD213_122x250) {
-        // send LUT
-        obdWriteCommand(pOBD, SSD1608_WRITE_LUT);
-        ucLine[0] = 0x40; // data
-        memcpy(&ucLine[1], epd213_lut_full_update, sizeof(epd213_lut_full_update));
-        RawWrite(pOBD, ucLine, sizeof(epd213_lut_full_update)+1);
-// Set ram X start and end position
-        ucLine[0] = 0x40; // data
-        ucLine[1] = 0;
-        ucLine[2] = (128/8)-1; // cols
-        obdWriteCommand(pOBD, SSD1608_SET_RAMXPOS);
-        RawWrite(pOBD, ucLine, 3);
-// Set ram Y start and end position
-        ucLine[0] = 0x40; // data
-        ucLine[1] = 0;
-        ucLine[2] = 0;
-        ucLine[3] = 250-1;
-        ucLine[4] = 0;
-        obdWriteCommand(pOBD, SSD1608_SET_RAMYPOS);
-        RawWrite(pOBD, ucLine, 5);
-// Set RAM address to 0, 0
-        obdWriteCommand(pOBD, SSD1608_SET_RAMXCOUNT);
-        ucLine[0] = 0x40;
-        ucLine[1] = 0x00;
-        RawWrite(pOBD, ucLine, 2);
-        obdWriteCommand(pOBD, SSD1608_SET_RAMYCOUNT);
-        ucLine[0] = 0x40;
-        ucLine[1] = 0x00;
-        ucLine[2] = 0x00;
-        RawWrite(pOBD, ucLine, 3);
-    }
-    if (pOBD->type == EPD213_122x250) {
-        obdWriteCommand(pOBD, SSD1608_WRITE_RAM);
+    if (pOBD->type == EPD213_104x212) {
+    obdWriteCommand(pOBD, SSD1608_SW_RESET);
+    EPDWaitBusy(pOBD);
+    EPD213_CMD(pOBD, 0x74, 0x54); // set analog block control
+    EPD213_CMD(pOBD, 0x7e, 0x3b); // set digital block control
+    obdWriteCommand(pOBD, 0x01); // gate setting
+    ucLine[0] = 0x40; // data
+    ucLine[1] = 212-1;
+    ucLine[2] = 0;
+    ucLine[3] = 0;
+    RawWrite(pOBD, ucLine, 4);
+    EPD213_CMD(pOBD, 0x03, 0x17); // gate driving voltage
+    obdWriteCommand(pOBD, 0x04); // source driving voltage
+    ucLine[1] = 0x41;
+    ucLine[2] = 0xac;
+    ucLine[3] = 0x32;
+    RawWrite(pOBD, ucLine, 4);
+    EPD213_CMD(pOBD, 0x3a, 0x07); // dummy line period
+    EPD213_CMD(pOBD, 0x3b, 0x04); // gate line width
+    EPD213_CMD(pOBD, 0x11, 0x03); // data entry mode = x/y incremented
+    EPD213_CMD(pOBD, 0x2c, 0x3c); // VCOM register
+    EPD213_CMD(pOBD, 0x3c, 0x00); // black border
+    // set luts
+    obdWriteCommand(pOBD, 0x32);
+    memcpy(&ucLine[1], epd213_lut, sizeof(epd213_lut));
+    RawWrite(pOBD, ucLine, sizeof(epd213_lut)+1);
+    obdWriteCommand(pOBD, 0x44); // set RAM X start/end
+    ucLine[1] = 0x00;
+    ucLine[2] = (104/8)-1;
+    RawWrite(pOBD, ucLine, 3);
+    obdWriteCommand(pOBD, 0x45); // set RAM Y start/end
+    ucLine[1] = 0x00;
+    ucLine[2] = 0x00;
+    ucLine[3] = 212;
+    ucLine[4] = 0x00;
+    RawWrite(pOBD, ucLine, 5);
+    EPD213_CMD(pOBD, 0x4e, 0x00); // set RAM X pointer start
+    ucLine[1] = 0x00;
+    ucLine[2] = 0x00;
+    obdWriteCommand(pOBD, 0x4f); // set RAM Y pointer start
+    RawWrite(pOBD, ucLine, 3);
+    obdWriteCommand(pOBD, 0x24); // WRITE_RAM
     } else {
         obdWriteCommand(pOBD, 0x13); // send buffer
     }
-  ucLine[0] = 0x40; // tell RawWrite that it's data
   // Convert the bit direction and write the data to the EPD
   if (pOBD->iOrientation == 0) {
       for (y=0; y<pOBD->height; y++) {
@@ -2013,6 +2010,7 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
             }
          } // for x
          // this code assumes I2C, so the first byte sets the D/C mode
+	 ucLine[0] = 0x40; // data
          RawWrite(pOBD, ucLine, (pOBD->width/8) + 1);
       } // for y
   } else if (pOBD->iOrientation == 90) {
@@ -2024,16 +2022,31 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
                 s -= pOBD->width;
          } // for y
          // this code assumes I2C, so the first byte sets the D/C mode
-         RawWrite(pOBD, ucLine, (pOBD->height/8) + 1);
+	 ucLine[0] = 0x40; // tell RawWrite that it's data
+         RawWrite(pOBD, ucLine, ((pOBD->height+7)/8) + 1);
       } // for x
   }
-    if (pOBD->type == EPD213_122x250) {
-        obdWriteCommand(pOBD, SSD1608_DISP_CTRL2);
-        ucLine[0] = 0x40; // data
-        ucLine[1] = 0xc4;
-        RawWrite(pOBD, ucLine, 2);
-        obdWriteCommand(pOBD, SSD1608_MASTER_ACTIVATE);
-        obdWriteCommand(pOBD, SSD1608_NOP); // terminate write
+    if (pOBD->type == EPD213_104x212) {
+//        obdWriteCommand(pOBD, SSD1608_DISP_CTRL2);
+//        ucLine[0] = 0x40; // data
+//        ucLine[1] = 0xc4;
+//        RawWrite(pOBD, ucLine, 2);
+//        Write 0's to the second memory buffer (we only have a 1-bpp epd)
+//         EPD213_CMD(pOBD, 0x4e, 0x00); // set RAM X pointer start
+//	 ucLine[1] = ucLine[2] = 0x00;
+//	 obdWriteCommand(pOBD, 0x4f); // set RAM Y pointer start
+//	 RawWrite(pOBD, ucLine, 3);
+// 	 obdWriteCommand(pOBD, 0x26); // WRITE_ALTRAM
+//   	 memset(&ucLine[1], 0, sizeof(ucLine)-1);
+//         for (y=0; y<pOBD->native_height; y++) {
+//	     RawWrite(pOBD, ucLine, ((pOBD->native_width+7)>>3)+1);
+//	 }
+	 EPD213_CMD(pOBD, 0x22, 0xc7); // display update sequence
+	 obdWriteCommand(pOBD, 0x20); // trigger display update
+         delay(50);
+	 EPDWaitBusy(pOBD);
+	 EPD213_CMD(pOBD, 0x10, 0x01); // enter deep sleep
+	 return;
     } else {
         if (pOBD->type == EPD29_128x296) {
             obdWriteCommand(pOBD, UC8151_DSP); // data stop
@@ -2278,7 +2291,7 @@ int iLines;
   if (pBuffer == NULL)
     return; // no backbuffer and no provided buffer
   
-  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_128x296)
+  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_128x296 || pOBD->type == EPD213_104x212)
   {
      EPDDumpBuffer(pOBD, pBuffer);
      return;
@@ -2709,13 +2722,13 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
   if (pOBD->com_mode == COM_I2C) {// I2C device
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
-      obdSetDCMode(pOBD, MODE_COMMAND);
-      if (pOBD->type < SHARP_144x168)
+      obdSetDCMode(pOBD, (pData[0] == 0) ? MODE_COMMAND : MODE_DATA);
+      if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
          digitalWrite(pOBD->iCSPin, LOW);
       AIOWriteSPI(pOBD->bbi2c.file_i2c, &pData[1], iLen-1);
-      if (pOBD->type < SHARP_144x168)
+      if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
          digitalWrite(pOBD->iCSPin, HIGH);
-      obdSetDCMode(pOBD, MODE_DATA);
+      //obdSetDCMode(pOBD, MODE_DATA);
   }
 #endif // MEMORY_ONLY
 } /* RawWrite() */
@@ -4322,6 +4335,12 @@ void obdSetBackBuffer(OBDISP *pOBD, uint8_t *pBuffer)
   if (pOBD->type >= LCD_COUNT) // invalid type, set to command output
     pOBD->type = DISPLAY_COMMANDS;
 } /* obdSetBackBuffer() */
+
+void obdAllocBuffer(OBDISP *pOBD)
+{
+  pOBD->ucScreen = malloc(pOBD->width * ((pOBD->height+7)>>3));
+  pOBD->iScreenOffset = 0;
+} /* obdAllocBuffer() */
 
 void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, int bRender)
 {

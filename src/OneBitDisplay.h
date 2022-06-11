@@ -5,6 +5,12 @@
 #include <BitBang_I2C.h>
 #endif
 
+#ifdef _LINUX_
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#endif // _LINUX_
+
 // 5 possible font sizes: 8x8, 16x32, 6x8, 12x16 (stretched from 6x8 with smoothing), 16x16 (stretched from 8x8)
 enum {
    FONT_6x8 = 0,
@@ -46,7 +52,7 @@ enum {
   LCD_ST7302,
   EPD42_400x300,
   EPD29_128x296,
-  EPD213_122x250,
+  EPD213_104x212,
   LCD_COUNT
 };
 
@@ -185,7 +191,7 @@ uint8_t wrap, flip, invert, type, render, can_flip;
 uint8_t *ucScreen;
 int iCursorX, iCursorY;
 int width, height, native_width, native_height;
-bool bScroll;
+uint8_t bScroll;
 int iScreenOffset, iOrientation;
 int iFG, iBG; //current color
 int iFont;
@@ -200,6 +206,7 @@ int iLEDPin; // backlight
 uint8_t bBitBang;
 } OBDISP;
 
+#ifdef __cplusplus
 class ONE_BIT_DISPLAY : public Print
 {
   public:
@@ -249,6 +256,7 @@ class ONE_BIT_DISPLAY : public Print
   private:
     OBDISP _obd;
 }; // class BB_SPI_LCD
+#endif // __cplusplus
 
 typedef char * (*SIMPLECALLBACK)(int iMenuItem);
 
@@ -385,6 +393,7 @@ void obdSetFlip(OBDISP *pOBD, int iOnOff);
 // large enough for your display (e.g. 128x64 needs 1K - 1024 bytes)
 //
 void obdSetBackBuffer(OBDISP *pOBD, uint8_t *pBuffer);
+void obdAllocBuffer(OBDISP *pOBD);
 //
 // Sets the brightness (0=off, 255=brightest)
 //

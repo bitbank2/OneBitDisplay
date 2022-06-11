@@ -47,6 +47,7 @@ void delay(int);
 // All of the drawing code is in here
 #include "obd.inl"
 
+#ifdef __cplusplus
 //
 // C++ Class implementation
 //
@@ -342,3 +343,4 @@ void ONE_BIT_DISPLAY::setRender(bool bRAMOnly)
 {
     _obd.render = !bRAMOnly;
 }
+#endif // __cplusplus
