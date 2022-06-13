@@ -6,6 +6,12 @@
 #endif
 
 #ifdef _LINUX_
+// for Print support
+#define DEC 10
+#define HEX 16
+#define OCT 8
+#define BIN 2
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -53,6 +59,7 @@ enum {
   EPD42_400x300,
   EPD29_128x296,
   EPD213_104x212,
+  EPD154_200x200,
   LCD_COUNT
 };
 
@@ -207,7 +214,13 @@ uint8_t bBitBang;
 } OBDISP;
 
 #ifdef __cplusplus
+#ifdef _LINUX_
+#include <string>
+using namespace std;
+class ONE_BIT_DISPLAY
+#else // Arduino
 class ONE_BIT_DISPLAY : public Print
+#endif // _LINUX_
 {
   public:
     ONE_BIT_DISPLAY() { memset(&_obd, 0, sizeof(_obd)); _obd.iFG = 1; _obd.render = 1; _obd.type = OLED_128x64; _obd.iSpeed = 400000;}
@@ -250,8 +263,18 @@ class ONE_BIT_DISPLAY : public Print
     void fillCircle(int32_t x, int32_t y, int32_t r, uint32_t color);
     void drawEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
     void fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
+#ifdef _LINUX_
+    void print(const char *pString);
+    void println(const char *pString);
+    void print(int, int);
+    void println(int, int);
+    void print(const string &);
+    void println(const string &);
+    size_t write(uint8_t ucChar);
+#else
     using Print::write;
     virtual size_t write(uint8_t);
+#endif // _LINUX_
 
   private:
     OBDISP _obd;

@@ -215,8 +215,106 @@ int y, iLines;
     }
     memset(&pOBD->ucScreen[(iLines-iAmount) * pOBD->width], (char)pOBD->iBG, pOBD->width*iAmount);
 } /* obdScroll1Line() */
+#ifdef _LINUX_
+void ONE_BIT_DISPLAY::print(const string &str)
+{
+   print(str.c_str());
+} /* print() */
+
+void ONE_BIT_DISPLAY::println(const string &str)
+{
+char ucTemp[4];
+
+   print(str);
+   ucTemp[0] = '\n';
+   ucTemp[1] = '\r';
+   ucTemp[2] = 0;
+   print((const char *)ucTemp);
+} /* print() */
+
+void ONE_BIT_DISPLAY::print(const char *pString)
+{
+uint8_t *s = (uint8_t *)pString;
+
+   while (*s != 0) {
+      write(*s++);
+   }
+} /* print() */
+
+void ONE_BIT_DISPLAY::println(const char *pString)
+{
+char ucTemp[4];
+
+    print(pString);
+    ucTemp[0] = '\n';
+    ucTemp[1] = '\r';
+    ucTemp[2] = 0;
+    print((const char *)ucTemp);
+} /* println() */
+void ONE_BIT_DISPLAY::print(int value, int format)
+{
+char c, ucTemp[32];
+char *d = &ucTemp[31];
+
+   if (value) {
+   d[0] = 0;
+   switch(format) {
+      case DEC:
+         while (value) {
+	     d--;
+             *d = '0' + (value % 10);
+             value /= 10;
+	 }
+         break;
+      case HEX:
+	 while (value) {
+            d--;
+            c = value & 0xf;
+	    if (c < 10)
+		    *d = '0' + c;
+	    else
+		    *d = 'A' + (c-10);
+	    value >>= 4;
+	 }
+         break;
+      case OCT:
+	 while (value) {
+            d--;
+            *d = '0' + (value & 7);
+	    value >>= 3;
+	 }
+         break;
+      case BIN:
+         while (value) {
+            d--;
+            *d = '0' + (value & 1);
+	    value >>= 1;
+	 }
+         break;
+      default:
+         break;
+      }
+   } else { // if zero value
+     d--;
+     *d = '0';
+   }
+      print((const char *)d);
+} /* print() */
+
+void ONE_BIT_DISPLAY::println(int value, int format)
+{
+char ucTemp[4];
+
+	print(value, format);
+	ucTemp[0] = '\n';
+	ucTemp[1] = '\r';
+	ucTemp[2] = 0;
+	print((const char *)ucTemp);
+} /* println() */
+
+#endif // _LINUX_
 //
-// write (Print friend class)
+// write (Arduino Print friend class)
 //
 size_t ONE_BIT_DISPLAY::write(uint8_t c) {
 char szTemp[2]; // used to draw 1 character at a time to the C methods
@@ -263,13 +361,13 @@ int w, h;
       _obd.iCursorX = 0;
       _obd.iCursorY += (uint8_t)pgm_read_byte(&_obd.pFreeFont->yAdvance);
     } else if (c != '\r') {
-      uint8_t first = pgm_read_byte(&_obd.pFreeFont->first);
-      if ((c >= first) && (c <= (uint8_t)pgm_read_byte(&_obd.pFreeFont->last))) {
+      uint8_t first = pgm_read_word((const uint8_t*)&_obd.pFreeFont->first);
+      if ((c >= first) && (c <= (uint8_t)pgm_read_word((const uint8_t*)&_obd.pFreeFont->last))) {
         GFXglyph *glyph = pgm_read_glyph_ptr(_obd.pFreeFont, c - first);
         w = pgm_read_byte(&glyph->width);
         h = pgm_read_byte(&glyph->height);
         if ((w > 0) && (h > 0)) { // Is there an associated bitmap?
-          int16_t xo = (int8_t)pgm_read_byte(&glyph->xOffset);
+          int16_t xo = (int8_t)pgm_read_word((const uint8_t*)&glyph->xOffset);
           w += xo; // xadvance
           h = (uint8_t)pgm_read_byte(&_obd.pFreeFont->yAdvance);
           if (_obd.wrap && ((_obd.iCursorX + w) > _obd.width)) {
@@ -283,6 +381,7 @@ int w, h;
   }
   return 1;
 } /* write() */
+
 void ONE_BIT_DISPLAY::drawPixel(int16_t x, int16_t y, uint16_t color)
 {
     obdSetPixel(&_obd, x, y, color, _obd.render);
