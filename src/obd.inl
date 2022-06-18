@@ -968,7 +968,7 @@ void EPD29_Init(OBDISP *pOBD)
     }
 } /* EPD29_Init() */
 
-const unsigned char epd213_lut[] =
+const uint8_t epd213_lut[] =
 {
 	// black
 	0x48, 0x50, 0x10, 0x10, 0x13, 0x00, 0x00,
@@ -986,6 +986,23 @@ const unsigned char epd213_lut[] =
 	0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+const uint8_t epd213_lut2[] = 
+{
+	// black
+	0x80,0x60,0x40,0x00,0x00,0x00,0x00,
+	0x10,0x60,0x20,0x00,0x00,0x00,0x00,
+	0x80,0x60,0x40,0x00,0x00,0x00,0x00,
+	0x10,0x60,0x20,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+
+	0x03,0x03,0x00,0x00,0x02,
+	0x09,0x09,0x00,0x00,0x02,
+	0x03,0x03,0x00,0x00,0x02,
+	0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00
+};
 
 void EPD213_Init(OBDISP *pOBD)
 {
@@ -1129,6 +1146,14 @@ int iLen;
       pOBD->native_width = pOBD->width = 400;
       pOBD->native_height = pOBD->height = 300;
       return; // nothing else to do yet
+  }
+  else if (iType == EPD213_122x250)
+  {
+      pOBD->native_width = pOBD->width = 122;
+      pOBD->native_height = pOBD->height = 250;
+      pOBD->can_flip = 0;
+      EPD213_Init(pOBD);
+      return;
   }
   else if (iType == EPD213_104x212)
   {
@@ -1784,7 +1809,7 @@ uint8_t ucTemp[8];
         obdWriteCommand(pOBD, UC8151_PON);
         return;
     }
-    if (pOBD->type == EPD213_104x212)
+    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250)
         return; // nothing to do - yet
     // The following is for the 4.2" 400x300 e-ink
   ucTemp[0] = 0x40; // tell I2CWrite that it's a data write, not command
@@ -1842,7 +1867,7 @@ uint8_t ucTemp[4];
         obdWriteCommand(pOBD, UC8151_POF); // power off
         return;
     }
-    if (pOBD->type == EPD213_104x212) {
+    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
 	    return; // nothing for now
     }
   ucTemp[0] = 0x40;
@@ -1981,7 +2006,7 @@ int cols=0, rows=0, x1=0, y1=0, tx, ty;
         obdWriteCommand(pOBD, UC8151_PTL); // partial window
         RawWrite(pOBD, ucLine, 8); // boundaries
         obdWriteCommand(pOBD, UC8151_DTM2); // start of data
-    } else if (pOBD->type == EPD213_104x212) {
+    } else if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
         EPD213_Begin(pOBD, x, y, w, h);
     }
     if (pOBD->iOrientation == 90) {
@@ -2004,7 +2029,7 @@ int cols=0, rows=0, x1=0, y1=0, tx, ty;
         obdWriteCommand(pOBD, UC8151_DRF); // start display refresh
         EPDWaitBusy(pOBD);
         obdWriteCommand(pOBD, UC8151_POF); // power off
-    } else if (pOBD->type == EPD213_104x212) {
+    } else if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
         EPD213_Finish(pOBD);
     }
 } /* EPDDumpPartial() */
@@ -2028,25 +2053,41 @@ uint8_t ucLine[128];
     EPD213_CMD(pOBD, 0x7e, 0x3b); // set digital block control
     obdWriteCommand(pOBD, 0x01); // gate setting
     ucLine[0] = 0x40; // data
-    ucLine[1] = 212-1;
+    ucLine[1] = pOBD->native_height-1;
     ucLine[2] = 0;
     ucLine[3] = 0;
     RawWrite(pOBD, ucLine, 4);
-    EPD213_CMD(pOBD, 0x03, 0x17); // gate driving voltage
-    obdWriteCommand(pOBD, 0x04); // source driving voltage
-    ucLine[1] = 0x41;
-    ucLine[2] = 0xac;
-    ucLine[3] = 0x32;
-    RawWrite(pOBD, ucLine, 4);
-    EPD213_CMD(pOBD, 0x3a, 0x07); // dummy line period
-    EPD213_CMD(pOBD, 0x3b, 0x04); // gate line width
+    if (pOBD->type == EPD213_122x250) {
+       EPD213_CMD(pOBD, 0x03, 0x15); // gate driving voltage
+       obdWriteCommand(pOBD, 0x04); // source driving voltage
+       ucLine[1] = 0x41;
+       ucLine[2] = 0xa8;
+       ucLine[3] = 0x32;
+       RawWrite(pOBD, ucLine, 4);
+       EPD213_CMD(pOBD, 0x3a, 0x30); // dummy line period
+       EPD213_CMD(pOBD, 0x3b, 0x0a); // gate line width
+    } else { // 104x212
+       EPD213_CMD(pOBD, 0x03, 0x17); // gate driving voltage
+       obdWriteCommand(pOBD, 0x04); // source driving voltage
+       ucLine[1] = 0x41;
+       ucLine[2] = 0xac;
+       ucLine[3] = 0x32;
+       RawWrite(pOBD, ucLine, 4);
+       EPD213_CMD(pOBD, 0x3a, 0x07); // dummy line period
+       EPD213_CMD(pOBD, 0x3b, 0x04); // gate line width
+    }
     EPD213_CMD(pOBD, 0x11, 0x03); // data entry mode = x/y incremented
-    EPD213_CMD(pOBD, 0x2c, 0x3c); // VCOM register
-    EPD213_CMD(pOBD, 0x3c, 0x00); // black border
+    EPD213_CMD(pOBD, 0x2c, (pOBD->type == EPD213_104x212) ? 0x3c : 0x55); // VCOM register
+    EPD213_CMD(pOBD, 0x3c, (pOBD->type == EPD213_104x212) ? 0x00 : 0x03); // black border
     // set luts
     obdWriteCommand(pOBD, 0x32);
-    memcpy(&ucLine[1], epd213_lut, sizeof(epd213_lut));
-    RawWrite(pOBD, ucLine, sizeof(epd213_lut)+1);
+    if (pOBD->type == EPD213_104x212) {
+       memcpy(&ucLine[1], epd213_lut, sizeof(epd213_lut));
+       RawWrite(pOBD, ucLine, sizeof(epd213_lut)+1);
+    } else { // 122x250
+       memcpy(&ucLine[1], epd213_lut2, sizeof(epd213_lut2));
+       RawWrite(pOBD, ucLine, sizeof(epd213_lut2)+1);
+    }
     obdWriteCommand(pOBD, 0x44); // set RAM X start/end
     ucLine[1] = x/8;
     ucLine[2] = (x+w-1)/8;
@@ -2062,6 +2103,7 @@ uint8_t ucLine[128];
     ucLine[2] = 0x00;
     obdWriteCommand(pOBD, 0x4f); // set RAM Y pointer start
     RawWrite(pOBD, ucLine, 3);
+    EPDWaitBusy(pOBD);
     obdWriteCommand(pOBD, 0x24); // WRITE_RAM
 } /* EPD213_Begin() */
 
@@ -2107,13 +2149,37 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
   }
     if (pOBD->type == EPD213_104x212) {
         EPD213_Begin(pOBD, 0, 0, 104, 212); // x, y, w, h
+    } else if (pOBD->type == EPD213_122x250) {
+	EPD213_Begin(pOBD, 0, 0, 122, 250);
     } else if (pOBD->type == EPD154_200x200) {
         EPD154_Begin(pOBD, 0, 0, 200, 200); // x, y, w, h
     } else {
         obdWriteCommand(pOBD, 0x13); // send buffer
     }
   // Convert the bit direction and write the data to the EPD
-  if (pOBD->iOrientation == 0) {
+  if (pOBD->iOrientation == 180) {
+      for (y=pOBD->height-1; y>=0; y--) {
+	 ucSrcMask = 1 << (y & 7);
+	 ucDstMask = 0x80;
+	 uc = 0xff;
+	 d = &ucLine[1];
+	 s = &pBuffer[(y>>3) * pOBD->width];
+	 for (x=pOBD->width-1; x>=0; x--) {
+            if (s[x] & ucSrcMask)
+	       uc &= ~ucDstMask;
+	    ucDstMask >>= 1;
+	    if (ucDstMask == 0) {
+               *d++ = uc;
+	       uc = 0xff;
+	       ucDstMask = 0x80;
+	    }
+	 } // for x
+         if (ucDstMask)
+            *d++ = uc; // store final partial byte
+	 ucLine[0] = 0x40; // data
+	 RawWrite(pOBD, ucLine, ((pOBD->width+7)/8)+1);
+      } // for y
+  } else if (pOBD->iOrientation == 0) {
       for (y=0; y<pOBD->height; y++) {
          ucSrcMask = 1 << (y & 7);
          ucDstMask = 0x80;
@@ -2130,24 +2196,63 @@ uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
                ucDstMask = 0x80;
             }
          } // for x
+	 if (ucDstMask)
+	    *d++ = uc; // store final partial byte
          // this code assumes I2C, so the first byte sets the D/C mode
 	 ucLine[0] = 0x40; // data
-         RawWrite(pOBD, ucLine, (pOBD->width/8) + 1);
+         RawWrite(pOBD, ucLine, ((pOBD->width+7)/8) + 1);
       } // for y
   } else if (pOBD->iOrientation == 90) {
       for (x=0; x<pOBD->width; x++) {
          d = &ucLine[1];
-          s = &pBuffer[x + (((pOBD->height-1)>>3) * pOBD->width)];
-         for (y=pOBD->height; y>0; y-=8) {
-               *d++ = ~s[0];
-                s -= pOBD->width;
-         } // for y
+	 // need to pick up and reassemble every pixel
+	 ucDstMask = 0x80;
+	 uc = 0xff;
+	 ucSrcMask = (1 << ((pOBD->height-1) & 7));
+	 for (y=pOBD->height-1; y>=0; y--) {
+            s = &pBuffer[x + (y>>3) * pOBD->width];
+	    if (s[0] & ucSrcMask) uc &= ~ucDstMask;
+	    ucDstMask >>= 1;
+	    ucSrcMask >>= 1;
+            if (ucDstMask == 0) {
+               *d++ = uc;
+	       ucDstMask = 0x80;
+	       uc = 0xff;
+	    }
+	    if (ucSrcMask == 0)
+	       ucSrcMask = 0x80; // bottom up
+	 } // for y
+	 if (ucDstMask) *d++ = uc; // store final partial byte
          // this code assumes I2C, so the first byte sets the D/C mode
 	 ucLine[0] = 0x40; // tell RawWrite that it's data
          RawWrite(pOBD, ucLine, ((pOBD->height+7)/8) + 1);
       } // for x
-  }
-    if (pOBD->type == EPD213_104x212) {
+  } else if (pOBD->iOrientation == 270) {
+      for (x=pOBD->width-1; x>=0; x--) {
+	  d = &ucLine[1];
+	  // reassemble every pixel
+	  ucDstMask = 0x80;
+	  uc = 0xff;
+	  ucSrcMask = 1;
+	  for (y=0; y<pOBD->height; y++) {
+	      s = &pBuffer[x + (y>>3) * pOBD->width];
+	      if (s[0] & ucSrcMask) uc &= ~ucDstMask;
+	      ucDstMask >>= 1;
+	      ucSrcMask <<= 1;
+	      if (ucDstMask == 0) {
+		 *d++ = uc;
+		 ucDstMask = 0x80;
+		 uc = 0xff;
+	      }
+	      if (ucSrcMask == 0)
+		 ucSrcMask = 1;
+	  } // for y
+	  if (ucDstMask) *d++ = uc; // store final partial byte
+	  ucLine[0] = 0x40; // data
+	  RawWrite(pOBD, ucLine, ((pOBD->height+7)/8)+1);
+      } // for x
+  } // 270
+    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
         EPD213_Finish(pOBD);
         return;
     } else if (pOBD->type == EPD154_200x200) {
@@ -2397,7 +2502,7 @@ int iLines;
   if (pBuffer == NULL)
     return; // no backbuffer and no provided buffer
   
-  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_128x296 || pOBD->type == EPD213_104x212 || pOBD->type == EPD154_200x200)
+  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_128x296 || pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200)
   {
      EPDDumpBuffer(pOBD, pBuffer);
      return;
