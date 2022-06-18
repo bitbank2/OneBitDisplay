@@ -1009,7 +1009,7 @@ void EPD213_Init(OBDISP *pOBD)
     
     obdWriteCommand(pOBD, SSD1608_SW_RESET); // Soft Reset
     EPDWaitBusy(pOBD);
-
+    EPD213_CMD(pOBD, 0x10, 0x1); // enter deep sleep
 } /* EPD213_Init() */
 
 void EPD154_Init(OBDISP *pOBD)
