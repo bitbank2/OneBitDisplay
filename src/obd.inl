@@ -1951,6 +1951,8 @@ void EPD154_Finish(OBDISP *pOBD)
 void EPD213_Finish(OBDISP *pOBD)
 {
 uint8_t ucLine[32];
+
+    ucLine[0] = 0x40; // data
     EPD213_CMD(pOBD, 0x4e, 0x00); // set RAM X pointer start
     ucLine[1] = ucLine[2] = 0x00;
     obdWriteCommand(pOBD, 0x4f); // set RAM Y pointer start
