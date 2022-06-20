@@ -429,9 +429,9 @@ void ONE_BIT_DISPLAY::pushImage(int x, int y, int w, int h, uint16_t *pixels)
     (void)x; (void)y; (void)w; (void)h; (void)pixels;
 }
 
-void ONE_BIT_DISPLAY::display(int x, int y, int w, int h)
+void ONE_BIT_DISPLAY::displayPartial()
 {
-    obdDumpPartial(&_obd, x, y, w, h);
+    obdDumpPartial(&_obd, 0, 0, _obd.width, _obd.height);
 }
 
 void ONE_BIT_DISPLAY::display(void)

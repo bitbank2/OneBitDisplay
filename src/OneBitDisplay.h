@@ -196,7 +196,7 @@ typedef struct obdstruct
 BBI2C bbi2c;
 #endif
 uint8_t oled_addr; // requested address or 0xff for automatic detection
-uint8_t wrap, flip, invert, type, render, can_flip;
+uint8_t busy_idle, wrap, flip, invert, type, render, can_flip;
 uint8_t *ucScreen;
 int iCursorX, iCursorY;
 int width, height, native_width, native_height;
@@ -234,7 +234,7 @@ class ONE_BIT_DISPLAY : public Print
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
     void display(void);
-    void display(int x, int y, int w, int h);
+    void displayPartial();
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
