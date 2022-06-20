@@ -1852,7 +1852,11 @@ int iTimeout = 0;
      delay(100);
   }
   if (iTimeout > EPD_BUSY_TIMEOUT)
+#ifdef ARDUINO
      Serial.println("EPDWaitBusy() timed out");
+#else
+     printf("EPDWaitBusy() timed out\n");
+#endif
 #endif // MEMORY_ONLY
 } /* EPDWaitBusy() */
 
@@ -1896,7 +1900,7 @@ uint8_t ucTemp[8];
         obdWriteCommand(pOBD, UC8151_PON);
         return;
     }
-    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200)
+    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200) {
         if (pOBD->iRSTPin != 0xff) {
             digitalWrite(pOBD->iRSTPin, LOW);
             delay(10);
@@ -1906,8 +1910,8 @@ uint8_t ucTemp[8];
         obdWriteCommand(pOBD, SSD1608_SW_RESET); // soft reset
         EPDWaitBusy(pOBD);
         return;
+    }
     // The following is for the 4.2" 400x300 e-ink
-  ucTemp[0] = 0x40; // tell I2CWrite that it's a data write, not command
   if (pOBD->iRSTPin != 0xff)
   {
     digitalWrite(pOBD->iRSTPin, LOW);
@@ -1916,38 +1920,38 @@ uint8_t ucTemp[8];
     delay(10);
   }
   obdWriteCommand(pOBD, 0x01); // POWER SETTING
-  ucTemp[1] = 0x03;   // VDS_EN, VDG_EN internal
-  ucTemp[2] = 0x00;   // VCOM_HV, VGHL_LV=16V
-  ucTemp[3] = 0x2b;   // VDH=11V
-  ucTemp[4] = 0x2b;   // VDL=11V
-  ucTemp[5] = 0xff;   // VDHR
-  RawWrite(pOBD, ucTemp, 6);
+  ucTemp[0] = 0x03;   // VDS_EN, VDG_EN internal
+  ucTemp[1] = 0x00;   // VCOM_HV, VGHL_LV=16V
+  ucTemp[2] = 0x2b;   // VDH=11V
+  ucTemp[3] = 0x2b;   // VDL=11V
+  ucTemp[4] = 0xff;   // VDHR
+  RawWriteData(pOBD, ucTemp, 5);
   obdWriteCommand(pOBD, 0x06); // boost soft start
-  ucTemp[1] = 0x17;   // A
-  ucTemp[2] = 0x17;   // B
-  ucTemp[3] = 0x17;   // C
-  RawWrite(pOBD, ucTemp, 4);
+  ucTemp[0] = 0x17;   // A
+  ucTemp[1] = 0x17;   // B
+  ucTemp[2] = 0x17;   // C
+  RawWriteData(pOBD, ucTemp, 4);
   obdWriteCommand(pOBD, 0x00); // panel setting
-  ucTemp[1] = 0x3f;
-  RawWrite(pOBD, ucTemp, 2);  // 300x400 B/W mode, LUT set by register
+  ucTemp[0] = 0x3f;
+  RawWriteData(pOBD, ucTemp, 1);  // 300x400 B/W mode, LUT set by register
   obdWriteCommand(pOBD, 0x30); // PLL setting
-  ucTemp[1] = 0x3a; // 3a 100HZ   29 150Hz 39 200HZ 31 171HZ
-  RawWrite(pOBD, ucTemp, 2);
+  ucTemp[0] = 0x3a; // 3a 100HZ   29 150Hz 39 200HZ 31 171HZ
+  RawWriteData(pOBD, ucTemp, 1);
   obdWriteCommand(pOBD, 0x61); // resolution setting
-  ucTemp[1] = (uint8_t)(pOBD->width >> 8);
-  ucTemp[2] = (uint8_t)(pOBD->width);
-  ucTemp[3] = (uint8_t)(pOBD->height >> 8);
-  ucTemp[4] = (uint8_t)(pOBD->height);
-  RawWrite(pOBD, ucTemp, 5);
+  ucTemp[0] = (uint8_t)(pOBD->width >> 8);
+  ucTemp[1] = (uint8_t)(pOBD->width);
+  ucTemp[2] = (uint8_t)(pOBD->height >> 8);
+  ucTemp[3] = (uint8_t)(pOBD->height);
+  RawWriteData(pOBD, ucTemp, 4);
   obdWriteCommand(pOBD, 0x82); // vcom_DC setting
   //IO.writeDataTransaction(0x08);   // -0.1 + 8 * -0.05 = -0.5V from demo
-  ucTemp[1] = 0x12;   // -0.1 + 18 * -0.05 = -1.0V from OTP, slightly better
-  RawWrite(pOBD, ucTemp, 2);
+  ucTemp[0] = 0x12;   // -0.1 + 18 * -0.05 = -1.0V from OTP, slightly better
+  RawWriteData(pOBD, ucTemp, 1);
   //IO.writeDataTransaction(0x1c);   // -0.1 + 28 * -0.05 = -1.5V test, worse
   obdWriteCommand(pOBD, 0x50); // VCOM AND DATA INTERVAL SETTING
   //IO.writeDataTransaction(0x97);    // WBmode:VBDF 17|D7 VBDW 97 VBDB 57   WBRmode:VBDF F7 VBDW 77 VBDB 37  VBDR B7
-  ucTemp[1] = 0xd7;  // border floating to avoid flashing
-  RawWrite(pOBD, ucTemp, 2);
+  ucTemp[0] = 0xd7;  // border floating to avoid flashing
+  RawWriteData(pOBD, ucTemp, 1);
   obdWriteCommand(pOBD, 0x04);
   EPDWaitBusy(pOBD); // power on
   EPDInitFullUpdate(pOBD);
@@ -2053,7 +2057,7 @@ void EPD154_Finish(OBDISP *pOBD, bool bPartial)
 static void EPDDumpPartial(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, int h)
 {
 uint8_t ucLine[132];
-int cols=0, rows=0, x1=0, y1=0, tx, ty;
+
     if (pBuffer == NULL)
       pBuffer = pOBD->ucScreen;
     if (pBuffer == NULL)
@@ -2061,17 +2065,6 @@ int cols=0, rows=0, x1=0, y1=0, tx, ty;
     
     EPDWakeUp(pOBD);
 
-    if (pOBD->iOrientation == 0) {
-        cols = w;
-        y1 = y;
-        x1 = x;
-        rows = h;
-    } else if (pOBD->iOrientation == 90) {
-        cols = h / 8;
-        y1 = y/8;
-        x1 = x;
-        rows = w;
-    }
     if (pOBD->type == EPD29_128x296) {
         ucLine[0] = 0x40; // data
         ucLine[1] = y;
@@ -2233,8 +2226,7 @@ int tx, ty;
 uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
 uint8_t *pBuffer;
     
-      if (pBuffer == NULL)
-         pBuffer = pOBD->ucScreen;
+    pBuffer = pOBD->ucScreen;
     obdWriteCommand(pOBD, ucCMD); // start write
   // Convert the bit direction and write the data to the EPD
   if (pOBD->iOrientation == 180) {
