@@ -201,7 +201,7 @@ const uint8_t epd29_init_sequence_partial[] = {
     0x00 // end of table
 };
 
-const uint8_t st7302_wenting[] = {
+const uint8_t st7302_wenting[] PROGMEM = {
     0x02, 0xEB, 0x02, // Enable OTP
     0x02, 0xD7, 0x68, // OTP Load Control
     0x02, 0xD1, 0x01, // Auto Power Control
@@ -986,17 +986,18 @@ static void LCDPowerUp(OBDISP *pOBD)
 #ifdef _LINUX_
     AIOWriteSPI(pOBD->bbi2c.file_i2c, uc, iLen);
 #else
-    if (pOBD->iMOSIPin == 0xff)
-       SPI.transfer(uc, iLen);
+    if (pOBD->bBitBang)
+        SPI_BitBang(pOBD, uc, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
     else
-       SPI_BitBang(pOBD, uc, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
+        SPI.transfer(uc, iLen);
 #endif
     delay(100);
     obdWriteCommand(pOBD, 0xa5);
     delay(100);
     obdWriteCommand(pOBD, 0xa4);
     obdWriteCommand(pOBD, 0xaf);
-    digitalWrite(pOBD->iCSPin, HIGH);
+    if (pOBD->iCSPin != 0xff)
+        digitalWrite(pOBD->iCSPin, HIGH);
     obdSetDCMode(pOBD, MODE_DATA);
 #endif // MEMORY_ONLY
 } /* LCDPowerUp() */
@@ -1095,7 +1096,7 @@ const uint8_t epd213_lut2_full[] =
 const uint8_t lut154_full_update[] =
     {
         0x80,0x48,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
-        0x40,   0x48,   0x80,   0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,
+        0x40,0x48,0x80,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
         0x80,   0x48,   0x40,   0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,
         0x40,   0x48,   0x80,   0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,
         0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,    0x0,
@@ -1188,11 +1189,10 @@ uint8_t ucLine[8];
     obdWriteCommand(pOBD, SSD1608_SW_RESET); // Soft Reset
     EPDWaitBusy(pOBD);
     obdWriteCommand(pOBD, SSD1608_DRIVER_CONTROL); // gate setting
-    ucLine[0] = 0x40; // data
-    ucLine[1] = 200-1;
-    ucLine[2] = 0;
-    ucLine[3] = 0x01;
-    RawWrite(pOBD, ucLine, 4);
+    ucLine[0] = pOBD->native_height-1;
+    ucLine[1] = 0; // high bit of line count
+    ucLine[2] = 0x01; // bit1 = interlaced, bit 0 = Y order (0 = increasing, 1 = decreasing)
+    RawWriteData(pOBD, ucLine, 3);
     EPD213_CMD(pOBD, SSD1608_DATA_MODE, 0x01); // data entry mode = x/y incremented
     EPD213_CMD(pOBD, SSD1608_WRITE_BORDER, 0x01);
     EPD213_CMD(pOBD, 0x18, 0x80); // ?
@@ -1222,6 +1222,7 @@ int iLen;
   pOBD->type = iType;
   pOBD->flip = bFlip;
   pOBD->invert = bInvert;
+  pOBD->bBitBang = bBitBang;
   pOBD->wrap = 0; // default - disable text wrap
   pOBD->com_mode = COM_SPI; // communication mode
   if (pOBD->iDCPin != 0xff) // Note - not needed on Sharp Memory LCDs
@@ -1241,14 +1242,14 @@ int iLen;
   }
 
   // Reset it
-  if (iReset != -1 && iReset != 0xff)
+  if (pOBD->iRSTPin != 0xff)
   {
-    pinMode(iReset, OUTPUT);
-    digitalWrite(iReset, HIGH);
+    pinMode(pOBD->iRSTPin, OUTPUT);
+    digitalWrite(pOBD->iRSTPin, HIGH);
     delay(200);
-    digitalWrite(iReset, LOW);
+    digitalWrite(pOBD->iRSTPin, LOW);
     delay(10);
-    digitalWrite(iReset, HIGH);
+    digitalWrite(pOBD->iRSTPin, HIGH);
     delay(200);
   }
   if (iLED != -1 && iLED != 0xff)
@@ -1259,13 +1260,13 @@ int iLen;
          pinMode(iLED, OUTPUT);
   }
 // Initialize SPI
-    if (!bBitBang) {
-        pOBD->iMOSIPin = 0xff; // mark it as hardware SPI
+    if (!pOBD->bBitBang) {
 #ifdef _LINUX_
-    pOBD->bbi2c.file_i2c = AIOOpenSPI(SPI_BUS_NUMBER, iSpeed);
+        pOBD->bbi2c.file_i2c = AIOOpenSPI(SPI_BUS_NUMBER, iSpeed);
 #else
         SPI.begin();
         SPI.beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
+        SPI.endTransaction(); // N.B. - if you call beginTransaction() again without a matching endTransaction(), it will hang on ESP32
 #endif
     //  SPI.setClockDivider(16);
        //  SPI.setBitOrder(MSBFIRST);
@@ -1277,6 +1278,7 @@ int iLen;
   {
       pOBD->native_width = pOBD->width = 250;
       pOBD->native_height = pOBD->height = 122;
+      pOBD->can_flip = 0;
   }
   if (iType == OLED_80x128)
   {
@@ -1287,12 +1289,14 @@ int iLen;
   {
       pOBD->native_width = pOBD->width = 144;
       pOBD->native_height = pOBD->height = 168;
+      pOBD->can_flip = 0;
       pOBD->iDCPin = 0xff; // no D/C wire on this display
   }
   else if (iType == SHARP_400x240)
   {
       pOBD->native_width = pOBD->width = 400;
       pOBD->native_height = pOBD->height = 240;
+      pOBD->can_flip = 0;
       pOBD->iDCPin = 0xff; // no D/C wire on this display
   }
   else if (iType == EPD42_400x300)
@@ -1300,6 +1304,7 @@ int iLen;
       pOBD->native_width = pOBD->width = 400;
       pOBD->native_height = pOBD->height = 300;
       pOBD->busy_idle = HIGH;
+      pOBD->can_flip = 0;
       return; // nothing else to do yet
   }
   else if (iType == EPD213_122x250)
@@ -1318,6 +1323,15 @@ int iLen;
       pOBD->can_flip = 0; // flip display commands don't exist
       pOBD->busy_idle = LOW;
       EPD213_Init(pOBD);
+      return;
+  }
+  else if (iType == EPD154_152x152)
+  {
+      pOBD->native_width = pOBD->width = 152;
+      pOBD->native_height = pOBD->height = 152;
+      pOBD->can_flip = 0; // flip display commands don't exist
+      pOBD->busy_idle = LOW;
+      EPD154_Init(pOBD);
       return;
   }
   else if (iType == EPD154_200x200)
@@ -1436,19 +1450,21 @@ int iLen;
   } // OLED
   if (iType == LCD_ST7302)
   {
-      uint8_t *s = (uint8_t *)st7302_wenting; //st7302_lpm_init;
-      iLen = 1;
+    uint8_t ucTemp[16];
+    uint8_t *s = (uint8_t *)st7302_wenting; //st7302_lpm_init;
+    iLen = 1;
 
       while (iLen) {
-          iLen = *s++; // parameter byte count
+          iLen = pgm_read_byte(s++); // parameter byte count
           if (iLen) {
-              if (s[0] == 0xff) { // delay
-                  delay(s[1]);
+              if (pgm_read_byte(s) == 0xff) { // delay
+                  delay(pgm_read_byte(&s[1]));
                   s += 2;
               } else {
-                  obdWriteCommand(pOBD, s[0]);
+                  obdWriteCommand(pOBD, pgm_read_byte(s));
                   if (iLen > 1) {
-                      RawWrite(pOBD, s, iLen);
+                      memcpy_P(ucTemp, s, iLen);
+                      RawWrite(pOBD, ucTemp, iLen);
                   }
                   s += iLen;
               }
@@ -1466,7 +1482,6 @@ int iLen;
 //      uc[0] = 0x40;
 //      uc[1] = 0x23;
 //      RawWrite(pOBD, uc, 2);
-
       return;
   } /* ST7302 */
     
@@ -1794,6 +1809,7 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
    while (iLen)
    {
       c = *pData++;
+      iLen--;
       if (pOBD->iDCPin == 0xff) // 3-wire SPI, write D/C bit first
       {
 #ifdef __AVR__
@@ -1806,10 +1822,11 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
 #else
           digitalWrite(iMOSIPin, (pOBD->mode == MODE_DATA));
           digitalWrite(iSCKPin, HIGH);
-          delayMicroseconds(0);
+          delayMicroseconds(1);
       digitalWrite(iSCKPin, LOW);
 #endif
       }
+#ifdef FUTURE
       if (c == 0 || c == 0xff) // quicker for all bits equal
       {
 #ifdef __AVR__
@@ -1827,12 +1844,13 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
          for (i=0; i<8; i++)
          {
             digitalWrite(iSCKPin, HIGH);
-            delayMicroseconds(0);
+            delayMicroseconds(1);
             digitalWrite(iSCKPin, LOW);
          }
 #endif
       }
       else
+#endif // FUTURE
       {
          for (i=0; i<8; i++)
          {
@@ -1846,10 +1864,12 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
             *outSCK &= ~bitSCK;
 #else
             digitalWrite(iMOSIPin,  (c & 0x80) != 0); // MSB first
+             delayMicroseconds(1);
             digitalWrite(iSCKPin, HIGH);
             c <<= 1;
-            delayMicroseconds(0);
+            delayMicroseconds(1);
             digitalWrite(iSCKPin, LOW);
+            delayMicroseconds(1);
 #endif
         }
       }
@@ -1973,7 +1993,7 @@ uint8_t ucTemp[8];
         obdWriteCommand(pOBD, UC8151_PON);
         return;
     }
-    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200) {
+    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) {
         if (pOBD->iRSTPin != 0xff) {
             digitalWrite(pOBD->iRSTPin, LOW);
             delay(10);
@@ -1992,40 +2012,30 @@ uint8_t ucTemp[8];
     digitalWrite(pOBD->iRSTPin, HIGH);
     delay(10);
   }
-  obdWriteCommand(pOBD, 0x01); // POWER SETTING
+  obdWriteCommand(pOBD, UC8151_PWR); // POWER SETTING
   ucTemp[0] = 0x03;   // VDS_EN, VDG_EN internal
   ucTemp[1] = 0x00;   // VCOM_HV, VGHL_LV=16V
   ucTemp[2] = 0x2b;   // VDH=11V
   ucTemp[3] = 0x2b;   // VDL=11V
   ucTemp[4] = 0xff;   // VDHR
   RawWriteData(pOBD, ucTemp, 5);
-  obdWriteCommand(pOBD, 0x06); // boost soft start
+  obdWriteCommand(pOBD, UC8151_BTST); // boost soft start
   ucTemp[0] = 0x17;   // A
   ucTemp[1] = 0x17;   // B
   ucTemp[2] = 0x17;   // C
-  RawWriteData(pOBD, ucTemp, 4);
-  obdWriteCommand(pOBD, 0x00); // panel setting
-  ucTemp[0] = 0x3f;
-  RawWriteData(pOBD, ucTemp, 1);  // 300x400 B/W mode, LUT set by register
-  obdWriteCommand(pOBD, 0x30); // PLL setting
-  ucTemp[0] = 0x3a; // 3a 100HZ   29 150Hz 39 200HZ 31 171HZ
-  RawWriteData(pOBD, ucTemp, 1);
-  obdWriteCommand(pOBD, 0x61); // resolution setting
+  RawWriteData(pOBD, ucTemp, 3);
+  EPD213_CMD(pOBD, UC8151_PSR, 0x3f); // panel setting
+  EPD213_CMD(pOBD, UC8151_PLL, 0x3a); // PLL setting 100HZ   29 150Hz 39 200HZ 31 171HZ
+  obdWriteCommand(pOBD, UC8151_TRES); // resolution setting
   ucTemp[0] = (uint8_t)(pOBD->width >> 8);
   ucTemp[1] = (uint8_t)(pOBD->width);
   ucTemp[2] = (uint8_t)(pOBD->height >> 8);
   ucTemp[3] = (uint8_t)(pOBD->height);
   RawWriteData(pOBD, ucTemp, 4);
-  obdWriteCommand(pOBD, 0x82); // vcom_DC setting
-  //IO.writeDataTransaction(0x08);   // -0.1 + 8 * -0.05 = -0.5V from demo
-  ucTemp[0] = 0x12;   // -0.1 + 18 * -0.05 = -1.0V from OTP, slightly better
-  RawWriteData(pOBD, ucTemp, 1);
-  //IO.writeDataTransaction(0x1c);   // -0.1 + 28 * -0.05 = -1.5V test, worse
-  obdWriteCommand(pOBD, 0x50); // VCOM AND DATA INTERVAL SETTING
-  //IO.writeDataTransaction(0x97);    // WBmode:VBDF 17|D7 VBDW 97 VBDB 57   WBRmode:VBDF F7 VBDW 77 VBDB 37  VBDR B7
-  ucTemp[0] = 0xd7;  // border floating to avoid flashing
-  RawWriteData(pOBD, ucTemp, 1);
-  obdWriteCommand(pOBD, 0x04);
+  EPD213_CMD(pOBD, UC8151_VDCS, 0x12); // vcom_DC setting = -0.1 + 18 * -0.05 = -1.0V from OTP, slightly better
+  EPD213_CMD(pOBD, UC8151_CDI, 0xd7); // VCOM AND DATA INTERVAL SETTING
+//  ucTemp[0] = 0xd7;  // border floating to avoid flashing
+  obdWriteCommand(pOBD, UC8151_PON);
   EPDWaitBusy(pOBD); // power on
   EPDInitFullUpdate(pOBD);
 
@@ -2033,29 +2043,22 @@ uint8_t ucTemp[8];
 
 static void EPDSleep(OBDISP *pOBD)
 {
-uint8_t ucTemp[4];
 
     if (pOBD->type == EPD29_128x296) {
         obdWriteCommand(pOBD, UC8151_POF); // power off
         return;
     }
-    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200) {
-        EPD213_CMD(pOBD, 0x10, 0x01); // enter deep sleep
+    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) {
+        EPD213_CMD(pOBD, SSD1608_DEEP_SLEEP, 0x01); // enter deep sleep
 	    return;
     }
-  ucTemp[0] = 0x40;
-  obdWriteCommand(pOBD, 0x50); // border floating
-  ucTemp[1] = 0x17; // power off
-  RawWrite(pOBD, ucTemp, 2);
-  obdWriteCommand(pOBD, 0x02); // power off
+  EPD213_CMD(pOBD, UC8151_CDI, 0x17); // border floating
+  obdWriteCommand(pOBD, UC8151_POF); // power off
   EPDWaitBusy(pOBD);
   if (pOBD->iRSTPin != 0xff)
   {
-    obdWriteCommand(pOBD, 0x07); // deep sleep
-    ucTemp[1] = 0xa5;
-    RawWrite(pOBD, ucTemp, 2);
+    EPD213_CMD(pOBD, UC8151_DSLP, 0xa5); // deep sleep
   }
-
 } /* EPDSleep() */
 
 void EPDInitPartialUpdate(OBDISP *pOBD)
@@ -2117,7 +2120,7 @@ uint8_t ucTemp[12];
 void EPD154_Finish(OBDISP *pOBD, int bPartial)
 {
     if (bPartial) {
-        EPD213_CMD(pOBD, SSD1608_DISP_CTRL2, (pOBD->type == EPD154_200x200) ? 0xcf : 0x0c);
+        EPD213_CMD(pOBD, SSD1608_DISP_CTRL2, (pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) ? 0xcf : 0x0c);
     } else {
         EPD213_CMD(pOBD, SSD1608_DISP_CTRL2, 0xc7);
     }
@@ -2175,7 +2178,7 @@ static void EPDDumpPartial(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, 
         EPD213_Begin(pOBD, x, y, w, h, true);
         EPDWriteImage(pOBD, SSD1608_WRITE_RAM, x, y, w, h);
         EPD154_Finish(pOBD, true);
-    } else if (pOBD->type == EPD154_200x200) {
+    } else if (pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) {
         EPD154_Begin(pOBD, x, y, w, h, true);
         EPDWriteImage(pOBD, SSD1608_WRITE_RAM, x, y, w, h);
         EPD154_Finish(pOBD, true);
@@ -2417,15 +2420,19 @@ static void EPDDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
       EPDWriteImage(pOBD, UC8151_DTM2, 0, 0, pOBD->width, pOBD->height); // send buffer
       EPD29_Finish(pOBD, false);
   }
+    if (pOBD->type == EPD42_400x300) {
+        EPDWriteImage(pOBD, UC8151_DTM2, 0, 0, pOBD->width, pOBD->height);
+        obdWriteCommand(pOBD, UC8151_DRF);
+    }
     if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
         EPD213_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
         EPDWriteImage(pOBD, SSD1608_WRITE_RAM, 0, 0, pOBD->width, pOBD->height);
         EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, 0, 0, pOBD->width, pOBD->height); // send image to current and previous buffers
         EPD154_Finish(pOBD, false);
-    } else if (pOBD->type == EPD154_200x200) {
-        EPD154_Begin(pOBD, 0, 0, 200, 200, false); // x, y, w, h
-        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, 0, 0, 200, 200);
-        EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, 0, 0, 200, 200); // send image to current and previous buffers
+    } else if (pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) {
+        EPD154_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false); // x, y, w, h
+        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, 0, 0, pOBD->width, pOBD->height);
+        EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, 0, 0, pOBD->width, pOBD->height); // send image to current and previous buffers
         EPD154_Finish(pOBD, false);
     }
   EPDWaitBusy(pOBD);
@@ -2664,7 +2671,7 @@ int iLines;
   if (pBuffer == NULL)
     return; // no backbuffer and no provided buffer
   
-  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_128x296 || pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200)
+  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_128x296 || pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152)
   {
      EPDDumpBuffer(pOBD, pBuffer);
      return;
@@ -3096,10 +3103,10 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
       obdSetDCMode(pOBD, (pData[0] == 0) ? MODE_COMMAND : MODE_DATA);
-      if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
          digitalWrite(pOBD->iCSPin, LOW);
       AIOWriteSPI(pOBD->bbi2c.file_i2c, &pData[1], iLen-1);
-      if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
          digitalWrite(pOBD->iCSPin, HIGH);
       //obdSetDCMode(pOBD, MODE_DATA);
   }
@@ -3112,10 +3119,10 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
       obdSetDCMode(pOBD, MODE_DATA);
-      if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
          digitalWrite(pOBD->iCSPin, LOW);
       AIOWriteSPI(pOBD->bbi2c.file_i2c, &pData[1], iLen-1);
-      if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+      if (pOBD->iCSPin != 0xff &&pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
          digitalWrite(pOBD->iCSPin, HIGH);
       //obdSetDCMode(pOBD, MODE_DATA);
   }
@@ -3130,19 +3137,28 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
     if (pOBD->iDCPin != 0xff)
     {
       digitalWrite(pOBD->iDCPin, (pData[0] == 0) ? LOW : HIGH); // data versus command
-      digitalWrite(pOBD->iCSPin, LOW);
+    }
+    if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+    {
+        digitalWrite(pOBD->iCSPin, LOW);
     }
 #ifdef HAL_ESP32_HAL_H_
    {
    uint8_t ucTemp[1024];
-        SPI.transferBytes(&pData[1], ucTemp, iLen-1);
+       if (pOBD->bBitBang)
+           SPI_BitBang(pOBD, &pData[1], iLen-1, pOBD->iMOSIPin, pOBD->iCLKPin);
+       else
+           SPI.transferBytes(&pData[1], ucTemp, iLen-1);
    }
 #else
     for (int i=1; i<iLen; i++) {
-       SPI.transfer(pData[i]);
+        if (pOBD->bBitBang)
+            SPI_BitBang(pOBD, &pData[i], 1, pOBD->iMOSIPin, pOBD->iCLKPin);
+        else
+            SPI.transfer(pData[i]);
     }
 #endif
-    if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+    if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
       digitalWrite(pOBD->iCSPin, HIGH);
   }
   else // must be I2C
@@ -3172,10 +3188,9 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
   if (pOBD->com_mode == COM_SPI) // we're writing to SPI, treat it differently
   {
     if (pOBD->iDCPin != 0xff)
-    {
       digitalWrite(pOBD->iDCPin, HIGH); // data mode
+    if (pOBD->iCSPin != 0xff)
       digitalWrite(pOBD->iCSPin, LOW);
-    }
 #ifdef HAL_ESP32_HAL_H_
    {
    uint8_t ucTemp[1024];
@@ -3186,7 +3201,7 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
        SPI.transfer(pData[i]);
     }
 #endif
-    if (pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+    if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
       digitalWrite(pOBD->iCSPin, HIGH);
   }
   else // must be I2C
@@ -3224,16 +3239,18 @@ unsigned char buf[4];
       RawWrite(pOBD, buf, 2);
   } else { // must be SPI
       obdSetDCMode(pOBD, MODE_COMMAND);
-      digitalWrite(pOBD->iCSPin, LOW);
+      if (pOBD->iCSPin != 0xff)
+          digitalWrite(pOBD->iCSPin, LOW);
 #ifdef _LINUX_
       AIOWriteSPI(pOBD->bbi2c.file_i2c, &c, 1);
 #else
-      if (pOBD->iMOSIPin == 0xff)
-         SPI.transfer(c);
+      if (pOBD->bBitBang)
+          SPI_BitBang(pOBD, &c, 1, pOBD->iMOSIPin, pOBD->iCLKPin);
       else
-         SPI_BitBang(pOBD, &c, 1, pOBD->iMOSIPin, pOBD->iCLKPin);
+          SPI.transfer(c);
 #endif
-      digitalWrite(pOBD->iCSPin, HIGH);
+      if (pOBD->iCSPin != 0xff)
+          digitalWrite(pOBD->iCSPin, HIGH);
       obdSetDCMode(pOBD, MODE_DATA);
   }
 #endif // MEMORY_ONLY
@@ -3608,15 +3625,17 @@ if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
   {
       if (pOBD->com_mode == COM_SPI) // SPI/Bit Bang
       {
-	  digitalWrite(pOBD->iCSPin, LOW);
+          if (pOBD->iCSPin != 0xff)
+              digitalWrite(pOBD->iCSPin, LOW);
 #ifdef _LINUX_
 	  AIOWriteSPI(pOBD->bbi2c.file_i2c, ucBuf, iLen);
 #else // Arduino
-          if (pOBD->iMOSIPin != 0xff) // Bit Bang
+          if (pOBD->bBitBang) // Bit Bang
             SPI_BitBang(pOBD, ucBuf, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
           else
             SPI.transfer(ucBuf, iLen);
 #endif // _LINUX_
+        if (pOBD->iCSPin != 0xff)
           digitalWrite(pOBD->iCSPin, HIGH);
       }
       else // I2C
