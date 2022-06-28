@@ -3068,7 +3068,7 @@ static int16_t pgm_read_word(const uint8_t *ptr)
 {
   return ptr[0] + (ptr[1]<<8);
 }
-#ifndef MEMORY_ONLY
+#if !defined( MEMORY_ONLY ) && !defined( __BITBANG_I2C__ )
 int I2CReadRegister(BBI2C *pI2C, uint8_t addr, uint8_t reg, uint8_t *pBuf, int iLen)
 {
 int rc;

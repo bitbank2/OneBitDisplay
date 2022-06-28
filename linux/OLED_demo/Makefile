@@ -1,5 +1,5 @@
 CFLAGS=-c -Wall -O3 -D_LINUX_ -DSPI_BUS_NUMBER=0
-LFLAGS= -larmbianio
+LFLAGS= -larmbianio -pthread
 all: oled_demo
 
 oled_demo: main.o
