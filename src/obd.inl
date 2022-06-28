@@ -2653,7 +2653,10 @@ uint8_t ucMask;
 //
 void obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height)
 {
-   EPDDumpPartial(pOBD, NULL, startx, starty, width, height);
+   if (pOBD->type >= EPD42_400x300) // it's an e-ink panel
+      EPDDumpPartial(pOBD, NULL, startx, starty, width, height);
+   else // use the default full screen dump function
+      obdDumpBuffer(pOBD, NULL);
 } /* obdDumpPartial() */
 //
 // Dump a screen's worth of data directly to the display
