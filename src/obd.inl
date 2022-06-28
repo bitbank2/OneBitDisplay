@@ -11,6 +11,12 @@
 #define memcpy_P memcpy
 #ifndef I2C_SLAVE
 #define I2C_SLAVE 0
+#define INPUT GPIO_IN
+#define OUTPUT GPIO_OUT
+#define INPUT_PULLUP GPIO_IN_PULLUP
+#define HIGH 1
+#define LOW 0
+void delay(int iDelay);
 #endif
 static uint8_t pgm_read_byte(const uint8_t *ptr);
 static void digitalWrite(int iPin, int iState) {
@@ -1622,7 +1628,9 @@ uint8_t u8Len, *s;
   pOBD->bbi2c.iSCL = scl;
   pOBD->bbi2c.bWire = bWire;
   pOBD->com_mode = COM_I2C; // communication mode
-
+#ifdef _LINUX_
+  pOBD->bbi2c.iBus = sda;
+#endif
   I2CInit(&pOBD->bbi2c, iSpeed); // on Linux, SDA = bus number, SCL = device address
 #ifdef _LINUX_
   pOBD->oled_addr = (uint8_t)scl;
