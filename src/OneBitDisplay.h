@@ -254,6 +254,7 @@ class ONE_BIT_DISPLAY : public Print
     int16_t getCursorX(void);
     int16_t getCursorY(void);
     void setTextSize(int iSize);
+    void setTextWrap(bool bWrap);
     void setFont(int iFont);
     void setFreeFont(const GFXfont *pFont);
     int16_t height(void);

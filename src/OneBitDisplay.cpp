@@ -156,6 +156,11 @@ void ONE_BIT_DISPLAY::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint1
     obdRectangle(&_obd, x, y, x+w-1, y+h-1, color, 1);
 } /* fillRect() */
 
+void ONE_BIT_DISPLAY::setTextWrap(bool bWrap)
+{
+  _obd.wrap = (int)bWrap;
+}
+
 void ONE_BIT_DISPLAY::setTextColor(int iFG, int iBG)
 {
   _obd.iFG = iFG;
