@@ -4298,6 +4298,7 @@ unsigned char c, *s, ucTemp[40];
              pOBD->iCursorX += iLen;
              if (pOBD->iCursorX >= pOBD->width-7 && pOBD->wrap) // word wrap enabled?
              {
+               obdCachedFlush(pOBD, bRender);
                pOBD->iCursorX = 0; // start at the beginning of the next line
                pOBD->iCursorY+=8;
                obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
@@ -4572,6 +4573,7 @@ unsigned char c, *s, ucTemp[40];
                iFontSkip = 0;
                if (pOBD->iCursorX >= pOBD->width-5 && pOBD->wrap) // word wrap enabled?
                {
+                 obdCachedFlush(pOBD, bRender);
                  pOBD->iCursorX = 0; // start at the beginning of the next line
                  pOBD->iCursorY +=8;
                  obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
