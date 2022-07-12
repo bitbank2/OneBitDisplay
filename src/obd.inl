@@ -16,7 +16,6 @@
 #define INPUT_PULLUP GPIO_IN_PULLUP
 #define HIGH 1
 #define LOW 0
-void delay(int iDelay);
 #endif
 static uint8_t pgm_read_byte(const uint8_t *ptr);
 static void digitalWrite(int iPin, int iState) {
@@ -35,7 +34,13 @@ static int digitalRead(int iPin)
   return AIOReadGPIO(iPin);
 } /* digitalRead() */
 
+#endif // _LINUX_
+#ifdef ARDUINO_ARCH_RP2040
+MbedSPI *mySPI;
+#else
+SPIClass *mySPI = &SPI;
 #endif
+void _delay(int iDelay);
 static void EPDWaitBusy(OBDISP *pOBD);
 static void EPDSleep(OBDISP *pOBD);
 static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, int x, int y, int w, int h);
@@ -148,7 +153,7 @@ const uint8_t epd29_init_sequence_full[] = {
     0x02, UC8151_PFS, 0x00, // FRAMES_1
     0x02, UC8151_TSE, 0x00, // TEMP_INTERNAL | OFFSET_0
     0x02, UC8151_TCON, 0x22,
-    0x02, UC8151_CDI, 0x5c, // inverted
+    0x02, UC8151_CDI, 0x9c, // inverted, white border
     0x02, UC8151_PLL, 0x3a, // HZ_100
     0x00 // end of table
 };
@@ -995,11 +1000,11 @@ static void LCDPowerUp(OBDISP *pOBD)
     if (pOBD->bBitBang)
         SPI_BitBang(pOBD, uc, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
     else
-        SPI.transfer(uc, iLen);
+        mySPI->transfer(uc, iLen);
 #endif
-    delay(100);
+    _delay(100);
     obdWriteCommand(pOBD, 0xa5);
-    delay(100);
+    _delay(100);
     obdWriteCommand(pOBD, 0xa4);
     obdWriteCommand(pOBD, 0xaf);
     if (pOBD->iCSPin != 0xff)
@@ -1206,6 +1211,7 @@ uint8_t ucLine[8];
     obdWriteCommand(pOBD, SSD1608_MASTER_ACTIVATE);
     EPDWaitBusy(pOBD);
 } /* EPD154_Init() */
+
 //
 // Initialize the display controller on an SPI bus
 //
@@ -1252,11 +1258,11 @@ int iLen;
   {
     pinMode(pOBD->iRSTPin, OUTPUT);
     digitalWrite(pOBD->iRSTPin, HIGH);
-    delay(200);
+    _delay(200);
     digitalWrite(pOBD->iRSTPin, LOW);
-    delay(10);
+    _delay(10);
     digitalWrite(pOBD->iRSTPin, HIGH);
-    delay(200);
+    _delay(200);
   }
   if (iLED != -1 && iLED != 0xff)
   {
@@ -1270,9 +1276,16 @@ int iLen;
 #ifdef _LINUX_
         pOBD->bbi2c.file_i2c = AIOOpenSPI(SPI_BUS_NUMBER, iSpeed);
 #else
-        SPI.begin();
-        SPI.beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
-        SPI.endTransaction(); // N.B. - if you call beginTransaction() again without a matching endTransaction(), it will hang on ESP32
+#ifdef ARDUINO_ARCH_RP2040
+        if (iMOSI != -1) {
+            mySPI = new MbedSPI(-1,iMOSI,iCLK);
+        } else { // use default pins
+            mySPI->begin();
+        }
+#endif
+        mySPI->begin();
+        mySPI->beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
+        mySPI->endTransaction(); // N.B. - if you call beginTransaction() again without a matching endTransaction(), it will hang on ESP32
 #endif
     //  SPI.setClockDivider(16);
        //  SPI.setBitOrder(MSBFIRST);
@@ -1384,6 +1397,7 @@ int iLen;
       // NOTE: 64x128 SH1107 doesn't seem to properly support
       // segment remap, so the init commands are A0/C0 and
       // it can't be flipped 180
+      pOBD->can_flip = 0;
       pOBD->native_width = pOBD->width = 64;
       pOBD->native_height = pOBD->height = 128;
   }
@@ -1413,7 +1427,7 @@ int iLen;
   }
   else if (iType == OLED_64x128)
   {
-     s = (uint8_t *)oled64x128_initbuf;
+      s = (uint8_t *)oled64x128_initbuf;
      iLen = sizeof(oled64x128_initbuf);
   }
   else if (iType == OLED_128x128)
@@ -1435,7 +1449,7 @@ int iLen;
   {
       memcpy_P(uc, s, iLen); // do it from RAM
       RawWrite(pOBD, uc, iLen);
-      delay(100); // on SPI display this delay is needed or the display
+      _delay(100); // on SPI display this delay is needed or the display
       // never sees the "display on" command at the end of the sequence
       obdWriteCommand(pOBD, 0xaf); // turn on display
       if (bInvert)
@@ -1464,7 +1478,7 @@ int iLen;
           iLen = pgm_read_byte(s++); // parameter byte count
           if (iLen) {
               if (pgm_read_byte(s) == 0xff) { // delay
-                  delay(pgm_read_byte(&s[1]));
+                  _delay(pgm_read_byte(&s[1]));
                   s += 2;
               } else {
                   obdWriteCommand(pOBD, pgm_read_byte(s));
@@ -1483,7 +1497,7 @@ int iLen;
 //      uc[0] = 0x40;
 //      uc[1] = 0xe3;
 //      RawWrite(pOBD, uc, 2);
-//      delay(1000);
+//      _delay(1000);
 //      obdWriteCommand(pOBD, 0xb9);
 //      uc[0] = 0x40;
 //      uc[1] = 0x23;
@@ -1515,14 +1529,14 @@ int iLen;
       LCDPowerUp(pOBD);
       return;
       obdWriteCommand(pOBD, 0xe2); // system reset
-      delay(100);
+      _delay(100);
       obdWriteCommand(pOBD, 0xa0); // set frame rate to 76fps
       obdWriteCommand(pOBD, 0xeb); // set BR
       obdWriteCommand(pOBD, 0x2f); // set Power Control
       obdWriteCommand(pOBD, 0xc4); // set LCD mapping control
       obdWriteCommand(pOBD, 0x81); // set PM
       obdWriteCommand(pOBD, 0x90); // set contrast to 144
-      delay(100);
+      _delay(100);
       obdWriteCommand(pOBD, 0xaf); // display enable
       if (bFlip) // flip horizontal + vertical
       {
@@ -1640,11 +1654,11 @@ uint8_t u8Len, *s;
   {
     pinMode(reset, OUTPUT);
     digitalWrite(reset, HIGH);
-    delay(50);
+    _delay(50);
     digitalWrite(reset, LOW);
-    delay(50);
+    _delay(50);
     digitalWrite(reset, HIGH);
-    delay(10);
+    _delay(10);
   }
   // find the device address if requested
   if (iAddr == -1 || iAddr == 0 || iAddr == 0xff) // find it
@@ -1782,14 +1796,25 @@ void oledPower(OBDISP *pOBD, uint8_t bOn)
 } /* oledPower() */
 
 #ifdef _LINUX_
-void delay(int iDelay)
+void _delay(int iDelay)
 {
     usleep(iDelay * 1000);
-} /* delay() */
+} /* _delay() */
 void delayMicroseconds(int iDelay)
 {
     usleep(iDelay);
 } /* delayMicroseconds() */
+#else // Arduino
+void _delay(int iDelay)
+{
+#ifdef HAL_ESP32_HAL_H_
+// light sleep to save power
+    esp_sleep_enable_timer_wakeup(iDelay * 1000);
+    esp_light_sleep_start();
+#else // any other platform
+    delay(iDelay); // use the Arduino delay function
+#endif // ESP32
+}
 #endif // _LINUX_
 //
 // Bit Bang the data on GPIO pins
@@ -1938,7 +1963,7 @@ static void EPDWaitBusy(OBDISP *pOBD)
 int iTimeout = 0;
 
     if (pOBD->iLEDPin == 0xff || pOBD->iLEDPin == -1) {
-        delay(2000); // no busy pin, wait 2 seconds
+        _delay(2000); // no busy pin, wait 1 second
         return;
     }
   while (1) {
@@ -1950,7 +1975,7 @@ int iTimeout = 0;
      iTimeout += 100;
      if (iTimeout > EPD_BUSY_TIMEOUT)
          break; // DEBUG - timeout
-     delay(100);
+     _delay(100);
   }
   if (iTimeout > EPD_BUSY_TIMEOUT)
 #ifdef ARDUINO
@@ -2004,9 +2029,9 @@ uint8_t ucTemp[8];
     if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) {
         if (pOBD->iRSTPin != 0xff) {
             digitalWrite(pOBD->iRSTPin, LOW);
-            delay(10);
+            _delay(10);
             digitalWrite(pOBD->iRSTPin, HIGH);
-            delay(200);
+            _delay(200);
         }
         obdWriteCommand(pOBD, SSD1608_SW_RESET); // soft reset
         EPDWaitBusy(pOBD);
@@ -2016,9 +2041,9 @@ uint8_t ucTemp[8];
   if (pOBD->iRSTPin != 0xff)
   {
     digitalWrite(pOBD->iRSTPin, LOW);
-    delay(10);
+    _delay(10);
     digitalWrite(pOBD->iRSTPin, HIGH);
-    delay(10);
+    _delay(10);
   }
   obdWriteCommand(pOBD, UC8151_PWR); // POWER SETTING
   ucTemp[0] = 0x03;   // VDS_EN, VDG_EN internal
@@ -2120,7 +2145,7 @@ uint8_t ucTemp[12];
   ucTemp[8] = (uint8_t)(ey & 256);
   ucTemp[9] = 0x01; // gates scan inside and outside the partial area (don't see any difference)
   RawWrite(pOBD, ucTemp, 10);
-  delay(2);
+  _delay(2);
   //IO.writeDataTransaction(0x00); // don't see any difference
   //return (7 + xe - x) / 8; // number of bytes to transfer
 } /* EPDSetPartialArea() */
@@ -2163,7 +2188,7 @@ void EPD29_Finish(OBDISP *pOBD, int bPartial)
 {
     obdWriteCommand(pOBD, UC8151_DSP); // stop data
     obdWriteCommand(pOBD, UC8151_DRF); // start display refresh
-    delay(10); // needed
+    _delay(10); // needed
     EPDWaitBusy(pOBD);
 } /* EPD29_Finish() */
 //
@@ -2697,7 +2722,7 @@ int iLines;
     SharpDumpBuffer(pOBD, pBuffer);
     return;
   }
-  iLines = (pOBD->height+7) >> 3;
+  iLines = (pOBD->native_height+7) >> 3;
     // 0/180 we can send the 8 lines of pixels straight through
     if (pOBD->iOrientation == 0 || pOBD->iOrientation == 180) {
         if (pOBD->iOrientation == 0 || (pOBD->iOrientation == 180 && pOBD->can_flip)) {
@@ -2719,18 +2744,19 @@ int iLines;
      return;
   } else { // must be 90/270
       // Capture the pixels 'sideways' and send a line at a time
-      if (pOBD->iOrientation == 90 || (pOBD->iOrientation == 270 && pOBD->can_flip)) {
+     if (pOBD->iOrientation == 90 || (pOBD->iOrientation == 270 && pOBD->can_flip)) {
           for (x=0; x<pOBD->width; x+=8) {
-              uint8_t j, *s, *d, uc, ucMask, ucTemp[132];
+              uint8_t *s, *d, uc, ucMask, ucTemp[132];
+              int j;
               d = ucTemp;
               *d++ = 0x40;
-              s = &pBuffer[x + (((pOBD->height-1)>>3) * pOBD->width)];
+              s = &pBuffer[x + ((pOBD->height-7)>>3)*pOBD->width];
               ucMask = 0x80;
               for (y=0; y<pOBD->height; y++) {
                   uc = 0;
-                  for (j=0; j<8; j++) {
-                      uc >>= 1;
-                      if (s[j] & ucMask) uc |= 0x80;
+                  for (j=7; j>=0; j--) {
+                      uc <<= 1;
+                      if (s[j] & ucMask) uc |= 1;
                   } // for j
                   *d++ = uc;
                   ucMask >>= 1;
@@ -2941,9 +2967,9 @@ char szTemp[64];
   for (i=0; i<3; i++)
   {
     obdMenuShowItem(sm->pOBD, x, y, szTemp, 0, 0, sm->iFontSize, 1); // show non-inverted
-    delay(200);
+    _delay(200);
     obdMenuShowItem(sm->pOBD, x, y, szTemp, 1, 0, sm->iFontSize, 1); // show inverted
-    delay(200);
+    _delay(200);
   }
 } /* obdMenuFlash() */
 
@@ -3159,14 +3185,14 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
        if (pOBD->bBitBang)
            SPI_BitBang(pOBD, &pData[1], iLen-1, pOBD->iMOSIPin, pOBD->iCLKPin);
        else
-           SPI.transferBytes(&pData[1], ucTemp, iLen-1);
+           mySPI->transferBytes(&pData[1], ucTemp, iLen-1);
    }
 #else
     for (int i=1; i<iLen; i++) {
         if (pOBD->bBitBang)
             SPI_BitBang(pOBD, &pData[i], 1, pOBD->iMOSIPin, pOBD->iCLKPin);
         else
-            SPI.transfer(pData[i]);
+            mySPI->transfer(pData[i]);
     }
 #endif
     if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
@@ -3205,11 +3231,11 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
 #ifdef HAL_ESP32_HAL_H_
    {
    uint8_t ucTemp[1024];
-        SPI.transferBytes(pData, ucTemp, iLen);
+        mySPI->transferBytes(pData, ucTemp, iLen);
    }
 #else
     for (int i=0; i<iLen; i++) {
-       SPI.transfer(pData[i]);
+       mySPI->transfer(pData[i]);
     }
 #endif
     if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
@@ -3258,7 +3284,7 @@ unsigned char buf[4];
       if (pOBD->bBitBang)
           SPI_BitBang(pOBD, &c, 1, pOBD->iMOSIPin, pOBD->iCLKPin);
       else
-          SPI.transfer(c);
+          mySPI->transfer(c);
 #endif
       if (pOBD->iCSPin != 0xff)
           digitalWrite(pOBD->iCSPin, HIGH);
@@ -3644,7 +3670,7 @@ if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
           if (pOBD->bBitBang) // Bit Bang
             SPI_BitBang(pOBD, ucBuf, iLen, pOBD->iMOSIPin, pOBD->iCLKPin);
           else
-            SPI.transfer(ucBuf, iLen);
+            mySPI->transfer(ucBuf, iLen);
 #endif // _LINUX_
         if (pOBD->iCSPin != 0xff)
           digitalWrite(pOBD->iCSPin, HIGH);
