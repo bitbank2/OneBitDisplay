@@ -29,11 +29,18 @@ void setup() {
   lcd.println("Pico-OLED");
   lcd.println("Demo");
   lcd.display(); // update
-  delay(3000);
 } /* setup() */
 
 void loop() {
 int i;
+ for (i=0; i<2047; i++) {
+  int x, y;
+  x = rand() & 127;
+  y = rand() & 63;
+  lcd.drawPixel(x, y, 1);
+  if ((i & 3) == 3)
+     lcd.display();
+ }
  lcd.setFont(FONT_6x8);
  lcd.setScroll(true);
  lcd.fillScreen(0);

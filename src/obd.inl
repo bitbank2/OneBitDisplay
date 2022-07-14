@@ -1277,11 +1277,10 @@ int iLen;
         pOBD->bbi2c.file_i2c = AIOOpenSPI(SPI_BUS_NUMBER, iSpeed);
 #else
 #ifdef ARDUINO_ARCH_RP2040
-        if (iMOSI != -1) {
-            mySPI = new MbedSPI(-1,iMOSI,iCLK);
-        } else { // use default pins
-            mySPI->begin();
+        if (iMOSI == -1 || iMOSI == 0xff) {
+            iMOSI = MOSI; iCLK = SCK; // use the default pins
         }
+        mySPI = new MbedSPI(-1,iMOSI,iCLK);
 #endif
         mySPI->begin();
         mySPI->beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
