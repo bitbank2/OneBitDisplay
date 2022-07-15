@@ -233,6 +233,7 @@ class ONE_BIT_DISPLAY : public Print
     void setBB(BBI2C *pBB);
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
+    void setPower(bool bOn);
     void display(void);
     void displayPartial();
     void setBitBang(bool bBitBang);
