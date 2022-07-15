@@ -97,6 +97,11 @@ void ONE_BIT_DISPLAY::setContrast(uint8_t ucContrast)
   obdSetContrast(&_obd, ucContrast);
 }
 
+void ONE_BIT_DISPLAY::setPower(bool bOn)
+{
+  obdPower(&_obd, bOn);
+}
+
 int ONE_BIT_DISPLAY::I2Cbegin(int iType, int iAddr, int32_t iSpeed)
 {
   return obdI2CInit(&_obd, iType, iAddr, _obd.flip, _obd.invert, !_obd.bBitBang, _obd.iSDAPin, _obd.iSCLPin, _obd.iRSTPin, iSpeed);
