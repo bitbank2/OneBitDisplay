@@ -47,7 +47,7 @@ rc = obdI2CInit(&obd, MY_OLED, OLED_ADDR, FLIP180, INVERT, USE_HW_I2C, GROVE_SDA
   if (rc != OLED_NOT_FOUND)
   {
     obdFill(&obd, 0, 1);
-    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_NORMAL, 0, 1);
+    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_8x8, 0, 1);
     delay(2000);
   }
   else
@@ -66,7 +66,7 @@ void loop() {
 
 #ifdef DRAW_ELLIPSES
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Ellipses", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Ellipses", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd, 0, 1);
   for (i=0; i<100; i++)
@@ -79,7 +79,7 @@ void loop() {
     obdDumpBuffer(&obd, NULL);    
   }
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Ellipses", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Ellipses", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd, 0, 1);
   for (i=0; i<100; i++)
@@ -96,7 +96,7 @@ void loop() {
 
 #ifdef DRAW_RECTS
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Rectangles", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Rectangles", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd, 0, 1);
   for (i=0; i<100; i++)
@@ -109,7 +109,7 @@ void loop() {
     obdDumpBuffer(&obd, NULL);
   }
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Rects", FONT_NORMAL, 0, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Rects", FONT_8x8, 0, 1);
   delay(2000);
   obdFill(&obd, 0, 1);
   for (i=0; i<100; i++)

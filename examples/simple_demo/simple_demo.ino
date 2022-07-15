@@ -60,7 +60,7 @@ rc = obdI2CInit(&obd, MY_OLED, OLED_ADDR, FLIP180, INVERT, USE_HW_I2C, SDA_PIN, 
   {
     char *msgs[] = {(char *)"SSD1306 @ 0x3C", (char *)"SSD1306 @ 0x3D",(char *)"SH1106 @ 0x3C",(char *)"SH1106 @ 0x3D"};
     obdFill(&obd, 0, 1);
-    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_NORMAL, 0, 1);
+    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_8x8, 0, 1);
     obdSetBackBuffer(&obd, ucBackBuffer);
     delay(2000);
   }
@@ -73,16 +73,16 @@ char szTemp[32];
 unsigned long ms;
 
   obdFill(&obd, 0x0, 1);
-  obdWriteString(&obd, 0,28,0,(char *)"OLED Demo", FONT_NORMAL, 0, 1);
-  obdWriteString(&obd, 0,0,1,(char *)"Written by Larry Bank", FONT_SMALL, 1, 1);
-  obdWriteString(&obd, 0,0,3,(char *)"**Demo**", FONT_LARGE, 0, 1);
+  obdWriteString(&obd, 0,28,0,(char *)"OLED Demo", FONT_8x8, 0, 1);
+  obdWriteString(&obd, 0,0,1,(char *)"Written by Larry Bank", FONT_6x8, 1, 1);
+  obdWriteString(&obd, 0,0,3,(char *)"**Demo**", FONT_16x32, 0, 1);
   delay(2000);
   
  // Pixel and line functions won't work without a back buffer
 #ifdef USE_BACKBUFFER
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0,0,0,(char *)"Backbuffer Test", FONT_NORMAL,0,1);
-  obdWriteString(&obd, 0,0,1,(char *)"3000 Random dots", FONT_NORMAL,0,1);
+  obdWriteString(&obd, 0,0,0,(char *)"Backbuffer Test", FONT_8x8,0,1);
+  obdWriteString(&obd, 0,0,1,(char *)"3000 Random dots", FONT_8x8,0,1);
   delay(2000);
   obdFill(&obd, 0,1);
   ms = millis();
@@ -94,8 +94,8 @@ unsigned long ms;
   }
   ms = millis() - ms;
   sprintf(szTemp, "%dms", (int)ms);
-  obdWriteString(&obd, 0,0,0,szTemp, FONT_NORMAL, 0, 1);
-  obdWriteString(&obd, 0,0,1,(char *)"Without backbuffer", FONT_SMALL,0,1);
+  obdWriteString(&obd, 0,0,0,szTemp, FONT_8x8, 0, 1);
+  obdWriteString(&obd, 0,0,1,(char *)"Without backbuffer", FONT_6x8,0,1);
   delay(2000);
   obdFill(&obd, 0,1);
   ms = millis();
@@ -108,12 +108,12 @@ unsigned long ms;
   obdDumpBuffer(&obd, NULL);
   ms = millis() - ms;
   sprintf(szTemp, "%dms", (int)ms);
-  obdWriteString(&obd, 0,0,0,szTemp, FONT_NORMAL, 0, 1);
-  obdWriteString(&obd, 0,0,1,(char *)"With backbuffer", FONT_SMALL,0,1);
+  obdWriteString(&obd, 0,0,0,szTemp, FONT_8x8, 0, 1);
+  obdWriteString(&obd, 0,0,1,(char *)"With backbuffer", FONT_6x8,0,1);
   delay(2000);
   obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0,0,0,(char *)"Backbuffer Test", FONT_NORMAL,0,1);
-  obdWriteString(&obd, 0,0,1,(char *)"96 lines", FONT_NORMAL,0,1);
+  obdWriteString(&obd, 0,0,0,(char *)"Backbuffer Test", FONT_8x8,0,1);
+  obdWriteString(&obd, 0,0,1,(char *)"96 lines", FONT_8x8,0,1);
   delay(2000);
   ms = millis();
   for (x=0; x<OLED_WIDTH-1; x+=2)
@@ -126,8 +126,8 @@ unsigned long ms;
   }
   ms = millis() - ms;
   sprintf(szTemp, "%dms", (int)ms);
-  obdWriteString(&obd, 0,0,0,szTemp, FONT_NORMAL, 0, 1);
-  obdWriteString(&obd, 0,0,1,(char *)"Without backbuffer", FONT_SMALL,0,1);
+  obdWriteString(&obd, 0,0,0,szTemp, FONT_8x8, 0, 1);
+  obdWriteString(&obd, 0,0,1,(char *)"Without backbuffer", FONT_6x8,0,1);
   delay(2000);
   obdFill(&obd, 0,1);
   ms = millis();
@@ -142,8 +142,8 @@ unsigned long ms;
   obdDumpBuffer(&obd, ucBackBuffer);
   ms = millis() - ms;
   sprintf(szTemp, "%dms", (int)ms);
-  obdWriteString(&obd, 0,0,0,szTemp, FONT_NORMAL, 0, 1);
-  obdWriteString(&obd, 0,0,1,(char *)"With backbuffer", FONT_SMALL,0,1);
+  obdWriteString(&obd, 0,0,0,szTemp, FONT_8x8, 0, 1);
+  obdWriteString(&obd, 0,0,1,(char *)"With backbuffer", FONT_6x8,0,1);
   delay(2000);
 #endif
 } /* loop() */

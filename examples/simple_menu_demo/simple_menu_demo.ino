@@ -47,7 +47,7 @@ static char *szOnOff[] = {(char *)"Off", (char *)"On"};
 #define MY_OLED OLED_128x64
 uint8_t ucBackBuffer[1024];
 
-// The diisplay structure. Each structure is about 56 bytes
+// The display structure. Each structure is about 56 bytes
 // There is no limit to the number of simultaneous displays which can be controlled by OneBitDisplay 
 OBDISP obd;
 
@@ -71,7 +71,7 @@ int rc;
   if (rc != OLED_NOT_FOUND)
   {
     obdFill(&obd, 0, 1);
-    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_NORMAL, 0, 1);
+    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_8x8, 0, 1);
     delay(2000);
   }
   else
@@ -94,7 +94,7 @@ void loop() {
 //int menuInit(OBDISP *pOBD, SIMPLEMENU *sm, char **pText, int iFontSize, int bCenter, int btnUp, int btnDn, int btnEnter, int iPressedState, int bIsRotary)
 // Initialize the menu with a single button. In this mode, a quick press advances the position and a long press
 // takes 'action' on the currently selected item
-  obdMenuInit(&obd, &sm, menu1, FONT_NORMAL, 0, ENTER_BUTTON, -1, -1, BUTTON_ACTIVE, false);
+  obdMenuInit(&obd, &sm, menu1, FONT_8x8, 0, ENTER_BUTTON, -1, -1, BUTTON_ACTIVE, false);
   obdMenuSetCallback(&sm, myCallback);
   obdMenuShow(&sm, -1); // display the whole menu
   while (1) {

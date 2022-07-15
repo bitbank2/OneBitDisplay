@@ -53,7 +53,7 @@ rc = obdI2CInit(&obd, MY_OLED, OLED_ADDR, FLIP180, INVERT, USE_HW_I2C, SDA_PIN, 
   {
     char *msgs[] = {(char *)"SSD1306 @ 0x3C", (char *)"SSD1306 @ 0x3D",(char *)"SH1106 @ 0x3C",(char *)"SH1106 @ 0x3D"};
     obdFill(&obd, 0, 1);
-    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_NORMAL, 0, 1);
+    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_8x8, 0, 1);
     obdSetBackBuffer(&obd, ucBackBuffer);
     delay(2000);
   }
@@ -71,7 +71,7 @@ unsigned long ms;
     ms = micros() - ms;
     obdDumpBuffer(&obd, NULL);
     sprintf(szTemp, "rendered in %d us", (int)ms);
-    obdWriteString(&obd, 0,0,7,szTemp, FONT_SMALL, 0, 1);
+    obdWriteString(&obd, 0,0,7,szTemp, FONT_6x8, 0, 1);
     delay(4000);
     
   for (y=-30; y<80; y++)
