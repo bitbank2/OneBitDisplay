@@ -86,8 +86,14 @@ void ONE_BIT_DISPLAY::setBitBang(bool bBitBang)
 {
     _obd.bBitBang = bBitBang;
 }
+void ONE_BIT_DISPLAY::setPower(bool bOn)
+{
+    obdPower(&_obd, bOn);
+} /* setPower() */
+
 void ONE_BIT_DISPLAY::setFlags(int iFlags)
 {
+    _obd.iFlags = iFlags;
     _obd.invert = iFlags & OBD_INVERTED;
     _obd.flip = iFlags & OBD_FLIP180;
 }
@@ -95,11 +101,6 @@ void ONE_BIT_DISPLAY::setFlags(int iFlags)
 void ONE_BIT_DISPLAY::setContrast(uint8_t ucContrast)
 {
   obdSetContrast(&_obd, ucContrast);
-}
-
-void ONE_BIT_DISPLAY::setPower(bool bOn)
-{
-  obdPower(&_obd, bOn);
 }
 
 int ONE_BIT_DISPLAY::I2Cbegin(int iType, int iAddr, int32_t iSpeed)

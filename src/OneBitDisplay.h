@@ -29,6 +29,7 @@ enum {
    FONT_CUSTOM2,
    FONT_COUNT
 };
+
 // For backwards compatibility, keep the old names valid
 #define FONT_NORMAL FONT_8x8
 #define FONT_SMALL FONT_6x8
@@ -58,16 +59,21 @@ enum {
   LCD_ST7302,
   EPD42_400x300,
   EPD29_128x296,
+  EPD292_128x296,
   EPD213_104x212,
   EPD213_122x250,
   EPD154_152x152,
   EPD154_200x200,
+  EPD102_80x128,
   LCD_COUNT
 };
 
 #define OBD_INVERTED 1
 #define OBD_FLIP180 2
-#define OBD_BITBANG 4
+#define OBD_FLIPV 4
+#define OBD_FLIPH 8
+#define OBD_BITBANG 16
+
 
 #define OLED_BLACK 0x00
 #define OLED_WHITE 0xff
@@ -203,7 +209,7 @@ int width, height, native_width, native_height;
 uint8_t bScroll;
 int iScreenOffset, iOrientation;
 int iFG, iBG; //current color
-int iFont;
+int iFont, iFlags;
 uint32_t iSpeed;
 GFXfont *pFreeFont;
 void *pFont[3]; // up to 3 custom font pointers
@@ -233,7 +239,6 @@ class ONE_BIT_DISPLAY : public Print
     void setBB(BBI2C *pBB);
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
-    void setPower(bool bOn);
     void display(void);
     void displayPartial();
     void setBitBang(bool bBitBang);
@@ -251,6 +256,7 @@ class ONE_BIT_DISPLAY : public Print
     void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void setTextColor(int iFG, int iBG = -1);
     void setCursor(int x, int y);
+    void setPower(bool bOn);
     int loadBMP(uint8_t *pBMP, int x, int y, int bInvert);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
