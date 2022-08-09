@@ -117,6 +117,8 @@ bool ONE_BIT_DISPLAY::allocBuffer(void)
 {
     int iSize = _obd.width * ((_obd.height+7)>>3);
     _obd.ucScreen = (uint8_t *)malloc(iSize);
+    if (_obd.iFlags & OBD_3COLOR)
+        iSize *= 2; // 2 bit planes
     if (_obd.ucScreen != NULL) {
         _obd.render = false; // draw into RAM only
         return 1;

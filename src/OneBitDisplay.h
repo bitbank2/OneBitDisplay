@@ -60,7 +60,7 @@ enum {
   LCD_ST7302,
   EPD42_400x300,
   EPD29_128x296,
-  EPD292_128x296,
+  EPD29R_128x296,
   EPD293_128x296,
   EPD213_104x212,
   EPD213_122x250,
@@ -75,10 +75,12 @@ enum {
 #define OBD_FLIPV 4
 #define OBD_FLIPH 8
 #define OBD_BITBANG 16
+#define OBD_3COLOR 32
 
 
-#define OLED_BLACK 0x00
-#define OLED_WHITE 0xff
+#define OBD_WHITE 0
+#define OBD_BLACK 1
+#define OBD_RED 2
 
 #define OBD_ANY_ADDRESS -1
 // Rotation and flip angles to draw tiles

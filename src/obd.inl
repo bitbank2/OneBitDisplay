@@ -43,7 +43,7 @@ SPIClass *mySPI = &SPI;
 void _delay(int iDelay);
 static void EPDWaitBusy(OBDISP *pOBD);
 static void EPDSleep(OBDISP *pOBD);
-static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, int x, int y, int w, int h);
+static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, int x, int y, int w, int h, int bRed);
 void EPD213_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
 void EPD154_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
 void EPD213_CMD(OBDISP *pOBD, uint8_t cmd, uint8_t param);
@@ -182,20 +182,35 @@ const uint8_t epd29_init_sequence_full[] = {
 
 // initialization sequence for 1.02" 80x128 e-paper
 const uint8_t epd102_init_sequence_full[] = {
-    0x02, 0xd2, 0x3f,
-    0x02, 0x00, 0x6f,
-    0x05, 0x01, 0x03, 0x00, 0x2b, 0x2b, // power setting
-    0x02, 0x06, 0x3f, // charge pump
+    0x02, 0x00, 0x5f,
     0x03, 0x2a, 0x00, 0x00, // xon and lut options
-    0x02, 0x30, 0x17, // clock 50hz
-    0x02, 0x50, 0x57, // VCOM
-    0x02, 0x60, 0x22, // gate and source
-    0x03, 0x61, 0x50, 0x80, // resolution
-    0x02, 0x82, 0x12, // vcom dc
-    0x02, 0xe3, 0x33, // power saving
+    0x01, 0x04, // power on
+    BUSY_WAIT,
+    0x02, 0x50, 0x97, // VCOM
     0x00 // end of table
 };
 
+const uint8_t epd29r_init_sequence[] = {
+    0x01, 0x12, // soft reset
+    BUSY_WAIT,
+    0x02, 0x74, 0x54, // set analog block control
+    0x02, 0x7e, 0x3b, // set digital block control
+    0x03, 0x2b, 0x04, 0x63, // ACVCOM
+    0x05, 0x0c, 0x8f, 0x8f, 0x8f, 0x3f, // Softstart
+    0x04, 0x01, 0x27, 0x01, 0x00, // output control
+    0x02, 0x11, 0x03, // data entry mode
+    0x03, 0x44, 0x00, 0x0f, // RAM X start/end
+    0x05, 0x45, 0,0,0x27, 0x01, // RAM Y start/end
+    0x02, 0x3c, 0x01, // border (0=bk,1=wh,2=red)
+    0x02, 0x18, 0x80, // temp sensor = internal
+    0x02, 0x21, 0x00, // display update ctrl 1
+    0x02, 0x22, 0xb1, // display update ctrl 2
+    0x01, 0x20, // master activation
+    BUSY_WAIT,
+    0x02, 0x4e, 0x00, // RAM X counter
+    0x03, 0x4f, 0x27, 0x01, // RAM Y counter
+    0x00
+};
 const uint8_t epd29_init_sequence_partial[] = {
     0x02, UC8151_PSR, 0x80 | 0x20 | 0x10 | 0x00 | 0x02 | 0x01, // RES_128x296, LUT_REG, FORMAT_BW, SHIFT_LEFT, BOOSTER_ON, RESET_NONE
     0x06, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x03,
@@ -1246,6 +1261,10 @@ const uint8_t lut154_partial_update[] =
     0x22,0x22,0x22,0x22,0x22,0x22,0x0,0x0,0x0
 };
 
+void EPD29R_Init(OBDISP *pOBD)
+{
+} /* EPD29R_Init() */
+
 void EPD213_Init(OBDISP *pOBD)
 {
 uint8_t ucLine[8];
@@ -1437,27 +1456,30 @@ else
       pOBD->can_flip = 0;
       return; // nothing else to do yet
   }
-  else if (iType == EPD213_122x250 || iType == EPD292_128x296)
+  else if (iType == EPD213_122x250)
   {
-      if (iType == EPD213_122x250) {
-          pOBD->native_width = pOBD->width = 122;
-          pOBD->native_height = pOBD->height = 250;
-      } else { // larger panel, same controller
-          pOBD->native_width = pOBD->width = 128;
-          pOBD->native_height = pOBD->height = 296;
-          pOBD->type = iType = EPD213_122x250; // force it to use this logic
-      }
-      pOBD->can_flip = 0;
-      pOBD->busy_idle = LOW;
-      EPD213_Init(pOBD);
-      return;
+        pOBD->native_width = pOBD->width = 122;
+        pOBD->native_height = pOBD->height = 250;
+        pOBD->can_flip = 0;
+        pOBD->busy_idle = LOW;
+        EPD213_Init(pOBD);
+  }
+  else if (iType == EPD29R_128x296)
+  { // BLACK/WHITE/RED
+        pOBD->native_width = pOBD->width = 128;
+        pOBD->native_height = pOBD->height = 296;
+        pOBD->iFlags |= OBD_3COLOR;
+        pOBD->can_flip = 0;
+        pOBD->busy_idle = LOW;
+        EPD29R_Init(pOBD);
+        return;
   }
   else if (iType == EPD102_80x128)
   {
       pOBD->native_width = pOBD->width = 80;
       pOBD->native_height = pOBD->height = 128;
       pOBD->can_flip = 0; // flip display commands don't exist
-      pOBD->busy_idle = LOW;
+      pOBD->busy_idle = HIGH;
       return;
   }
   else if (iType == EPD213_104x212)
@@ -2184,6 +2206,7 @@ uint8_t ucTemp[8];
     _delay(10);
   }
     if (pOBD->type == EPD102_80x128) {
+        return; // DEBUG
         EPD213_CMD(pOBD, UC8151_PSR, 0x5f); // panel setting
         obdWriteCommand(pOBD, 0x2a); // POWER SETTING
         ucTemp[0] = 0x00;   // VDS_EN, VDG_EN internal
@@ -2194,6 +2217,8 @@ uint8_t ucTemp[8];
         EPD213_CMD(pOBD, UC8151_CDI, 0x97); // VCOM AND DATA INTERVAL SETTING
         return;
     }
+    if (pOBD->type == EPD29R_128x296) return;
+    
   obdWriteCommand(pOBD, UC8151_PWR); // POWER SETTING
   ucTemp[0] = 0x03;   // VDS_EN, VDG_EN internal
   ucTemp[1] = 0x00;   // VCOM_HV, VGHL_LV=16V
@@ -2228,6 +2253,10 @@ static void EPDSleep(OBDISP *pOBD)
 
     if (pOBD->type == EPD29_128x296) {
         obdWriteCommand(pOBD, UC8151_POF); // power off
+        return;
+    }
+    if (pOBD->type == EPD29R_128x296) {
+        EPD213_CMD(pOBD, 0x10, 0x01); // deep sleep
         return;
     }
     if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) {
@@ -2354,15 +2383,15 @@ static void EPDDumpPartial(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, 
 
     if (pOBD->type == EPD29_128x296) {
         EPD29_Begin(pOBD, x, y, w, h, true);
-        EPDWriteImage(pOBD, UC8151_DTM2, x, y, w, h);
+        EPDWriteImage(pOBD, UC8151_DTM2, x, y, w, h, 0);
         EPD29_Finish(pOBD, true);
     } else if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
         EPD213_Begin(pOBD, x, y, w, h, true);
-        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, x, y, w, h);
+        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, x, y, w, h, 0);
         EPD154_Finish(pOBD, true);
     } else if (pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) {
         EPD154_Begin(pOBD, x, y, w, h, true);
-        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, x, y, w, h);
+        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, x, y, w, h, 0);
         EPD154_Finish(pOBD, true);
     }
     EPDSleep(pOBD);
@@ -2506,14 +2535,18 @@ uint8_t ucLine[16];
 //
 // Write EPD Image data
 //
-static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, int x, int y, int w, int h)
+static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, int x, int y, int w, int h, int bRed)
 {
 uint8_t ucLine[128]; // send the data one line at a time
 int tx, ty;
 uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
-uint8_t *pBuffer;
+uint8_t *pBuffer, ucInvert = 0;
     
     pBuffer = pOBD->ucScreen;
+    if (bRed) {// use second bit plane
+        pBuffer += pOBD->width * ((pOBD->height+7)/8);
+        ucInvert = 0xff; // red logic is inverted
+    }
     obdWriteCommand(pOBD, ucCMD); // start write
   // Convert the bit direction and write the data to the EPD
   if (pOBD->iOrientation == 180) {
@@ -2528,7 +2561,7 @@ uint8_t *pBuffer;
            uc &= ~ucDstMask;
         ucDstMask >>= 1;
         if (ucDstMask == 0) {
-           *d++ = uc;
+           *d++ = (uc ^ ucInvert);
            uc = 0xff;
            ucDstMask = 0x80;
         }
@@ -2548,12 +2581,12 @@ uint8_t *pBuffer;
                uc &= ~ucDstMask;
             ucDstMask >>= 1;
             if (ucDstMask == 0) { // completed byte
-               *d++ = uc;
+               *d++ = (uc ^ ucInvert);
                uc = 0xff;
                ucDstMask = 0x80;
             }
          } // for tx
-        *d++ = uc; // store final partial byte
+        *d++ = (uc ^ ucInvert); // store final partial byte
          RawWriteData(pOBD, ucLine, (w+7)/8);
       } // for ty
   } else if (pOBD->iOrientation == 90) {
@@ -2569,14 +2602,14 @@ uint8_t *pBuffer;
         ucDstMask >>= 1;
         ucSrcMask >>= 1;
             if (ucDstMask == 0) {
-               *d++ = uc;
+               *d++ = (uc ^ ucInvert);
            ucDstMask = 0x80;
            uc = 0xff;
         }
         if (ucSrcMask == 0)
            ucSrcMask = 0x80; // bottom up
      } // for ty
-      *d++ = uc; // store final partial byte
+      *d++ = (uc ^ ucInvert); // store final partial byte
          RawWriteData(pOBD, ucLine, (h+7)/8);
       } // for tx
   } else if (pOBD->iOrientation == 270) {
@@ -2592,14 +2625,14 @@ uint8_t *pBuffer;
           ucDstMask >>= 1;
           ucSrcMask <<= 1;
           if (ucDstMask == 0) {
-         *d++ = uc;
+         *d++ = (uc ^ ucInvert);
          ucDstMask = 0x80;
          uc = 0xff;
           }
           if (ucSrcMask == 0)
          ucSrcMask = 1;
       } // for ty
-      *d++ = uc; // store final partial byte
+      *d++ = (uc ^ ucInvert); // store final partial byte
       RawWriteData(pOBD, ucLine, (h+7)/8);
       } // for x
   } // 270
@@ -2674,6 +2707,17 @@ void EPD293_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
     }
 } /* EPD293_Begin() */
 
+void EPD29R_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
+{
+//    uint8_t ucLine[128];
+        
+        if (bPartial) {
+            EPDSendCMDSequence(pOBD, epd29_init_sequence_partial);
+        } else {
+            EPDSendCMDSequence(pOBD, epd29r_init_sequence);
+        }
+} /* EPD29R_Begin() */
+
 void EPD102_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 {
     uint8_t ucLine[128];
@@ -2693,6 +2737,7 @@ void EPD102_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
             RawWriteData(pOBD, ucLine, 7); // boundaries
         } else {
             EPDSendCMDSequence(pOBD, epd102_init_sequence_full);
+            return;
             // send LUTs
             obdWriteCommand(pOBD, UC8151_LUT_WB);
             memcpy_P(ucLine, epd102_lut_w_full, sizeof(epd102_lut_w_full));
@@ -2714,40 +2759,61 @@ static void EPDDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
   EPDWakeUp(pOBD);
     if (pOBD->type == EPD293_128x296) {
         EPD293_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-        EPDWriteImage(pOBD, 0x10, 0, 0, pOBD->width, pOBD->height);
+        EPDWriteImage(pOBD, 0x10, 0, 0, pOBD->width, pOBD->height, 0);
         obdWriteCommand(pOBD, 0x92); // ??
-        EPDWriteImage(pOBD, 0x13, 0, 0, pOBD->width, pOBD->height);
+        EPDWriteImage(pOBD, 0x13, 0, 0, pOBD->width, pOBD->height, 0);
         obdWriteCommand(pOBD, 0x92); // ??
         obdWriteCommand(pOBD, 0x12); // start display refresh
         _delay(10); // needed
         return;
     }
     if (pOBD->type == EPD102_80x128) {
+//        Serial.println("starting epd102");
         EPD102_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-        EPDWriteImage(pOBD, UC8151_DTM1, 0, 0, pOBD->width, pOBD->height);
-        EPDWriteImage(pOBD, UC8151_DTM2, 0, 0, pOBD->width, pOBD->height); // send image to current and previous buffers
-        obdWriteCommand(pOBD, UC8151_DSP); // stop data
-        obdWriteCommand(pOBD, UC8151_DRF); // start display refresh
+//        EPDWriteImage(pOBD, 0x10, 0, 0, pOBD->width, pOBD->height, 0);
+        obdWriteCommand(pOBD, 0x10);
+        uint8_t uc = 0xff;
+        for (int i=0; i<10*128*2; i++) {
+            RawWriteData(pOBD, &uc, 1);
+        }
+        obdWriteCommand(pOBD, 0x13);
+        for (int i=0; i<10*128; i++) {
+            RawWriteData(pOBD, &uc, 1);
+        }
+//        EPDWriteImage(pOBD, 0x13, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
+        obdWriteCommand(pOBD, 0x12); // refresh
         _delay(10); // needed
     }
   if (pOBD->type == EPD29_128x296) {
       EPD29_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-      EPDWriteImage(pOBD, UC8151_DTM2, 0, 0, pOBD->width, pOBD->height); // send buffer
+      EPDWriteImage(pOBD, UC8151_DTM2, 0, 0, pOBD->width, pOBD->height, 0); // send buffer
       EPD29_Finish(pOBD, false);
   }
     if (pOBD->type == EPD42_400x300) {
-        EPDWriteImage(pOBD, UC8151_DTM2, 0, 0, pOBD->width, pOBD->height);
+        EPDWriteImage(pOBD, UC8151_DTM2, 0, 0, pOBD->width, pOBD->height, 0);
         obdWriteCommand(pOBD, UC8151_DRF);
+    }
+    if (pOBD->type == EPD29R_128x296) { // BLACK/WHITE/RED
+        uint8_t ucTemp[4];
+        EPD29R_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
+        EPDWriteImage(pOBD, 0x26, 0, 0, pOBD->width, pOBD->height, 1); // red plane
+        EPD213_CMD(pOBD, 0x4e, 0x00); // RAM X counter
+        obdWriteCommand(pOBD, 0x4f);
+        ucTemp[0] = 0x27; ucTemp[1] = 0x01;
+        RawWriteData(pOBD, ucTemp, 2);
+        EPDWriteImage(pOBD, 0x24, 0, 0, pOBD->width, pOBD->height, 0); // black/white plane
+        EPD213_CMD(pOBD, 0x22, 0xc7); // update control
+        obdWriteCommand(pOBD, 0x20); // master activation
     }
     if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
         EPD213_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, 0, 0, pOBD->width, pOBD->height);
-        EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, 0, 0, pOBD->width, pOBD->height); // send image to current and previous buffers
+        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, 0, 0, pOBD->width, pOBD->height, 0);
+        EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
         EPD154_Finish(pOBD, false);
     } else if (pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152) {
         EPD154_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false); // x, y, w, h
-        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, 0, 0, pOBD->width, pOBD->height);
-        EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, 0, 0, pOBD->width, pOBD->height); // send image to current and previous buffers
+        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, 0, 0, pOBD->width, pOBD->height, 0);
+        EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
         EPD154_Finish(pOBD, false);
     }
   EPDWaitBusy(pOBD);
@@ -2989,7 +3055,7 @@ int iLines;
   if (pBuffer == NULL)
     return; // no backbuffer and no provided buffer
   
-  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_128x296 || pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152 || pOBD->type == EPD102_80x128 || pOBD->type == EPD293_128x296)
+  if (pOBD->type == EPD42_400x300 || pOBD->type == EPD29_128x296 || pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250 || pOBD->type == EPD154_200x200 || pOBD->type == EPD154_152x152 || pOBD->type == EPD102_80x128 || pOBD->type == EPD293_128x296 || pOBD->type == EPD29R_128x296)
   {
      EPDDumpBuffer(pOBD, pBuffer);
      return;
@@ -3926,14 +3992,17 @@ void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender
 {
 unsigned char ucTemp[196];
 int iPitch, iBufferSize;
-
+int iRedOffset = 0;
+    
   iPitch = pOBD->width;
   iBufferSize = iPitch * ((pOBD->height+7) / 8);
-
+    if (pOBD->iFG == OBD_RED) {
+        iRedOffset = pOBD->width * ((pOBD->height+7)/8);
+    }
 // Keep a copy in local buffer
 if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= iBufferSize)
 {
-  memcpy(&pOBD->ucScreen[pOBD->iScreenOffset], ucBuf, iLen);
+  memcpy(&pOBD->ucScreen[iRedOffset + pOBD->iScreenOffset], ucBuf, iLen);
   pOBD->iScreenOffset += iLen;
   // wrap around ?
   if (pOBD->iScreenOffset >= iBufferSize)
@@ -4476,7 +4545,7 @@ uint8_t c, uc, color, *d;
 const uint8_t *s;
 uint8_t ucTemp[16];
 int tx, ty, bit, iFontOff;
-int iPitch;
+int iPitch, iRedOffset = 0;
 int iFontWidth;
 
    if (iXScale == 0 || iYScale == 0 || szMsg == NULL || pOBD == NULL || pOBD->ucScreen == NULL || x < 0 || y < 0 || x >= pOBD->width-1 || y >= pOBD->height-1)
@@ -4486,6 +4555,10 @@ int iFontWidth;
    iFontWidth = (iSize == FONT_6x8) ? 6:8;
    s = (iSize == FONT_6x8) ? ucSmallFont : ucFont;
    iPitch = pOBD->width;
+    if (pOBD->iFG == OBD_RED) {
+        // use the second half of the image buffer
+        iRedOffset = pOBD->width * ((pOBD->height+7)/8);
+    }
    dx = (iFontWidth * iXScale) >> 8; // width of each character
    dy = (8 * iYScale) >> 8; // height of each character
    sx = 65536 / iXScale; // turn the scale into an accumulator value
@@ -4525,7 +4598,7 @@ int iFontWidth;
             } // switch on rotation direction
             // plot the pixel if it's within the image boundaries
             if (nx >= 0 && ny >= 0 && nx < pOBD->width && ny < pOBD->height) {
-               d = &pOBD->ucScreen[(ny >> 3) * iPitch + nx];
+               d = &pOBD->ucScreen[(ny >> 3) * iPitch + nx + iRedOffset];
                if (color)
                   d[0] |= (1 << (ny & 7));
                else
@@ -4937,7 +5010,7 @@ unsigned int c;
 uint8_t *s, *d, bits, ucMask, ucClr, uc;
 GFXfont font;
 GFXglyph glyph, *pGlyph;
-int iPitch;
+int iPitch, iRedOffset = 0;
  
    if (pOBD == NULL || pFont == NULL || pOBD->ucScreen == NULL)
       return -1;
@@ -4945,6 +5018,10 @@ int iPitch;
         x = pOBD->iCursorX;
     if (y == -1)
         y = pOBD->iCursorY;
+    if (ucColor == OBD_RED) {
+        // use the second half of the image buffer
+        iRedOffset = pOBD->width * ((pOBD->height+7)/8);
+    }
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
       uint8_t *d = pOBD->ucScreen;
       dx = (int)strlen(szMsg);
@@ -4990,7 +5067,7 @@ int iPitch;
       for (ty=dy; ty<end_y && ty < pOBD->height; ty++) {
          ucMask = 1<<(ty & 7); // destination bit number for this line
          ucClr = (ucColor) ? ucMask : 0;
-         d = &pOBD->ucScreen[(ty >> 3) * iPitch + dx]; // internal buffer dest
+         d = &pOBD->ucScreen[iRedOffset + (ty >> 3) * iPitch + dx]; // internal buffer dest
          for (tx=0; tx<pGlyph->width; tx++) {
             if (uc == 0) { // need to read more font data
                tx += bits; // skip any remaining 0 bits
@@ -5010,7 +5087,7 @@ int iPitch;
                   // need to recalculate mask and offset in case Y changed
                   ucMask = 1<<(ty & 7); // destination bit number for this line
                   ucClr = (ucColor) ? ucMask : 0;
-                  d = &pOBD->ucScreen[(ty >> 3) * iPitch + dx]; // internal buffer dest
+                  d = &pOBD->ucScreen[iRedOffset + (ty >> 3) * iPitch + dx]; // internal buffer dest
                }
             } // if we ran out of bits
             if (uc & 0x80 && (dx+tx) < pOBD->width) { // set pixel
@@ -5072,8 +5149,11 @@ uint8_t iCols, iLines;
   pOBD->iCursorX = pOBD->iCursorY = 0;
   if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168) // pure memory, handle it differently
   {
-     if (pOBD->ucScreen)
-        memset(pOBD->ucScreen, ucData, pOBD->width * ((pOBD->height+7)/8));
+      if (pOBD->ucScreen) {
+          int iSize = pOBD->width * ((pOBD->height+7)/8);
+          if (pOBD->iFlags & OBD_3COLOR) iSize *= 2;
+        memset(pOBD->ucScreen, ucData, iSize);
+      }
      return;
   }
   if (pOBD->iOrientation == 0 || pOBD->iOrientation == 180) {
@@ -5092,8 +5172,9 @@ uint8_t iCols, iLines;
       obdWriteDataBlock(pOBD, u8Cache, iCols, bRender);
     } // for y
   }
-  if (pOBD->ucScreen)
-    memset(pOBD->ucScreen, ucData, (pOBD->width * pOBD->height)/8);
+    if (pOBD->ucScreen) {
+        memset(pOBD->ucScreen, ucData, (pOBD->width * pOBD->height)/8);
+    }
 } /* obdFill() */
 
 //
@@ -5129,6 +5210,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
   int xinc, yinc;
   int y, x;
   int iPitch = pOBD->width;
+  int iRedOffset = 0;
 
   if (pOBD == NULL) return;
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
@@ -5142,6 +5224,10 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
 
   if (x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 || x1 >= pOBD->width || x2 >= pOBD->width || y1 >= pOBD->height || y2 >= pOBD->height)
      return;
+  if (ucColor == OBD_RED) {
+        // use the second half of the image buffer
+        iRedOffset = pOBD->width * ((pOBD->height+7)/8);
+    }
 
   if(abs(dx) > abs(dy)) {
     // X major case
@@ -5164,7 +5250,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
       dy = -dy;
       yinc = -1;
     }
-    p = pStart = &pOBD->ucScreen[x1 + ((y >> 3) * iPitch)]; // point to current spot in back buffer
+    p = pStart = &pOBD->ucScreen[iRedOffset + x1 + ((y >> 3) * iPitch)]; // point to current spot in back buffer
     mask = 1 << (y & 7); // current bit offset
     for(x=x1; x1 <= x2; x1++) {
       if (ucColor)
@@ -5210,7 +5296,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
       y2 = temp;
     }
 
-    p = &pOBD->ucScreen[x1 + ((y1 >> 3) * iPitch)]; // point to current spot in back buffer
+    p = &pOBD->ucScreen[iRedOffset + x1 + ((y1 >> 3) * iPitch)]; // point to current spot in back buffer
     bOld = bNew = p[0]; // current data at that address
     mask = 1 << (y1 & 7); // current bit offset
     dx = (x2 - x1);
@@ -5271,14 +5357,19 @@ static void DrawScaledPixel(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_
 {
     uint8_t *d, ucMask;
     int iPitch;
+    int iRedOffset = 0;
 
     iPitch = pOBD->width;
+    if (ucColor == OBD_RED) {
+          // use the second half of the image buffer
+          iRedOffset = pOBD->width * ((pOBD->height+7)/8);
+      }
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
     x += iCX; y += iCY;
     if (x < 0 || x >= pOBD->width || y < 0 || y >= pOBD->height)
         return; // off the screen
-    d = &pOBD->ucScreen[((y >> 3)*iPitch) + x];
+    d = &pOBD->ucScreen[iRedOffset + ((y >> 3)*iPitch) + x];
     ucMask = 1 << (y & 7);
     if (ucColor)
         *d |= ucMask;
@@ -5293,7 +5384,12 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
     int iLen, x2;
     uint8_t *d, ucMask;
     int iPitch;
+    int iRedOffset = 0;
 
+    if (ucColor == OBD_RED) {
+          // use the second half of the image buffer
+          iRedOffset = pOBD->width * ((pOBD->height+7)/8);
+      }
     iPitch = pOBD->width;
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
@@ -5305,7 +5401,7 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
     if (x < 0) x = 0;
     if (x2 >= pOBD->width) x2 = pOBD->width-1;
     iLen = x2 - x + 1; // new length
-    d = &pOBD->ucScreen[((y >> 3)*iPitch) + x];
+    d = &pOBD->ucScreen[iRedOffset + ((y >> 3)*iPitch) + x];
     ucMask = 1 << (y & 7);
     if (ucColor) // white
     {
@@ -5403,6 +5499,12 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
     uint8_t *d, ucMask, ucMask2;
     int tmp, iOff;
     int iPitch;
+    int iRedOffset = 0;
+
+    if (ucColor == OBD_RED) {
+          // use the second half of the image buffer
+          iRedOffset = pOBD->width * ((pOBD->height+7)/8);
+      }
 
     if (pOBD == NULL || pOBD->ucScreen == NULL)
         return; // only works with a back buffer
@@ -5439,7 +5541,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
         ucMask = 0xff << (y1 & 7);
         if (iMiddle == 0) // top and bottom lines are in the same row
             ucMask &= (0xff >> (7-(y2 & 7)));
-        d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
+        d = &pOBD->ucScreen[iRedOffset + (y1 >> 3)*iPitch + x1];
         // Draw top
         for (x = x1; x <= x2; x++)
         {
@@ -5454,7 +5556,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
             ucMask = (ucColor) ? 0xff : 0x00;
             for (y=1; y<iMiddle; y++)
             {
-                d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1 + (y*iPitch)];
+                d = &pOBD->ucScreen[iRedOffset + (y1 >> 3)*iPitch + x1 + (y*iPitch)];
                 for (x = x1; x <= x2; x++)
                     *d++ = ucMask;
             }
@@ -5462,7 +5564,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
         if (iMiddle >= 1) // need to draw bottom part
         {
             ucMask = 0xff >> (7-(y2 & 7));
-            d = &pOBD->ucScreen[(y2 >> 3)*iPitch + x1];
+            d = &pOBD->ucScreen[iRedOffset + (y2 >> 3)*iPitch + x1];
             for (x = x1; x <= x2; x++)
             {
                 if (ucColor)
@@ -5475,7 +5577,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
     else // outline
     {
       // see if top and bottom lines are within the same byte rows
-        d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
+        d = &pOBD->ucScreen[iRedOffset + (y1 >> 3)*iPitch + x1];
         if ((y1 >> 3) == (y2 >> 3))
         {
             ucMask2 = 0xff << (y1 & 7);  // L/R end masks
@@ -5526,7 +5628,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
             ucMask = 1 << (y1 & 7);
             ucMask2 = 1 << (y2 & 7);
             x1++;
-            d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
+            d = &pOBD->ucScreen[iRedOffset + (y1 >> 3)*iPitch + x1];
             iOff = (y2 >> 3) - (y1 >> 3);
             iOff *= iPitch;
             for (; x1 < x2; x1++)
