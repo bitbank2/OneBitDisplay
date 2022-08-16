@@ -60,7 +60,9 @@ enum {
   LCD_ST7302,
   EPD42_400x300,
   EPD29_128x296,
+  EPD29B_128x296,
   EPD29R_128x296,
+  EPD154R_152x152,
   EPD293_128x296,
   EPD213_104x212,
   EPD213_122x250,
@@ -70,13 +72,14 @@ enum {
   LCD_COUNT
 };
 
+// flag bits
 #define OBD_INVERTED 1
 #define OBD_FLIP180 2
 #define OBD_FLIPV 4
 #define OBD_FLIPH 8
 #define OBD_BITBANG 16
 #define OBD_3COLOR 32
-
+#define OBD_FULLUPDATE 64
 
 #define OBD_WHITE 0
 #define OBD_BLACK 1
@@ -215,6 +218,7 @@ int iScreenOffset, iOrientation;
 int iFG, iBG; //current color
 int iFont, iFlags;
 uint32_t iSpeed;
+uint32_t iTimeout; // for e-ink panels
 GFXfont *pFreeFont;
 void *pFont[3]; // up to 3 custom font pointers
 uint8_t com_mode; // communication mode (I2C / SPI)
@@ -236,7 +240,7 @@ class ONE_BIT_DISPLAY : public Print
 {
   public:
     ONE_BIT_DISPLAY() { memset(&_obd, 0, sizeof(_obd)); _obd.iFG = 1; _obd.render = 1; _obd.type = OLED_128x64; _obd.iSpeed = 400000;}
-    void SPIbegin(int iType, int32_t iSpeed); 
+    void SPIbegin(int iType = OLED_128x64, int32_t iSpeed = 2000000);
     void setSPIPins(int iCS, int iMOSI, int iSCLK, int iDC, int iReset=-1, int iLED=-1);
     void setI2CPins(int iSDA, int iSCL, int iReset=-1);
     BBI2C *getBB();

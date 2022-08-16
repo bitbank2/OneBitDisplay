@@ -171,7 +171,12 @@ void ONE_BIT_DISPLAY::setTextWrap(bool bWrap)
 
 void ONE_BIT_DISPLAY::setTextColor(int iFG, int iBG)
 {
-  _obd.iFG = iFG;
+    if (iFG > OBD_RED) iFG = OBD_BLACK;
+    if (iBG > OBD_RED) iBG = OBD_BLACK;
+    if ((_obd.iFlags & OBD_3COLOR) == 0) {
+        if (iFG == OBD_RED) iFG = OBD_BLACK; // can't set red color
+        if (iBG == OBD_RED) iBG = OBD_BLACK;
+    }  _obd.iFG = iFG;
   _obd.iBG = (iBG == -1) ? iFG : iBG;
 } /* setTextColor() */
 
