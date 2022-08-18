@@ -249,7 +249,7 @@ class ONE_BIT_DISPLAY : public Print
     void setBB(BBI2C *pBB);
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
-    void display(void);
+    void display(bool bRefresh = true);
     void displayPartial();
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
@@ -263,6 +263,8 @@ class ONE_BIT_DISPLAY : public Print
     void freeBuffer(void);
     void setScroll(bool bScroll);
     void drawPixel(int16_t x, int16_t y, uint16_t color);
+    void drawSprite(uint8_t *pSprite, int cx, int cy, int iPitch, int x, int y, uint8_t iPriority);
+    void drawTile(const uint8_t *pTile, int x, int y, int iRotation, int bInvert, int bRender);
     void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void setTextColor(int iFG, int iBG = -1);
     void setCursor(int x, int y);
@@ -521,6 +523,7 @@ void obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height)
 // Dump an entire custom buffer to the display
 // useful for custom animation effects
 //
+void obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, bool bRefresh);
 void obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
 //
 // Render a window of pixels from a provided buffer or the library's internal buffer

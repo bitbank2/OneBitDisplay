@@ -424,6 +424,14 @@ int16_t ONE_BIT_DISPLAY::height(void)
 {
    return _obd.height;
 }
+void ONE_BIT_DISPLAY::drawSprite(uint8_t *pSprite, int cx, int cy, int iPitch, int x, int y, uint8_t iPriority)
+{
+    obdDrawSprite(&_obd, pSprite, cx, cy, iPitch, x, y, iPriority);
+}
+void ONE_BIT_DISPLAY::drawTile(const uint8_t *pTile, int x, int y, int iRotation, int bInvert, int bRender)
+{
+    obdDrawTile(&_obd, pTile, x, y, iRotation, bInvert, bRender);
+}
 void ONE_BIT_DISPLAY::drawCircle(int32_t x, int32_t y, int32_t r, uint32_t color)
 {
   obdEllipse(&_obd, x, y, r, r, color, 0);
@@ -452,9 +460,9 @@ void ONE_BIT_DISPLAY::displayPartial()
     obdDumpPartial(&_obd, 0, 0, _obd.width, _obd.height);
 }
 
-void ONE_BIT_DISPLAY::display(void)
+void ONE_BIT_DISPLAY::display(bool bRefresh)
 {
-    obdDumpBuffer(&_obd, NULL);
+    obdDumpBuffer_2(&_obd, NULL, bRefresh);
 }
 void ONE_BIT_DISPLAY::setRender(bool bRAMOnly)
 {
