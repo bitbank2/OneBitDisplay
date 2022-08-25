@@ -65,12 +65,14 @@ enum {
   EPD154R_152x152,
   EPD42R_400x300,
   EPD293_128x296,
+  EPD213B_104x212,
   EPD213_104x212,
   EPD213_122x250,
   EPD154_152x152,
   EPD154_200x200,
   EPD27_176x264,
   EPD102_80x128,
+  EPD47_540x960,
   LCD_COUNT
 };
 
@@ -82,6 +84,8 @@ enum {
 #define OBD_BITBANG 16
 #define OBD_3COLOR 32
 #define OBD_FULLUPDATE 64
+#define OBD_CS_EVERY_BYTE 128
+#define OBD_HAS_FAST_UPDATE 256
 
 #define OBD_WHITE 0
 #define OBD_BLACK 1
@@ -250,7 +254,7 @@ class ONE_BIT_DISPLAY : public Print
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
     void display(bool bRefresh = true);
-    void displayPartial();
+    void displayFast();
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
@@ -516,9 +520,10 @@ void obdFill(OBDISP *pOBD, unsigned char ucData, int bRender);
 //
 int obdSetPixel(OBDISP *pOBD, int x, int y, unsigned char ucColor, int bRender);
 //
-// Dump a partial screen to an e-ink display
-//
-void obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height);
+// Dump a screen faster to an e-ink display
+// Not all displays have support for this
+// if not, the slow update will be used
+void obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height);
 //
 // Dump an entire custom buffer to the display
 // useful for custom animation effects
