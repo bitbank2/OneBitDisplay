@@ -31,7 +31,7 @@ int main(int argc, char **argv)
   AIOInitBoard("Raspberry Pi");
   printf("Starting...\n");
   epd.setSPIPins(INKY_CS, -1, -1, INKY_DC, INKY_RES, INKY_BUSY);
-  epd.SPIbegin(EPD213_122x250, EPD_FREQ);
+  epd.SPIbegin(EPD27_176x264, EPD_FREQ);
   epd.setRotation(270);
   epd.allocBuffer();
   epd.fillScreen(0);

@@ -35,11 +35,13 @@ static int digitalRead(int iPin)
 } /* digitalRead() */
 
 #endif // _LINUX_
+#ifndef _LINUX_
 #ifdef ARDUINO_ARCH_RP2040
 MbedSPI *mySPI;
 #else
 SPIClass *mySPI = &SPI;
 #endif
+#endif // !_LINUX_
 void _delay(int iDelay);
 static void EPDWaitBusy(OBDISP *pOBD);
 static void EPDSleep(OBDISP *pOBD);
@@ -2413,11 +2415,11 @@ int iTimeout = 0;
      if (digitalRead(pOBD->iLEDPin) == pOBD->busy_idle)
          break;
      iTimeout += 100;
-     if (iTimeout > pOBD->iTimeout)
+     if (iTimeout > (int)pOBD->iTimeout)
          break; // DEBUG - timeout
      _delay(100);
   }
-  if (iTimeout > pOBD->iTimeout)
+  if (iTimeout > (int)pOBD->iTimeout)
 #ifdef ARDUINO
      Serial.println("EPDWaitBusy() timed out");
 #else
@@ -3978,7 +3980,7 @@ static int16_t pgm_read_word(const uint8_t *ptr)
 {
   return ptr[0] + (ptr[1]<<8);
 }
-#if !defined( MEMORY_ONLY ) && !defined( __BITBANG_I2C__ )
+#if !defined( MEMORY_ONLY ) // && !defined( __BITBANG_I2C__ )
 int I2CReadRegister(BBI2C *pI2C, uint8_t addr, uint8_t reg, uint8_t *pBuf, int iLen)
 {
 int rc;
@@ -4032,11 +4034,19 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
       obdSetDCMode(pOBD, MODE_DATA);
+    if (pOBD->iFlags & OBD_CS_EVERY_BYTE) {
+       for (int i=0; i<iLen; i++) {
+          digitalWrite(pOBD->iCSPin, LOW);
+	  AIOWriteSPI(pOBD->bbi2c.file_i2c, &pData[i], 1);
+	  digitalWrite(pOBD->iCSPin, HIGH);
+       }
+    } else {
       if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
          digitalWrite(pOBD->iCSPin, LOW);
-      AIOWriteSPI(pOBD->bbi2c.file_i2c, &pData[1], iLen-1);
+      AIOWriteSPI(pOBD->bbi2c.file_i2c, pData, iLen);
       if (pOBD->iCSPin != 0xff &&pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
          digitalWrite(pOBD->iCSPin, HIGH);
+    }
       //obdSetDCMode(pOBD, MODE_DATA);
   }
 #endif // MEMORY_ONLY
