@@ -3085,7 +3085,7 @@ uint8_t *pBuffer, ucInvert = 0;
   } // 270
 } /* EPDWriteImage() */
 
-const uint8_t epd293_init_sequence_full[] PROGMEM
+const uint8_t epd293_init_sequence_full[] =
 {
 //    0x01, SSD1608_SW_RESET,
 //    BUSY_WAIT,
@@ -3107,7 +3107,7 @@ const uint8_t epd293_init_sequence_full[] PROGMEM
     0x00 // end of table
 }; /* epd293_init_sequence_full[] */
 
-const uint8_t epd293_init_sequence_part[] PROGMEM
+const uint8_t epd293_init_sequence_part[] = 
 {
 //    0x01, SSD1608_SW_RESET,
 //    BUSY_WAIT,
@@ -3131,7 +3131,7 @@ const uint8_t epd293_init_sequence_part[] PROGMEM
     0x00 // end of table
 }; /* epd293_init_sequence_full[] */
 
-const uint8_t epd293_lut[] PROGMEM
+const uint8_t epd293_lut[] =
 {
     0x22,  0x11, 0x10, 0x00, 0x10, 0x00, 0x00, 0x11, 0x88, 0x80, 0x80, 0x80, 0x00, 0x00, 0x6A, 0x9B,
     0x9B, 0x9B, 0x9B, 0x00, 0x00, 0x6A, 0x9B, 0x9B, 0x9B, 0x9B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -3231,7 +3231,7 @@ void EPD102_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 //
 // Special case for e-ink displays
 //
-static void EPDDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, bool bRefresh)
+static void EPDDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh)
 {
     
     pOBD->iFlags |= OBD_FULLUPDATE; // mark it for later
@@ -3565,7 +3565,7 @@ void obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height)
 // Dump a screen's worth of data directly to the display
 // Try to speed it up by comparing the new bytes with the existing buffer
 //
-void obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, bool bRefresh)
+void obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh)
 {
 int x, y;
 int iLines;
@@ -5081,7 +5081,7 @@ void obdSetTextWrap(OBDISP *pOBD, int bWrap)
 // To draw at 1x scale, set the scale factor to 256. To draw at 2x, use 512
 // The output must be drawn into a memory buffer, not directly to the display
 //
-int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int bInvert, int iXScale, int iYScale, int iRotation)
+int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int iColor, int iXScale, int iYScale, int iRotation)
 {
 uint32_t row, col, dx, dy;
 uint32_t sx, sy;
@@ -5113,7 +5113,7 @@ int iFontWidth;
       // we can't directly use the pointer to FLASH memory, so copy to a local buffer
       ucTemp[0] = 0; // first column is blank
       memcpy_P(&ucTemp[1], &s[iFontOff], iFontWidth-1);
-      if (bInvert) InvertBytes(ucTemp, iFontWidth);
+      if (iColor == OBD_WHITE) InvertBytes(ucTemp, iFontWidth);
       col = 0;
       for (tx=0; tx<(int)dx; tx++) {
          row = 0;
@@ -5175,7 +5175,7 @@ int iFontWidth;
 // Draw a string of normal (8x8), small (6x8) or large (16x32) characters
 // At the given col+row
 //
-int obdWriteString(OBDISP *pOBD, int iScroll, int x, int y, char *szMsg, int iSize, int bInvert, int bRender)
+int obdWriteString(OBDISP *pOBD, int iScroll, int x, int y, char *szMsg, int iSize, int iColor, int bRender)
 {
 int i, iFontOff, iLen, iFontSkip;
 unsigned char c, *s, ucTemp[40];
@@ -5184,7 +5184,7 @@ unsigned char c, *s, ucTemp[40];
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
       uint8_t *d = pOBD->ucScreen;
       iLen = (int)strlen(szMsg);
-      obdWriteCmdByte(pOBD, OBD_DRAWTEXT | ((bInvert & 1) << 7) | ((iSize & 7) << 4));
+      obdWriteCmdByte(pOBD, OBD_DRAWTEXT | ((iColor & 1) << 7) | ((iSize & 7) << 4));
       obdWriteCmdByte(pOBD, (uint8_t) iLen);
       obdWriteCmdInt(pOBD, x);
       obdWriteCmdInt(pOBD, y);
@@ -5218,7 +5218,7 @@ unsigned char c, *s, ucTemp[40];
              // we can't directly use the pointer to FLASH memory, so copy to a local buffer
              ucTemp[0] = 0; // first column is blank
              memcpy_P(&ucTemp[1], &ucFont[iFontOff], 7);
-             if (bInvert) InvertBytes(ucTemp, 8);
+             if (iColor == OBD_WHITE) InvertBytes(ucTemp, 8);
              iLen = 8 - iFontSkip;
              if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
                  iLen = pOBD->width - pOBD->iCursorX;
@@ -5256,19 +5256,19 @@ unsigned char c, *s, ucTemp[40];
               // we can't directly use the pointer to FLASH memory, so copy to a local buffer
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               memcpy_P(ucTemp, s, 16);
-              if (bInvert) InvertBytes(ucTemp, 16);
+              if (iColor == OBD_WHITE) InvertBytes(ucTemp, 16);
               obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               memcpy_P(ucTemp, s+16, 16);
-              if (bInvert) InvertBytes(ucTemp, 16);
+              if (iColor == OBD_WHITE) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+16, bRender);
               memcpy_P(ucTemp, s+32, 16);
-              if (bInvert) InvertBytes(ucTemp, 16);
+              if (iColor == OBD_WHITE) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+24, bRender);
               memcpy_P(ucTemp, s+48, 16);
-              if (bInvert) InvertBytes(ucTemp, 16);
+              if (iColor == OBD_WHITE) InvertBytes(ucTemp, 16);
                  obdWriteDataBlock(pOBD, &ucTemp[iFontSkip], iLen, bRender); // write character pattern
               pOBD->iCursorX += iLen;
               if (pOBD->iCursorX >= pOBD->width-15 && pOBD->wrap) // word wrap enabled?
@@ -5299,7 +5299,7 @@ unsigned char c, *s, ucTemp[40];
               s = (unsigned char *)&ucFont[(int)c*7];
               ucTemp[0] = 0; // first column is blank
               memcpy_P(&ucTemp[1], s, 7);
-              if (bInvert)
+              if (iColor == OBD_WHITE)
                   InvertBytes(ucTemp, 8);
               // Stretch the font to double width + double height
               memset(&ucTemp[8], 0, 32); // write 32 new bytes
@@ -5358,7 +5358,7 @@ unsigned char c, *s, ucTemp[40];
               s = (unsigned char *)&ucSmallFont[(int)c*5];
               ucTemp[0] = 0; // first column is blank
               memcpy_P(&ucTemp[1], s, 6);
-              if (bInvert)
+              if (iColor == OBD_WHITE)
                   InvertBytes(ucTemp, 6);
               // Stretch the font to double width + double height
               memset(&ucTemp[6], 0, 24); // write 24 new bytes
@@ -5396,7 +5396,7 @@ unsigned char c, *s, ucTemp[40];
                       {
                           if (ty < 3) // top half
                           {
-                              if (bInvert) {
+                              if (iColor == OBD_WHITE) {
                                 pDest[1] &= ~(1 << ((ty * 2)+1));
                                 pDest[2] &= ~(1 << ((ty * 2)+1));
                                 pDest[1] &= ~(1 << ((ty+1) * 2));
@@ -5410,7 +5410,7 @@ unsigned char c, *s, ucTemp[40];
                           }
                           else if (ty == 3) // on the border
                           {
-                              if (bInvert) {
+                              if (iColor == OBD_WHITE) {
                                 pDest[1] &= ~0x80; pDest[2] &= ~0x80;
                                 pDest[13] &= ~1; pDest[14] &= ~1;
                               } else {
@@ -5420,7 +5420,7 @@ unsigned char c, *s, ucTemp[40];
                           }
                           else // bottom half
                           {
-                              if (bInvert) {
+                              if (iColor == OBD_WHITE) {
                                 pDest[13] &= ~(1 << (2*(ty-4)+1));
                                 pDest[14] &= ~(1 << (2*(ty-4)+1));
                                 pDest[13] &= ~(1 << ((ty-3) * 2));
@@ -5437,7 +5437,7 @@ unsigned char c, *s, ucTemp[40];
                       {
                           if (ty < 4) // top half
                           {
-                              if (bInvert) {
+                              if (iColor == OBD_WHITE) {
                                 pDest[1] &= ~(1 << ((ty * 2)+1));
                                 pDest[2] &= ~(1 << ((ty+1) * 2));
                               } else {
@@ -5447,7 +5447,7 @@ unsigned char c, *s, ucTemp[40];
                           }
                           else
                           {
-                              if (bInvert) {
+                              if (iColor == OBD_WHITE) {
                                 pDest[13] &= ~(1 << (2*(ty-4)+1));
                                 pDest[14] &= ~(1 << ((ty-3) * 2));
                               } else {
@@ -5492,7 +5492,7 @@ unsigned char c, *s, ucTemp[40];
                // we can't directly use the pointer to FLASH memory, so copy to a local buffer
                ucTemp[0] = 0; // first column is blank
                memcpy_P(&ucTemp[1], &ucSmallFont[(int)c*5], 5);
-               if (bInvert) InvertBytes(ucTemp, 6);
+               if (iColor == OBD_WHITE) InvertBytes(ucTemp, 6);
                iLen = 6 - iFontSkip;
                if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
                    iLen = pOBD->width - pOBD->iCursorX;

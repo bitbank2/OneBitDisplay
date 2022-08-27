@@ -31,7 +31,7 @@ int main(int argc, char **argv)
   AIOInitBoard("Raspberry Pi");
   printf("Starting...\n");
   epd.setSPIPins(INKY_CS, -1, -1, INKY_DC, INKY_RES, INKY_BUSY);
-  epd.SPIbegin(EPD27_176x264, EPD_FREQ);
+  epd.SPIbegin(EPD213_104x212, EPD_FREQ);
   epd.setRotation(270);
   epd.allocBuffer();
   epd.fillScreen(0);
@@ -39,6 +39,7 @@ int main(int argc, char **argv)
   epd.setFont(FONT_12x16);
   epd.println("Inky Phat with");
   epd.println("OneBitDisplay lib");
+  epd.setTextColor(OBD_RED);
   epd.println(1234, DEC);
   epd.println(4095, HEX);
   epd.display();

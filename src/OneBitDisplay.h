@@ -11,7 +11,7 @@
 #define HEX 16
 #define OCT 8
 #define BIN 2
-
+#define PROGMEM
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -487,7 +487,7 @@ void obdNextLine(OBDISP *pOBD);
 //
 //  Returns 0 for success, -1 for invalid parameter
 //
-int obdWriteString(OBDISP *pOBD, int iScrollX, int x, int y, char *szMsg, int iSize, int bInvert, int bRender);
+int obdWriteString(OBDISP *pOBD, int iScrollX, int x, int y, char *szMsg, int iSize, int iColor, int bRender);
 //
 // Draw a string with a fractional scale in both dimensions
 // the scale is a 16-bit integer with and 8-bit fraction and 8-bit mantissa
@@ -495,7 +495,7 @@ int obdWriteString(OBDISP *pOBD, int iScrollX, int x, int y, char *szMsg, int iS
 // The output must be drawn into a memory buffer, not directly to the display
 // The string can be drawn in one of 4 rotations (ROT_0, ROT_90, ROT_180, ROT_270)
 //
-int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int bInvert, int iXScale, int iYScale, int iRotation);
+int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int iColor, int iXScale, int iYScale, int iRotation);
 //
 // Draw a string in a proportional font you supply
 // Requires a back buffer
@@ -528,7 +528,7 @@ void obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height);
 // Dump an entire custom buffer to the display
 // useful for custom animation effects
 //
-void obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, bool bRefresh);
+void obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh);
 void obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
 //
 // Render a window of pixels from a provided buffer or the library's internal buffer
