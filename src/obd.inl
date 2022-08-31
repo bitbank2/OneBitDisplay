@@ -269,6 +269,15 @@ const unsigned char epd102_lut_b_full[] PROGMEM =
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
+// init sequence for GDEW042Z15
+const uint8_t epd42r2_init_sequence_full[] = {
+    0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
+    0x01, UC8151_PON, // power on
+    BUSY_WAIT,
+    0x02, 0x00, 0x0f, // LUT from OTP
+    0x02, UC8151_CDI, 0x9c, // inverted, white border
+    0x00
+};
 
 // initialization sequence for 2.9" 296x128 e-paper
 const uint8_t epd29_init_sequence_full[] = {
@@ -287,11 +296,20 @@ const uint8_t epd29_init_sequence_full[] = {
 
 // initialization sequence for 1.02" 80x128 e-paper
 const uint8_t epd102_init_sequence_full[] = {
+//    0x02, 0xd2, 0x3f, // ?
     0x02, 0x00, 0x5f,
-    0x03, 0x2a, 0x00, 0x00, // xon and lut options
+//    0x05, 0x01, 0x03, 0x00, 0x2b, 0x2b,
+//    0x02, 0x06, 0x3f,
+    0x03, 0x2a, 0x00, 0x00,
+//    0x02, 0x30, 0x13, // PLL 30Hz
+//    0x02, 0x50, 0x57, // VCOM default
+//    0x02, 0x60, 0x22, // TCON 24us
+//    0x03, 0x61, 0x50,0x80, // resolution
+//    0x02, 0x82, 0x12, // VCOM -1v
+//    0x02, 0xe3, 0x33, // power saving
     0x01, 0x04, // power on
     BUSY_WAIT,
-    0x02, 0x50, 0x97, // VCOM
+    0x02, 0x50, 0x97, // panel setting
     0x00 // end of table
 };
 
@@ -1726,6 +1744,20 @@ else
         pOBD->busy_idle = LOW;
         EPD213_Init(pOBD);
   }
+  else if (iType == EPD42R2_400x300 || iType == EPD213R_104x212) {
+      if (iType == EPD213R_104x212) {
+          pOBD->native_width = pOBD->width = 104;
+          pOBD->native_height = pOBD->height = 212;
+          pOBD->type = EPD42R2_400x300; // use the same commands
+      } else {
+          pOBD->native_width = pOBD->width = 400;
+          pOBD->native_height = pOBD->height = 300;
+      }
+      pOBD->can_flip = 0;
+      pOBD->busy_idle = HIGH;
+      pOBD->iFlags |= OBD_3COLOR;
+      pOBD->iTimeout = 25000; // 3-color need a longer timeout (25 seconds)
+  }
   else if (iType == EPD29R_128x296 || iType == EPD154R_152x152 || iType == EPD42R_400x300)
   { // BLACK/WHITE/RED
       if (iType == EPD29R_128x296) {
@@ -1752,6 +1784,7 @@ else
       pOBD->native_height = pOBD->height = 128;
       pOBD->can_flip = 0; // flip display commands don't exist
       pOBD->busy_idle = HIGH;
+      pOBD->iFlags |= OBD_CS_EVERY_BYTE;
       return;
   }
   else if (iType == EPD213_104x212)
@@ -2597,7 +2630,7 @@ uint8_t ucTemp[8];
   }
     if (pOBD->type == EPD102_80x128) {
         return; // DEBUG
-        EPD213_CMD(pOBD, UC8151_PSR, 0x5f); // panel setting
+        EPD213_CMD(pOBD, UC8151_PSR, 0x4f); // panel setting
         obdWriteCommand(pOBD, 0x2a); // POWER SETTING
         ucTemp[0] = 0x00;   // VDS_EN, VDG_EN internal
         ucTemp[1] = 0x00;   // VCOM_HV, VGHL_LV=16V
@@ -2612,7 +2645,7 @@ uint8_t ucTemp[8];
 static void EPDSleep(OBDISP *pOBD)
 {
 
-    if (pOBD->type == EPD29_128x296) {
+    if (pOBD->type == EPD29_128x296 || pOBD->type == EPD42R2_400x300) {
         obdWriteCommand(pOBD, UC8151_POF); // power off
         return;
     }
@@ -3159,9 +3192,9 @@ void EPD29R_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 {
     if (bPartial) {
     } else {
-        if (pOBD->width == 152) {
+        if (pOBD->native_width == 152) {
             EPDSendCMDSequence(pOBD, epd29r_init_sequence_152);
-        } else if (pOBD->width == 400) {
+        } else if (pOBD->native_width == 400) {
             EPDSendCMDSequence(pOBD, epd42r_init_sequence);
         } else {
             EPDSendCMDSequence(pOBD, epd29r_init_sequence);
@@ -3223,7 +3256,7 @@ void EPD102_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
             obdWriteCommand(pOBD, UC8151_LUT_BB);
             memcpy_P(ucLine, epd102_lut_b_full, sizeof(epd102_lut_b_full));
             RawWriteData(pOBD, ucLine, sizeof(epd102_lut_b_full));
-           // obdWriteCommand(pOBD, UC8151_PTOU); // disable partial mode
+      //      obdWriteCommand(pOBD, UC8151_PTOU); // disable partial mode
             obdWriteCommand(pOBD, UC8151_PON); // power on
             EPDWaitBusy(pOBD);
         }
@@ -3236,6 +3269,14 @@ static void EPDDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh)
     
     pOBD->iFlags |= OBD_FULLUPDATE; // mark it for later
   EPDWakeUp(pOBD);
+    if (pOBD->type == EPD42R2_400x300) {
+        EPDSendCMDSequence(pOBD, epd42r2_init_sequence_full);
+        EPDWriteImage(pOBD, 0x10, 0, 0, pOBD->width, pOBD->height, 0); // black/white plane
+        EPDWriteImage(pOBD, 0x13, 0, 0, pOBD->width, pOBD->height, 1); // red plane
+        if (bRefresh) {
+            obdWriteCommand(pOBD, 0x12); // master activation
+        }
+    }
     if (pOBD->type == EPD47_540x960) {
         uint16_t u16Args[7];
         EPD47_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
@@ -3266,17 +3307,8 @@ static void EPDDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh)
     }
     if (pOBD->type == EPD102_80x128) {
         EPD102_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-//        EPDWriteImage(pOBD, 0x10, 0, 0, pOBD->width, pOBD->height, 0);
-        obdWriteCommand(pOBD, 0x10);
-        uint8_t uc = 0xff;
-        for (int i=0; i<10*128*2; i++) {
-            RawWriteData(pOBD, &uc, 1);
-        }
-        obdWriteCommand(pOBD, 0x13);
-        for (int i=0; i<10*128; i++) {
-            RawWriteData(pOBD, &uc, 1);
-        }
-//        EPDWriteImage(pOBD, 0x13, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
+        EPDWriteImage(pOBD, 0x10, 0, 0, pOBD->width, pOBD->height, 0);
+        EPDWriteImage(pOBD, 0x13, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
         obdWriteCommand(pOBD, 0x12); // refresh
         _delay(10); // needed
     }
@@ -3314,7 +3346,8 @@ static void EPDDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh)
         EPDWriteImage(pOBD, 0x26, 0, 0, pOBD->width, pOBD->height, 1); // red plane
         EPD213_CMD(pOBD, 0x4e, 0x00); // RAM X counter
         obdWriteCommand(pOBD, 0x4f);
-        ucTemp[0] = 0x27; ucTemp[1] = 0x01;
+        ucTemp[0] = (uint8_t)(pOBD->native_height-1);
+        ucTemp[1] = (uint8_t)((pOBD->native_height-1)>>8);
         RawWriteData(pOBD, ucTemp, 2);
         EPDWriteImage(pOBD, 0x24, 0, 0, pOBD->width, pOBD->height, 0); // black/white plane
         if (bRefresh) {
