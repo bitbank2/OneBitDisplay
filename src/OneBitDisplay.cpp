@@ -176,8 +176,9 @@ void ONE_BIT_DISPLAY::setTextColor(int iFG, int iBG)
     if ((_obd.iFlags & OBD_3COLOR) == 0) {
         if (iFG == OBD_RED) iFG = OBD_BLACK; // can't set red color
         if (iBG == OBD_RED) iBG = OBD_BLACK;
-    }  _obd.iFG = iFG;
-  _obd.iBG = (iBG == -1) ? iFG : iBG;
+    }
+    _obd.iFG = iFG;
+    _obd.iBG = (iBG == -1) ? iFG : iBG;
 } /* setTextColor() */
 
 void ONE_BIT_DISPLAY::setCursor(int x, int y)
@@ -193,12 +194,30 @@ int ONE_BIT_DISPLAY::loadBMP(uint8_t *pBMP, int x, int y, int bInvert)
     return obdLoadBMP(&_obd, pBMP, x, y, bInvert);
 } /* loadBMP() */
 
+int ONE_BIT_DISPLAY::loadBMP3(uint8_t *pBMP, int x, int y)
+{
+    return obdLoadBMP3(&_obd, pBMP, x, y);
+} /* loadBMP3() */
+
 void ONE_BIT_DISPLAY::setFont(int iFont)
 {
     _obd.iFont = iFont;
     _obd.pFreeFont = NULL;
 } /* setFont() */
 
+void ONE_BIT_DISPLAY::setTextSize(uint8_t s)
+{
+    _obd.u32FontScaleX = _obd.u32FontScaleY = 256 * s;
+    _obd.iFont = -1;
+    _obd.pFreeFont = NULL;
+}
+void ONE_BIT_DISPLAY::setTextSize(uint8_t sx, uint8_t sy)
+{
+    _obd.u32FontScaleX = 256 * sx;
+    _obd.u32FontScaleY = 256 * sy;
+    _obd.iFont = -1;
+    _obd.pFreeFont = NULL;
+}
 void ONE_BIT_DISPLAY::setFreeFont(const GFXfont *pFont)
 {
     _obd.pFreeFont = (GFXfont *)pFont;
@@ -339,8 +358,11 @@ char szTemp[2]; // used to draw 1 character at a time to the C methods
 int w, h;
 
   szTemp[0] = c; szTemp[1] = 0;
-  if (_obd.pFreeFont == NULL) { // use built-in fonts
-      if (_obd.iFont == FONT_8x8 || _obd.iFont == FONT_6x8) {
+   if (_obd.pFreeFont == NULL) { // use built-in fonts
+       if (_obd.iFont == -1) { // scaled 5x7 font
+           h = (int)(_obd.u32FontScaleY >> 8) * 8;
+           w = (int)(_obd.u32FontScaleX >> 8) * 6;
+       } else if (_obd.iFont == FONT_8x8 || _obd.iFont == FONT_6x8) {
         h = 8;
         w = (_obd.iFont == FONT_8x8) ? 8 : 6;
       } else if (_obd.iFont == FONT_12x16 || _obd.iFont == FONT_16x16) {
@@ -372,7 +394,12 @@ int w, h;
               _obd.iCursorY -= h;
           }
       }
-      obdWriteString(&_obd, 0, -1, -1, szTemp, _obd.iFont, !_obd.iFG, _obd.render);
+        if (_obd.iFont == -1) { // scaled drawing
+            obdScaledString(&_obd, _obd.iCursorX, _obd.iCursorY, szTemp, FONT_6x8, _obd.iFG, _obd.u32FontScaleX, _obd.u32FontScaleY, 0);
+            _obd.iCursorX += w;
+        } else {
+            obdWriteString(&_obd, 0, -1, -1, szTemp, _obd.iFont, _obd.iFG, _obd.render);
+        }
     }
   } else { // Custom font
     if (c == '\n') {
@@ -415,6 +442,21 @@ int16_t ONE_BIT_DISPLAY::getCursorY(void)
 uint8_t ONE_BIT_DISPLAY::getRotation(void)
 {
   return _obd.iOrientation;
+}
+void ONE_BIT_DISPLAY::getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
+{
+    if (_obd.pFreeFont) {
+        int width, top, bottom;
+        obdGetStringBox(_obd.pFreeFont, (char *)string, &width, &top, &bottom);
+        *x1 = x;
+        *w = width;
+        *y1 = y + top;
+        *h = (bottom - top + 1);
+    }
+}
+void ONE_BIT_DISPLAY::getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
+{
+    getTextBounds(str.c_str(), x, y, x1, y1, w, h);
 }
 int16_t ONE_BIT_DISPLAY::width(void)
 {

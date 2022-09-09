@@ -62,19 +62,21 @@ enum {
   EPD29_128x296,
   EPD29B_128x296,
   EPD29R_128x296,
-  EPD154R_152x152,
+  EPD293_128x296,
   EPD42R_400x300,
   EPD42R2_400x300,
-  EPD293_128x296,
   EPD213B_104x212,
   EPD213R_104x212,
   EPD213_104x212,
   EPD213_122x250,
   EPD154_152x152,
+  EPD154R_152x152,
   EPD154_200x200,
   EPD27_176x264,
-  EPD102_80x128,
-  EPD47_540x960,
+  EPD583R_600x448,
+  EPD74R_640x384,
+  EPD102_80x128, // not working yet
+  EPD47_540x960, // not working yet
   LCD_COUNT
 };
 
@@ -225,6 +227,7 @@ uint8_t bScroll;
 int iScreenOffset, iOrientation;
 int iFG, iBG; //current color
 int iFont, iFlags;
+uint32_t u32FontScaleX, u32FontScaleY;
 uint32_t iSpeed;
 uint32_t iTimeout; // for e-ink panels
 GFXfont *pFreeFont;
@@ -247,7 +250,7 @@ class ONE_BIT_DISPLAY : public Print
 #endif // _LINUX_
 {
   public:
-    ONE_BIT_DISPLAY() { memset(&_obd, 0, sizeof(_obd)); _obd.iFG = 1; _obd.render = 1; _obd.type = OLED_128x64; _obd.iSpeed = 400000;}
+    ONE_BIT_DISPLAY() { memset(&_obd, 0, sizeof(_obd)); _obd.iFG = OBD_BLACK; _obd.render = 1; _obd.type = OLED_128x64; _obd.iSpeed = 400000;}
     void SPIbegin(int iType = OLED_128x64, int32_t iSpeed = 2000000);
     void setSPIPins(int iCS, int iMOSI, int iSCLK, int iDC, int iReset=-1, int iLED=-1);
     void setI2CPins(int iSDA, int iSCL, int iReset=-1);
@@ -268,6 +271,8 @@ class ONE_BIT_DISPLAY : public Print
     void * getBuffer(void);
     void freeBuffer(void);
     void setScroll(bool bScroll);
+    void setTextSize(uint8_t s);
+    void setTextSize(uint8_t sx, uint8_t sy);
     void drawPixel(int16_t x, int16_t y, uint16_t color);
     void drawSprite(uint8_t *pSprite, int cx, int cy, int iPitch, int x, int y, uint8_t iPriority);
     void drawTile(const uint8_t *pTile, int x, int y, int iRotation, int bInvert, int bRender);
@@ -276,9 +281,11 @@ class ONE_BIT_DISPLAY : public Print
     void setCursor(int x, int y);
     void setPower(bool bOn);
     int loadBMP(uint8_t *pBMP, int x, int y, int bInvert);
+    int loadBMP3(uint8_t *pBMP, int x, int y);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
-    void setTextSize(int iSize);
+    void getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
+    void getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
     void setTextWrap(bool bWrap);
     void setFont(int iFont);
     void setFreeFont(const GFXfont *pFont);
@@ -455,6 +462,14 @@ void obdSetContrast(OBDISP *pOBD, unsigned char ucContrast);
 // First pass version assumes a full screen bitmap
 //
 int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int x, int y, int bInvert);
+//
+// load a 4-bpp Windows bitmap
+// into memory for 3-color (BLACK/WHITE/RED)
+// e-paper displays
+// It does a 'best match' of the colors to
+// B/W/R
+//
+int obdLoadBMP3(OBDISP *pOBD, uint8_t *pBMP, int dx, int dy);
 //
 // Power up/down the display
 // useful for low power situations
