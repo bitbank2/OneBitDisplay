@@ -17,6 +17,16 @@
 #include <stdio.h>
 #endif // _LINUX_
 
+// controller chip types
+enum {
+    OBD_CHIP_NA = 0,
+    OBD_CHIP_SSD13xx, // OLED
+    OBD_CHIP_SH11xx, // OLED
+    OBD_CHIP_SSD16xx, // EPD
+    OBD_CHIP_UC8151, // EPD
+    OBD_CHIP_COUNT
+};
+
 // 5 possible font sizes: 8x8, 16x32, 6x8, 12x16 (stretched from 6x8 with smoothing), 16x16 (stretched from 8x8)
 enum {
    FONT_6x8 = 0,
@@ -219,7 +229,7 @@ typedef struct obdstruct
 BBI2C bbi2c;
 #endif
 uint8_t oled_addr; // requested address or 0xff for automatic detection
-uint8_t busy_idle, wrap, flip, invert, type, render, can_flip;
+uint8_t busy_idle, wrap, flip, invert, type, render, can_flip, chip_type;
 uint8_t *ucScreen;
 int iCursorX, iCursorY;
 int width, height, native_width, native_height;
@@ -280,10 +290,12 @@ class ONE_BIT_DISPLAY : public Print
     void setTextColor(int iFG, int iBG = -1);
     void setCursor(int x, int y);
     void setPower(bool bOn);
-    int loadBMP(uint8_t *pBMP, int x, int y, int bInvert);
+    int loadBMP(uint8_t *pBMP, int x, int y, int iFG, int iBG);
     int loadBMP3(uint8_t *pBMP, int x, int y);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
+    void wake(void);
+    void sleep(void);
     void getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
     void getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
     void setTextWrap(bool bWrap);
@@ -461,7 +473,7 @@ void obdSetContrast(OBDISP *pOBD, unsigned char ucContrast);
 // Pass the pointer to the beginning of the BMP file
 // First pass version assumes a full screen bitmap
 //
-int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int x, int y, int bInvert);
+int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int x, int y, int iFG, int iBG);
 //
 // load a 4-bpp Windows bitmap
 // into memory for 3-color (BLACK/WHITE/RED)

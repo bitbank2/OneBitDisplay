@@ -44,8 +44,8 @@ void delay(int);
 
 #endif // _LINUX_
 #include "OneBitDisplay.h"
-// All of the drawing code is in here
-#include "obd.inl"
+#include "obd_io.inl" // I/O (non-portable) code is in here
+#include "obd.inl" // All of the drawing code is in here
 
 #ifdef __cplusplus
 //
@@ -189,9 +189,9 @@ void ONE_BIT_DISPLAY::setCursor(int x, int y)
     _obd.iCursorY = y;
 } /* setCursor() */
 
-int ONE_BIT_DISPLAY::loadBMP(uint8_t *pBMP, int x, int y, int bInvert)
+int ONE_BIT_DISPLAY::loadBMP(uint8_t *pBMP, int x, int y, int iFG, int iBG)
 {
-    return obdLoadBMP(&_obd, pBMP, x, y, bInvert);
+    return obdLoadBMP(&_obd, pBMP, x, y, iFG, iBG);
 } /* loadBMP() */
 
 int ONE_BIT_DISPLAY::loadBMP3(uint8_t *pBMP, int x, int y)
@@ -443,6 +443,19 @@ uint8_t ONE_BIT_DISPLAY::getRotation(void)
 {
   return _obd.iOrientation;
 }
+void ONE_BIT_DISPLAY::wake(void)
+{
+    if (_obd.type >= EPD42_400x300) {
+        EPDWakeUp(&_obd);
+    }
+}
+void ONE_BIT_DISPLAY::sleep(void)
+{
+    if (_obd.type >= EPD42_400x300) {
+        EPDSleep(&_obd);
+    }
+}
+
 void ONE_BIT_DISPLAY::getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
 {
     if (_obd.pFreeFont) {
