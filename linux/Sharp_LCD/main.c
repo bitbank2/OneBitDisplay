@@ -14,7 +14,6 @@
 #include <sys/ioctl.h>
 #include <math.h>
 #include <armbianio.h>
-
 #include "../../src/OneBitDisplay.cpp"
 
 volatile int iStop = 0;
@@ -66,15 +65,17 @@ struct sigaction sigIntHandler;
 //void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI, int iCLK, int iLED, int bFlip, int bInvert, int bBitBang, int32_t iSpeed)  
     obdSPIInit(&obd, DISPLAY_TYPE, DC_PIN, CS_PIN, RESET_PIN, -1, -1, LED_PIN, FLIP180, INVERT, BITBANG, SPEED);
     obdSetBackBuffer(&obd, ucBuffer);
+    //obdSetRotation(&obd, 270);
     // Create some simple content
     obdFill(&obd, 0, 0);
-    obdWriteString(&obd,0,0,0,"OneBitDisplay", FONT_16x32, 0, 0);
+    obdWriteString(&obd,0,0,0,"OneBitDisplay", FONT_16x32, OBD_BLACK, 0);
     for (int i=0; i<400; i+=3) {
-        obdDrawLine(&obd, i, 0, 399-i, 239, 1, 0);
+        obdDrawLine(&obd, i, 0, 399-i, 239, OBD_BLACK, 0);
+        obdDumpBuffer(&obd, NULL);
     }
-    for (int i=0; i<240; i++) {
-        obdDrawLine(&obd, 399, i, 0, 239-i, 1, 0);
-    }
+   // for (int i=0; i<240; i+=3) {
+   //     obdDrawLine(&obd, 399, i, 0, 239-i, OBD_BLACK, 0);
+   // }
     obdDumpBuffer(&obd, NULL);
     while (!iStop) { // toggle the EXTCOM signal until the user hits CTRL-C
 	    AIOWriteGPIO(EXTCOM_PIN, LOW);

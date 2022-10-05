@@ -22,6 +22,7 @@ static uint8_t u8Temp[40]; // for stretched character drawing
 #define HIGH 1
 #define LOW 0
 #endif
+void obdSetDCMode(OBDISP *pOBD, int iMode);
 static uint8_t pgm_read_byte(const uint8_t *ptr);
 static void digitalWrite(int iPin, int iState) {
 #ifndef MEMORY_ONLY
@@ -34,6 +35,10 @@ static void pinMode(int iPin, int iMode)
    AIOAddGPIO(iPin, iMode);
 #endif
 } /* pinMode() */
+static void delayMicroseconds(int iTime)
+{
+	usleep(iTime);
+} /* delayMicroseconds() */
 static int digitalRead(int iPin)
 {
   return AIOReadGPIO(iPin);
@@ -73,9 +78,9 @@ if (pOBD->bBitBang)
 #else // simple (default pin) SPI
     (void)iMOSI; (void)iCLK; (void)iCS;
     mySPI->begin();
-#endif // _LINUX_
     mySPI->beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
     mySPI->endTransaction(); // N.B. - if you call beginTransaction() again without a matching endTransaction(), it will hang on ESP32
+#endif // _LINUX_
 } /* initSPI() */
 
 //
@@ -159,7 +164,7 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
             *outSCK &= ~bitSCK;
 #else
             digitalWrite(iMOSIPin,  (c & 0x80) != 0); // MSB first
-             delayMicroseconds(1);
+            delayMicroseconds(1);
             digitalWrite(iSCKPin, HIGH);
             c <<= 1;
             delayMicroseconds(1);
@@ -365,10 +370,6 @@ void _delay(int iDelay)
 {
     usleep(iDelay * 1000);
 } /* _delay() */
-void delayMicroseconds(int iDelay)
-{
-    usleep(iDelay);
-} /* delayMicroseconds() */
 #else // Arduino
 void _delay(int iDelay)
 {

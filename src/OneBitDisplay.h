@@ -318,6 +318,7 @@ class ONE_BIT_DISPLAY : public Print
     void print(const string &);
     void println(const string &);
     size_t write(uint8_t ucChar);
+    void delayMicroseconds(int iTime);
 #else
     using Print::write;
     virtual size_t write(uint8_t);

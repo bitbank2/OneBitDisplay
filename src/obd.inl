@@ -3575,7 +3575,7 @@ static void SharpDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 int x, y;
 uint8_t c, ucInvert, *s, *d, ucStart;
 uint8_t ucLineBuf[56];
-int iPitch = pOBD->width / 8;
+int iPitch = pOBD->native_width / 8;
 static uint8_t ucVCOM = 0;
 int iBit;
 uint8_t ucMask;
@@ -3594,7 +3594,7 @@ uint8_t ucMask;
 
  // We need to flip and invert the image in code because the Sharp memory LCD
  // controller only has the simplest of commands for data writing
-  if (pOBD->flip)
+  if (pOBD->iOrientation == 180)
   {
      for (y=0; y<pOBD->height; y++) // we have to write the memory in the wrong direction
      {
@@ -3618,7 +3618,7 @@ uint8_t ucMask;
         RawWrite(pOBD, ucLineBuf, iPitch+3);
      } // for x
   }
-  else // normal orientation
+  else if (pOBD->iOrientation == 0) // normal orientation
   {
      for (y=0; y<pOBD->height; y++) // we have to write the memory in the wrong direction
      {
@@ -3642,7 +3642,31 @@ uint8_t ucMask;
         ucLineBuf[iPitch+2] = 0; // end of line
         RawWrite(pOBD, ucLineBuf, iPitch+3);
      } // for x
-  }
+  } else if (pOBD->iOrientation == 90) {
+     for (x=0; x<pOBD->width; x++) {
+	s = &pBuffer[x+((pOBD->height-1)>>3)*pOBD->width];
+	d = &ucLineBuf[2];
+	ucLineBuf[1] = pgm_read_byte(&ucMirror[x+1]); // line number
+        for (y=0; y<pOBD->height; y+=8) { // we have to write the memory in the wrong direction
+            *d++ = s[0] ^ ucInvert;
+	    s -= pOBD->width;
+        } // for y
+	ucLineBuf[iPitch+2] = 0; // end of line
+	RawWrite(pOBD, ucLineBuf, iPitch+3);
+     } // for x
+  } else { // must be 270
+     for (x=0; x<pOBD->width; x++) {
+	 d = &ucLineBuf[2];
+	 s = &pBuffer[(pOBD->width-1-x)];
+	 ucLineBuf[1] = pgm_read_byte(&ucMirror[x+1]); // line number
+         for (y=0; y<pOBD->height; y+=8) {
+	     *d++ = pgm_read_byte(&ucMirror[s[0] ^ ucInvert]);
+	     s += pOBD->width;
+	 } // for y
+	 ucLineBuf[iPitch+2] = 0; // end of line
+	 RawWrite(pOBD, ucLineBuf, iPitch+3);
+     } // for x
+  } // 270
   ucLineBuf[1] = 0;
   RawWrite(pOBD, ucLineBuf, 2); // final transfer
   digitalWrite(pOBD->iCSPin, LOW); // de-activate
