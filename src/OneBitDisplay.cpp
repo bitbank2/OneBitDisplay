@@ -514,6 +514,10 @@ void ONE_BIT_DISPLAY::displayFast()
 {
     obdDumpFast(&_obd, 0, 0, _obd.width, _obd.height);
 }
+void ONE_BIT_DISPLAY::displayPartial(int x, int y, int w, int h, uint8_t *pBuffer)
+{
+    obdDumpPartial(&_obd, x, y, w, h, pBuffer);
+}
 
 void ONE_BIT_DISPLAY::display(bool bRefresh)
 {

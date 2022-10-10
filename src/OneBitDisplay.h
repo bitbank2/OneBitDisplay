@@ -68,7 +68,7 @@ enum {
   SHARP_144x168,
   SHARP_400x240,
   LCD_ST7302,
-  EPD42_400x300,
+  EPD42_400x300, // WFT0420CZ15
   EPD29_128x296,
   EPD29B_128x296,
   EPD29R_128x296,
@@ -248,6 +248,9 @@ uint8_t iSDAPin, iSCLPin;
 uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
 int iLEDPin; // backlight
 uint8_t bBitBang;
+// e-paper variables
+const uint8_t *pInitFull; // full update initialization sequence
+const uint8_t *pInitFast; // fast update initialization sequence
 } OBDISP;
 
 #ifdef __cplusplus
@@ -270,6 +273,7 @@ class ONE_BIT_DISPLAY : public Print
     void setContrast(uint8_t ucContrast);
     void display(bool bRefresh = true);
     void displayFast();
+    void displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
@@ -549,6 +553,11 @@ void obdFill(OBDISP *pOBD, unsigned char ucData, int bRender);
 // otherwise, new pixels will erase old pixels within the same byte
 //
 int obdSetPixel(OBDISP *pOBD, int x, int y, unsigned char ucColor, int bRender);
+//
+// Dump a portion of the screen
+// optional buffer pointer if no back buffer
+//
+void obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height, uint8_t *pBuffer);
 //
 // Dump a screen faster to an e-ink display
 // Not all displays have support for this
