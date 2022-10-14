@@ -1,5 +1,5 @@
 //
-// OneBitDisplay (OLED+LCD library)
+// OneBitDisplay (OLED,LCD and e-paper library)
 // Copyright (c) 2020 BitBank Software, Inc.
 // Written by Larry Bank (bitbank@pobox.com)
 // Project started 3/23/2020
