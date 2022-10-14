@@ -353,6 +353,7 @@ char ucTemp[4];
 //
 // write (Arduino Print friend class)
 //
+#ifndef __AVR__
 size_t ONE_BIT_DISPLAY::write(uint8_t c) {
 char szTemp[2]; // used to draw 1 character at a time to the C methods
 int w, h;
@@ -426,6 +427,7 @@ int w, h;
   }
   return 1;
 } /* write() */
+#endif // !__AVR__
 
 void ONE_BIT_DISPLAY::drawPixel(int16_t x, int16_t y, uint16_t color)
 {
@@ -503,6 +505,17 @@ void ONE_BIT_DISPLAY::fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, 
 {
     obdEllipse(&_obd, x, y, rx, ry, color, 1);
 }
+void ONE_BIT_DISPLAY::setPosition(int x, int y, int w, int h)
+{
+    if (_obd.type >= EPD42_400x300)
+        EPDSetPosition(&_obd, x, y, w, h);
+    else
+        obdSetPosition(&_obd, x, y, 1);
+} /* setPosition() */
+void ONE_BIT_DISPLAY::pushPixels(uint8_t *pPixels, int iCount)
+{
+    RawWriteData(&_obd, pPixels, iCount);
+} /* pushPixels() */
 
 void ONE_BIT_DISPLAY::pushImage(int x, int y, int w, int h, uint16_t *pixels)
 {

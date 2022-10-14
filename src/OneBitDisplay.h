@@ -67,7 +67,9 @@ enum {
   LCD_VIRTUAL,
   SHARP_144x168,
   SHARP_400x240,
+#ifndef __AVR__
   LCD_ST7302,
+#endif
   EPD42_400x300, // WFT0420CZ15
   EPD29_128x296,
   EPD29B_128x296,
@@ -83,8 +85,11 @@ enum {
   EPD154R_152x152,
   EPD154_200x200,
   EPD27_176x264,
+#ifndef __AVR__
+    // requires too much RAM to run on AVR
   EPD583R_600x448,
   EPD74R_640x384,
+#endif
   EPD102_80x128, // not working yet
   EPD47_540x960, // not working yet
   LCD_COUNT
@@ -259,7 +264,11 @@ const uint8_t *pInitFast; // fast update initialization sequence
 using namespace std;
 class ONE_BIT_DISPLAY
 #else // Arduino
+#ifndef __AVR__
 class ONE_BIT_DISPLAY : public Print
+#else
+class ONE_BIT_DISPLAY
+#endif // !__AVR__
 #endif // _LINUX_
 {
   public:
@@ -307,6 +316,8 @@ class ONE_BIT_DISPLAY : public Print
     void setFreeFont(const GFXfont *pFont);
     int16_t height(void);
     int16_t width(void);
+    void setPosition(int x, int y, int w, int h);
+    void pushPixels(uint8_t *pPixels, int iCount);
     void pushImage(int x, int y, int w, int h, uint16_t *pixels);
     void drawLine(int x1, int y1, int x2, int y2, int iColor);
     void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
@@ -324,8 +335,10 @@ class ONE_BIT_DISPLAY : public Print
     size_t write(uint8_t ucChar);
     void delayMicroseconds(int iTime);
 #else
+#ifndef __AVR__
     using Print::write;
     virtual size_t write(uint8_t);
+#endif // !__AVR__
 #endif // _LINUX_
 
   private:
