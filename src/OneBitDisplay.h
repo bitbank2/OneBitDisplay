@@ -1,15 +1,3 @@
-// Copyright 2020 BitBank Software, Inc. All Rights Reserved.
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//    http://www.apache.org/licenses/LICENSE-2.0
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//===========================================================================
-
 #ifndef __ONEBITDISPLAY__
 #define __ONEBITDISPLAY__
 
@@ -28,6 +16,15 @@
 #include <string.h>
 #include <stdio.h>
 #endif // _LINUX_
+
+// error messages
+enum {
+    OBD_SUCCESS,
+    OBD_ERROR_BAD_PARAMETER,
+    OBD_ERROR_BAD_DATA,
+    OBD_ERROR_NOT_SUPPORTED,
+    OBD_ERROR_COUNT
+};
 
 // controller chip types
 enum {
@@ -92,11 +89,15 @@ enum {
   EPD213B_104x212,
   EPD213R_104x212,
   EPD213_104x212,
-  EPD213_122x250,
-  EPD154_152x152,
+  EPD213_122x250, // waveshare
+  EPD213B_122x250, // GDEY0213B74
+  EPD154_152x152, // GDEW0154M10
   EPD154R_152x152,
-  EPD154_200x200,
-  EPD27_176x264,
+  EPD154_200x200, // waveshare
+  EPD27_176x264, // waveshare
+  EPD27b_176x264, // GDEY027T91
+  EPD266_152x296, // GDEY0266T90
+  EPD579_272x792, // GDEY0579T93
 #ifndef __AVR__
     // requires too much RAM to run on AVR
   EPD583R_600x448,
@@ -329,14 +330,18 @@ class ONE_BIT_DISPLAY
     int16_t height(void);
     int16_t width(void);
     void setPosition(int x, int y, int w, int h);
+    int scrollBuffer(int iStartCol, int iEndCol, int iStartRow, int iEndRow, int bUp);
     void pushPixels(uint8_t *pPixels, int iCount);
     void pushImage(int x, int y, int w, int h, uint16_t *pixels);
+    void drawString(const char *pText, int x, int y);
+    void drawString(String text, int x, int y);
     void drawLine(int x1, int y1, int x2, int y2, int iColor);
     void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void drawCircle(int32_t x, int32_t y, int32_t r, uint32_t color);
     void fillCircle(int32_t x, int32_t y, int32_t r, uint32_t color);
     void drawEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
     void fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
+    int drawGFX(uint8_t *pSrc, int iSrcCol, int iSrcRow, int iDestCol, int iDestRow, int iWidth, int iHeight, int iSrcPitch);
 #ifdef _LINUX_
     void print(const char *pString);
     void println(const char *pString);

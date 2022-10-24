@@ -1,5 +1,5 @@
 //
-// OneBitDisplay (OLED,LCD and e-paper library)
+// OneBitDisplay (OLED+LCD library)
 // Copyright (c) 2020 BitBank Software, Inc.
 // Written by Larry Bank (bitbank@pobox.com)
 // Project started 3/23/2020
@@ -218,6 +218,11 @@ void ONE_BIT_DISPLAY::setTextSize(uint8_t sx, uint8_t sy)
     _obd.iFont = -1;
     _obd.pFreeFont = NULL;
 }
+int ONE_BIT_DISPLAY::scrollBuffer(int iStartCol, int iEndCol, int iStartRow, int iEndRow, int bUp)
+{
+    return obdScrollBuffer(&_obd, iStartCol, iEndCol, iStartRow, iEndRow, bUp);
+} /* scrollBuffer() */
+
 void ONE_BIT_DISPLAY::setFreeFont(const GFXfont *pFont)
 {
     _obd.pFreeFont = (GFXfont *)pFont;
@@ -485,6 +490,11 @@ void ONE_BIT_DISPLAY::drawSprite(uint8_t *pSprite, int cx, int cy, int iPitch, i
 {
     obdDrawSprite(&_obd, pSprite, cx, cy, iPitch, x, y, iPriority);
 }
+int ONE_BIT_DISPLAY::drawGFX(uint8_t *pSrc, int iSrcCol, int iSrcRow, int iDestCol, int iDestRow, int iWidth, int iHeight, int iSrcPitch)
+{
+    return obdDrawGFX(&_obd, pSrc, iSrcCol, iSrcRow, iDestCol, iDestRow, iWidth, iHeight, iSrcPitch);
+} /* drawGFX() */
+
 void ONE_BIT_DISPLAY::drawTile(const uint8_t *pTile, int x, int y, int iRotation, int bInvert, int bRender)
 {
     obdDrawTile(&_obd, pTile, x, y, iRotation, bInvert, bRender);
@@ -531,6 +541,18 @@ void ONE_BIT_DISPLAY::displayPartial(int x, int y, int w, int h, uint8_t *pBuffe
 {
     obdDumpPartial(&_obd, x, y, w, h, pBuffer);
 }
+void ONE_BIT_DISPLAY::drawString(const char *pText, int x, int y)
+{
+    setCursor(x,y);
+    if (_obd.pFreeFont != NULL)
+        obdWriteStringCustom(&_obd, _obd.pFreeFont, x, y, (char *)pText, _obd.iFG);
+    else
+        obdWriteString(&_obd, 0, x, y, (char *)pText, _obd.iFont, _obd.iFG, 1);
+} /* drawString() */
+void ONE_BIT_DISPLAY::drawString(String text, int x, int y)
+{
+    drawString(text.c_str(), x, y);
+} /* drawString() */
 
 void ONE_BIT_DISPLAY::display(bool bRefresh)
 {
