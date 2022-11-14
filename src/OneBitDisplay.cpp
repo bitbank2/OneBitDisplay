@@ -14,6 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+// This define (WIMPY_MCU) precludes the use of hardware interfaces
+// such as I2C & SPI
+//
+#if defined (__AVR_ATtiny85__) || defined (ARDUINO_ARCH_MCS51)
+#define WIMPY_MCU
+#endif
+
 #ifdef _LINUX_
 #include <stdint.h>
 #include <stdlib.h>
@@ -40,7 +47,10 @@ void delay(int);
 #ifdef __AVR__
 #include <avr/pgmspace.h>
 #endif
+
+#ifndef WIMPY_MCU
 #include <SPI.h>
+#endif
 
 #endif // _LINUX_
 #include "OneBitDisplay.h"
@@ -113,7 +123,7 @@ void ONE_BIT_DISPLAY::setBuffer(uint8_t *pBuffer)
     _obd.ucScreen = pBuffer;
 }
 
-bool ONE_BIT_DISPLAY::allocBuffer(void)
+int ONE_BIT_DISPLAY::allocBuffer(void)
 {
     int iSize = _obd.width * ((_obd.height+7)>>3);
     _obd.ucScreen = (uint8_t *)malloc(iSize);
@@ -121,9 +131,9 @@ bool ONE_BIT_DISPLAY::allocBuffer(void)
         iSize *= 2; // 2 bit planes
     if (_obd.ucScreen != NULL) {
         _obd.render = false; // draw into RAM only
-        return 1;
+        return OBD_SUCCESS;
     }
-    return 0; // failed
+    return OBD_ERROR_NO_MEMORY; // failed
 } /* allocBuffer() */
 
 void * ONE_BIT_DISPLAY::getBuffer(void)
@@ -533,13 +543,21 @@ void ONE_BIT_DISPLAY::pushImage(int x, int y, int w, int h, uint16_t *pixels)
     (void)x; (void)y; (void)w; (void)h; (void)pixels;
 }
 
-void ONE_BIT_DISPLAY::displayFast()
+int ONE_BIT_DISPLAY::displayFast()
 {
-    obdDumpFast(&_obd, 0, 0, _obd.width, _obd.height);
+    if (_obd.type >= EPD42_400x300 && _obd.iFlags & OBD_HAS_FAST_UPDATE) {
+        obdDumpFast(&_obd, 0, 0, _obd.width, _obd.height);
+        return OBD_SUCCESS;
+    }
+    return OBD_ERROR_NOT_SUPPORTED;
 }
-void ONE_BIT_DISPLAY::displayPartial(int x, int y, int w, int h, uint8_t *pBuffer)
+int ONE_BIT_DISPLAY::displayPartial(int x, int y, int w, int h, uint8_t *pBuffer)
 {
-    obdDumpPartial(&_obd, x, y, w, h, pBuffer);
+    if (_obd.type >= EPD42_400x300 && _obd.chip_type == OBD_CHIP_UC8151) {
+        return obdDumpPartial(&_obd, x, y, w, h, pBuffer);
+    } else {
+        return OBD_ERROR_NOT_SUPPORTED;
+    }
 }
 void ONE_BIT_DISPLAY::drawString(const char *pText, int x, int y)
 {
@@ -554,9 +572,9 @@ void ONE_BIT_DISPLAY::drawString(String text, int x, int y)
     drawString(text.c_str(), x, y);
 } /* drawString() */
 
-void ONE_BIT_DISPLAY::display(bool bRefresh)
+int ONE_BIT_DISPLAY::display(bool bRefresh)
 {
-    obdDumpBuffer_2(&_obd, NULL, bRefresh);
+    return obdDumpBuffer_2(&_obd, NULL, bRefresh);
 }
 void ONE_BIT_DISPLAY::setRender(bool bRAMOnly)
 {

@@ -23,6 +23,7 @@ enum {
     OBD_ERROR_BAD_PARAMETER,
     OBD_ERROR_BAD_DATA,
     OBD_ERROR_NOT_SUPPORTED,
+    OBD_ERROR_NO_MEMORY,
     OBD_ERROR_COUNT
 };
 
@@ -97,7 +98,7 @@ enum {
   EPD27_176x264, // waveshare
   EPD27b_176x264, // GDEY027T91
   EPD266_152x296, // GDEY0266T90
-  EPD579_272x792, // GDEY0579T93
+  EPD579_792x272, // GDEY0579T93
 #ifndef __AVR__
     // requires too much RAM to run on AVR
   EPD583R_600x448,
@@ -293,9 +294,9 @@ class ONE_BIT_DISPLAY
     void setBB(BBI2C *pBB);
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
-    void display(bool bRefresh = true);
-    void displayFast();
-    void displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
+    int display(bool bRefresh = true);
+    int displayFast();
+    int displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
@@ -303,7 +304,7 @@ class ONE_BIT_DISPLAY
     uint8_t getRotation(void);
     void fillScreen(int iColor);
     void setBuffer(uint8_t *pBuffer);
-    bool allocBuffer(void);
+    int allocBuffer(void);
     void * getBuffer(void);
     void freeBuffer(void);
     void setScroll(bool bScroll);
@@ -587,18 +588,18 @@ int obdSetPixel(OBDISP *pOBD, int x, int y, unsigned char ucColor, int bRender);
 // Dump a portion of the screen
 // optional buffer pointer if no back buffer
 //
-void obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height, uint8_t *pBuffer);
+int obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height, uint8_t *pBuffer);
 //
 // Dump a screen faster to an e-ink display
 // Not all displays have support for this
 // if not, the slow update will be used
-void obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height);
+int obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height);
 //
 // Dump an entire custom buffer to the display
 // useful for custom animation effects
 //
-void obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh);
-void obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
+int obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh);
+int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
 //
 // Render a window of pixels from a provided buffer or the library's internal buffer
 // to the display. The row values refer to byte rows, not pixel rows due to the memory

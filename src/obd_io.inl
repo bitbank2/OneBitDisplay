@@ -2,6 +2,14 @@
 // I/O functions for the OneBitDisplay library
 //
 // written by Larry Bank
+//
+// This define (WIMPY_MCU) precludes the use of hardware interfaces
+// such as I2C & SPI
+//
+#if defined (__AVR_ATtiny85__) || defined (ARDUINO_ARCH_MCS51)
+#define WIMPY_MCU
+#endif
+
 #define MAX_CACHE 192
 static uint8_t u8Cache[MAX_CACHE]; // for faster character drawing
 static volatile uint8_t u8End = 0;
@@ -13,7 +21,6 @@ static uint8_t u8Temp[40]; // for stretched character drawing
 #define true 1
 #define LOW 0
 #define HIGH 1
-#define memcpy_P memcpy
 #ifndef I2C_SLAVE
 #define I2C_SLAVE 0
 #define INPUT GPIO_IN
@@ -22,6 +29,10 @@ static uint8_t u8Temp[40]; // for stretched character drawing
 #define HIGH 1
 #define LOW 0
 #endif
+#if defined(_LINUX_) || defined(ARDUINO_ARCH_MCS51)
+#define memcpy_P memcpy
+#endif
+
 void obdSetDCMode(OBDISP *pOBD, int iMode);
 static uint8_t pgm_read_byte(const uint8_t *ptr);
 static void digitalWrite(int iPin, int iState) {
@@ -45,8 +56,7 @@ static int digitalRead(int iPin)
 } /* digitalRead() */
 #endif // _LINUX_
 
-
-#ifndef _LINUX_
+#if !defined( _LINUX_ ) && !defined( WIMPY_MCU )
 #include <SPI.h>
 
 #ifdef ARDUINO_ARCH_RP2040
@@ -59,6 +69,10 @@ SPIClass *mySPI = &SPI;
 // Initialize SPI
 void initSPI(OBDISP *pOBD, int iSpeed, int iMOSI, int iCLK, int iCS)
 {
+#ifdef WIMPY_MCU
+    (void)iSpeed; (void)iMOSI; (void)iCLK; (void)iCS;
+#endif
+    
 if (pOBD->bBitBang)
     return;
 #ifdef _LINUX_
@@ -75,7 +89,7 @@ if (pOBD->bBitBang)
     } else {
         mySPI->begin();
     }
-#else // simple (default pin) SPI
+#elif !defined (WIMPY_MCU) // simple (default pin) SPI
     (void)iMOSI; (void)iCLK; (void)iCS;
     mySPI->begin();
     mySPI->beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
@@ -177,7 +191,7 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
 } /* SPI_BitBang() */
 
 // wrapper/adapter functions to make the code work on Linux
-#ifdef _LINUX_
+#if defined( _LINUX_ ) || defined(ARDUINO_ARCH_MCS51)
 static uint8_t pgm_read_byte(const uint8_t *ptr)
 {
   return *ptr;
@@ -186,7 +200,7 @@ static int16_t pgm_read_word(const uint8_t *ptr)
 {
   return ptr[0] + (ptr[1]<<8);
 }
-#if !defined( MEMORY_ONLY ) // && !defined( __BITBANG_I2C__ )
+#if !defined( MEMORY_ONLY )  && !defined( WIMPY_MCU )
 int I2CReadRegister(BBI2C *pI2C, uint8_t addr, uint8_t reg, uint8_t *pBuf, int iLen)
 {
 int rc;
@@ -220,7 +234,7 @@ char filename[32];
 // Write raw (unfiltered) bytes directly to I2C or SPI
 static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
-#ifndef MEMORY_ONLY
+#if !defined( MEMORY_ONLY ) && !defined(WIMPY_MCU)
   if (pOBD->com_mode == COM_I2C) {// I2C device
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
@@ -232,11 +246,13 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
          digitalWrite(pOBD->iCSPin, HIGH);
       //obdSetDCMode(pOBD, MODE_DATA);
   }
+#else
+    (void)pOBD; (void)pData; (void)iLen;
 #endif // MEMORY_ONLY
 } /* RawWrite() */
 static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
-#ifndef MEMORY_ONLY
+#if !defined( MEMORY_ONLY ) && !defined(WIMPY_MCU)
   if (pOBD->com_mode == COM_I2C) {// I2C device
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
@@ -256,12 +272,14 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
     }
       //obdSetDCMode(pOBD, MODE_DATA);
   }
+#else
+    (void)pOBD; (void)pData; (void)iLen;
 #endif // MEMORY_ONLY
 } /* RawWriteData() */
 #else // Arduino
 static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
-#if !defined( __AVR_ATtiny85__ )
+#if !defined( WIMPY_MCU )
   if (pOBD->com_mode == COM_SPI) // we're writing to SPI, treat it differently
   {
     if (pOBD->iDCPin != 0xff)
@@ -296,7 +314,7 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
       }
   }
   else // must be I2C
-#endif // !ATtiny85
+#endif // !WIMPY_MCU
   {
     if (pOBD->bbi2c.bWire && iLen > 32) // Hardware I2C has write length limits
     {
@@ -318,7 +336,7 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
 } /* RawWrite() */
 static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
-#if !defined( __AVR_ATtiny85__ )
+#if !defined( WIMPY_MCU )
   if (pOBD->com_mode == COM_SPI) // we're writing to SPI, treat it differently
   {
     if (pOBD->iDCPin != 0xff)
@@ -347,7 +365,7 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
       digitalWrite(pOBD->iCSPin, HIGH);
   }
   else // must be I2C
-#endif // !ATtiny85
+#endif // !WIMPY_MCU
 {
     u8Temp[0] = 0x40; // data prefix byte
     while (iLen >= 31) { // max 31 data byes + data introducer
