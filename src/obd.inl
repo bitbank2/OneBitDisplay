@@ -646,7 +646,7 @@ const uint8_t epd213_122x250_init_sequence_full[] PROGMEM = {
     0
 };
 const uint8_t epd42_init_sequence_full[] PROGMEM = {
-    2, UC8151_PSR, 0x9b,
+    2, UC8151_PSR, 0x9f,
     6, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x2b,
     1, UC8151_PON,
     BUSY_WAIT,
