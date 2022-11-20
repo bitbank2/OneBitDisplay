@@ -301,6 +301,16 @@ const uint8_t epd42r2_init_sequence_full[] PROGMEM = {
     0x00
 };
 
+// init sequence for 2.13" Random screen double connector
+const uint8_t EPD213R_104x212_d_init_sequence_full[] PROGMEM = {
+    0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
+    0x01, UC8151_PON, // power on
+    BUSY_WAIT,
+    0x02, 0x00, 0x0f, // LUT from OTP
+    0x02, UC8151_CDI, 0x5c, // inverted, white border
+    0x00
+};
+
 // initialization sequence for 2.9" 296x128 e-paper
 const uint8_t epd29_init_sequence_full[] PROGMEM = {
     0x02, UC8151_PSR, 0x80 | 0x00 | 0x10 | 0x00 | 0x02 | 0x01, // RES_128x296, LUT_OTP, FORMAT_BW, SHIFT_LEFT, BOOSTER_ON, RESET_NONE
@@ -1964,6 +1974,15 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->iFlags |= OBD_3COLOR;
       pOBD->chip_type = OBD_CHIP_UC8151;
       pOBD->iTimeout = 25000; // 3-color need a longer timeout (25 seconds)
+  } else if (iType == EPD213R_104x212_d) {
+      pOBD->native_width = pOBD->width = 104;
+      pOBD->native_height = pOBD->height = 212;
+      pOBD->type = EPD213R_104x212_d;
+      pOBD->can_flip = 0;
+      pOBD->busy_idle = HIGH;
+      pOBD->iFlags |= OBD_3COLOR;
+      pOBD->chip_type = OBD_CHIP_UC8151;
+      pOBD->iTimeout = 25000; // 3-color need a longer timeout (25 seconds)
   }
   else if (iType == EPD29R_128x296 || iType == EPD154R_152x152 || iType == EPD42R_400x300)
   { // BLACK/WHITE/RED
@@ -3527,6 +3546,19 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh)
 #endif // !WIMPY_MCU
     if (pOBD->type == EPD42R2_400x300) {
         EPDSendCMDSequence(pOBD, epd42r2_init_sequence_full);
+        EPD27_SetLut(pOBD, false);
+#ifndef WIMPY_MCU
+        if (pOBD->ucScreen) {
+            EPDWriteImage(pOBD, 0x10, NULL, 0, 0, pOBD->width, pOBD->height, 0); // black/white plane
+            EPDWriteImage(pOBD, 0x13, NULL, 0, 0, pOBD->width, pOBD->height, 1); // red plane
+        }
+#endif // !WIMPY_MCU
+        if (bRefresh) {
+            obdWriteCommand(pOBD, 0x12); // master activation
+        }
+    }
+    if (pOBD->type == EPD213R_104x212_d) {
+        EPDSendCMDSequence(pOBD, EPD213R_104x212_d_init_sequence_full);
         EPD27_SetLut(pOBD, false);
 #ifndef WIMPY_MCU
         if (pOBD->ucScreen) {
