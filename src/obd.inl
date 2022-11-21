@@ -4939,28 +4939,34 @@ uint8_t bFlipped = false;
         if (iFG == -1) iFG = OBD_WHITE;
         if (iBG == -1) iBG = OBD_BLACK;
     }
-  i16 = pgm_read_word(pBMP);
+    // Don't use pgm_read_word because it can cause an unaligned
+    // access on RP2040 for odd addresses
+  i16 = pgm_read_byte(pBMP);
+  i16 += (pgm_read_byte(&pBMP[1]) << 8);
   if (i16 != 0x4d42) // must start with 'BM'
      return OBD_ERROR_BAD_DATA; // not a BMP file
-  cx = pgm_read_word(pBMP + 18);
+  cx = pgm_read_byte(pBMP + 18);
+    cx += (pgm_read_byte(pBMP+19)<<8);
   if (cx + dx > pOBD->width) // must fit on the display
      return OBD_ERROR_BAD_PARAMETER;
-  cy = pgm_read_word(pBMP + 22);
+  cy = pgm_read_byte(pBMP + 22);
+    cy += (pgm_read_byte(pBMP+23)<<8);
   if (cy < 0) cy = -cy;
   else bFlipped = true;
   if (cy + dy > pOBD->height) // must fit on the display
      return OBD_ERROR_BAD_PARAMETER;
-  i16 = pgm_read_word(pBMP + 28);
+  i16 = pgm_read_byte(pBMP + 28);
+    i16 += (pgm_read_byte(pBMP+29)<<8);
   if (i16 != 1) // must be 1 bit per pixel
      return OBD_ERROR_BAD_DATA;
-  iOffBits = pgm_read_word(pBMP + 10);
+  iOffBits = pgm_read_byte(pBMP + 10);
+    iOffBits += (pgm_read_byte(pBMP+11));
   iPitch = (((cx+7)>>3) + 3) & 0xfffc; // must be DWORD aligned
   if (bFlipped)
   {
     iOffBits += ((cy-1) * iPitch); // start from bottom
     iPitch = -iPitch;
   }
-
     ucFill = (iBG == OBD_WHITE && pOBD->type < EPD42_400x300) ? iBG : 0xff;
     if (!pOBD->ucScreen || iFG == OBD_RED) { // this will override the B/W plane, so invert things
         ucFill = 0x00;
@@ -5050,13 +5056,18 @@ uint8_t ucColorMap[16];
         return OBD_ERROR_NOT_SUPPORTED; // if not 3-color EPD or no back buffer, bye-byte
     iDestPitch = pOBD->width;
     iRedOff = ((pOBD->height+7)>>3) * iDestPitch;
-    i16 = pgm_read_word(pBMP);
+    // Need to avoid pgm_read_word because it can cause an
+    // unaligned address exception on the RP2040 for odd addresses
+    i16 = pgm_read_byte(pBMP);
+    i16 += (pgm_read_byte(pBMP+1)<<8);
     if (i16 != 0x4d42) // must start with 'BM'
         return OBD_ERROR_BAD_DATA; // not a BMP file
-    cx = pgm_read_word(&pBMP[18]);
+    cx = pgm_read_byte(&pBMP[18]);
+    cx += (pgm_read_byte(&pBMP[19]) << 8);
     if (cx + dx > pOBD->width) // must fit on the display
         return OBD_ERROR_BAD_PARAMETER;
-    cy = pgm_read_word(&pBMP[22]);
+    cy = pgm_read_byte(&pBMP[22]);
+    cy += (pgm_read_byte(&pBMP[23])<<8);
     if (cy < 0)
         cy = -cy;
     else
@@ -5065,10 +5076,11 @@ uint8_t ucColorMap[16];
         return OBD_ERROR_BAD_PARAMETER;
     if (pgm_read_byte(&pBMP[30]) != 0) // compression must be NONE
         return OBD_ERROR_BAD_DATA;
-    bpp = pgm_read_word(&pBMP[28]);
+    bpp = pgm_read_byte(&pBMP[28]);
     if (bpp != 4) // must be 4 bits per pixel
         return OBD_ERROR_BAD_DATA;
-    iOffBits = pgm_read_word(&pBMP[10]);
+    iOffBits = pgm_read_byte(&pBMP[10]);
+    iOffBits += (pgm_read_byte(&pBMP[11])<<8);
     iColors = pgm_read_byte(&pBMP[46]); // colors used BMP field
     if (iColors == 0 || iColors > (1<<bpp))
         iColors = (1 << bpp); // full palette
