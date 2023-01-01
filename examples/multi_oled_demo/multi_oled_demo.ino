@@ -49,19 +49,19 @@ int rc;
 rc = obdI2CInit(&obd[0], MY_OLED1, OLED_ADDR, FLIP180, INVERT, 1, SDA_PIN, SCL_PIN, RESET_PIN, 400000L); // use standard I2C bus at 400Khz
   if (rc != OLED_NOT_FOUND)
   {
-    obdFill(&obd[0], 0, 1);
-    obdWriteString(&obd[0], 0,0,0,msgs[rc], FONT_8x8, 0, 1);
-    obdWriteString(&obd[0], 0,8,3,(char *)"Display", FONT_16x16, 0, 1);
-    obdWriteString(&obd[0], 0,56,6,(char *)"0", FONT_16x16, 0, 1);
+    obdFill(&obd[0], OBD_WHITE, 1);
+    obdWriteString(&obd[0], 0,0,0,msgs[rc], FONT_8x8, OBD_BLACK, 1);
+    obdWriteString(&obd[0], 0,8,3,(char *)"Display", FONT_16x16, OBD_BLACK, 1);
+    obdWriteString(&obd[0], 0,56,6,(char *)"0", FONT_16x16, OBD_BLACK, 1);
   }
 rc = obdI2CInit(&obd[1], MY_OLED2, OLED_ADDR, FLIP180, INVERT, 0, GROVE_SDA_PIN, GROVE_SCL_PIN, RESET_PIN, 400000L); // use standard I2C bus at 400Khz
   if (rc != OLED_NOT_FOUND)
   {
-    obdFill(&obd[1], 0, 1);
+    obdFill(&obd[1], OBD_WHITE, 1);
     obdSetTextWrap(&obd[1], 1);
-    obdWriteString(&obd[1], 0,0,0,msgs[rc], FONT_6x8, 0, 1);
-    obdWriteString(&obd[1], 0,4,2,(char *)"Display", FONT_8x8, 0, 1);
-    obdWriteString(&obd[1], 0,28,3,(char *)"1", FONT_8x8, 0, 1);
+    obdWriteString(&obd[1], 0,0,0,msgs[rc], FONT_6x8, OBD_BLACK, 1);
+    obdWriteString(&obd[1], 0,4,2,(char *)"Display", FONT_8x8, OBD_BLACK, 1);
+    obdWriteString(&obd[1], 0,28,3,(char *)"1", FONT_8x8, OBD_BLACK, 1);
   }
 } /* setup() */
 

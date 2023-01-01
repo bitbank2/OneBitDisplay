@@ -17,8 +17,8 @@ uint8_t ucBackBuf[400*240/8];
 void setup() {
   obdSPIInit(&obd, SHARP_400x240, DC_PIN, CS_PIN, RESET_PIN, MOSI_PIN, CLK_PIN, LED_PIN, FLIP180, INVERT, BITBANG, 8000000L);
   obdSetBackBuffer(&obd, ucBackBuf);
-  obdFill(&obd, 0, 0);
-  obdWriteString(&obd,0,0,0,(char *)"Sharp Memory LCD Demo!", FONT_16x16, 0, 0);
+  obdFill(&obd, OBD_WHITE, 0);
+  obdWriteString(&obd,0,0,0,(char *)"Sharp Memory LCD Demo!", FONT_16x16, OBD_BLACK, 0);
   obdDumpBuffer(&obd, NULL);
 }
 
@@ -29,12 +29,12 @@ void loop() {
   {
     for (i=1; i<100; i++)
     {
-      obdEllipse(&obd, 200, 140, i, i, 1, 0); // circle, not filled
+      obdEllipse(&obd, 200, 140, i, i, OBD_BLACK, 0); // circle, not filled
       obdDumpBuffer(&obd, NULL);
     }
     for (i=99; i>=1; i--)
     {
-      obdEllipse(&obd, 200, 140, i, i, 0, 0); // circle, not filled
+      obdEllipse(&obd, 200, 140, i, i, OBD_WHITE, 0); // circle, not filled
       obdDumpBuffer(&obd, NULL);
     }
   }  

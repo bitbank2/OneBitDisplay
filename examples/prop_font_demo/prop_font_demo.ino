@@ -52,8 +52,8 @@ rc = obdI2CInit(&obd, MY_OLED, OLED_ADDR, FLIP180, INVERT, USE_HW_I2C, SDA_PIN, 
   if (rc != OLED_NOT_FOUND)
   {
     char *msgs[] = {(char *)"SSD1306 @ 0x3C", (char *)"SSD1306 @ 0x3D",(char *)"SH1106 @ 0x3C",(char *)"SH1106 @ 0x3D"};
-    obdFill(&obd, 0, 1);
-    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_8x8, 0, 1);
+    obdFill(&obd, OBD_WHITE, 1);
+    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_8x8, OBD_BLACK, 1);
     obdSetBackBuffer(&obd, ucBackBuffer);
     delay(2000);
   }
@@ -64,28 +64,28 @@ int y;
 char szTemp[32];
 unsigned long ms;
 
-    obdFill(&obd, 0, 0);
+    obdFill(&obd, OBD_WHITE, 0);
     ms = micros();
-    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, 16, (char *)"Hello World",1);
-    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, 16+FreeSerif12pt7b.yAdvance, (char *)"Fast Perf!", 1);
+    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, 16, (char *)"Hello World",OBD_BLACK);
+    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, 16+FreeSerif12pt7b.yAdvance, (char *)"Fast Perf!", OBD_BLACK);
     ms = micros() - ms;
     obdDumpBuffer(&obd, NULL);
     sprintf(szTemp, "rendered in %d us", (int)ms);
-    obdWriteString(&obd, 0,0,7,szTemp, FONT_6x8, 0, 1);
+    obdWriteString(&obd, 0,0,7,szTemp, FONT_6x8, OBD_BLACK, 1);
     delay(4000);
     
   for (y=-30; y<80; y++)
   {
-    obdFill(&obd, 0xff, 0);
-    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, y, (char *)"Hello World", 0);
-    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, y+FreeSerif12pt7b.yAdvance, (char *)"Fast Perf!", 0);
+    obdFill(&obd, OBD_BLACK, 0);
+    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, y, (char *)"Hello World", OBD_WHITE);
+    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, y+FreeSerif12pt7b.yAdvance, (char *)"Fast Perf!", OBD_WHITE);
     obdDumpBuffer(&obd, NULL);
   }
   for (y=79; y>=-30; y--)
   {
-    obdFill(&obd, 0, 0);
-    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, y, (char *)"Hello World", 1);
-    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, y+FreeSerif12pt7b.yAdvance, (char *)"Fast Perf!", 1);
+    obdFill(&obd, OBD_WHITE, 0);
+    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, y, (char *)"Hello World", OBD_BLACK);
+    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, y+FreeSerif12pt7b.yAdvance, (char *)"Fast Perf!", OBD_BLACK);
     obdDumpBuffer(&obd, NULL);
   }
 } /* loop() */

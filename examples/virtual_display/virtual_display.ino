@@ -5,7 +5,7 @@
 // these allow you to create a display of any size in memory
 // and draw it across multiple physical displays
 //
-#include <random.h>
+//#include <random.h>
 #include <OneBitDisplay.h>
 OBDISP obLeft;
 OBDISP obRight;
@@ -133,8 +133,8 @@ rc = obdI2CInit(&obRight, OLED_128x64, -1, 0, 0,0,WM_IO_PB_11, WM_IO_PA_00,-1,12
   if (rc != OLED_NOT_FOUND)
   {
     char *msgs[] = {(char *)"SSD1306 @ 0x3C", (char *)"SSD1306 @ 0x3D",(char *)"SH1106 @ 0x3C",(char *)"SH1106 @ 0x3D"};
-    obdFill(&obLeft, 0, 1);
-    obdWriteString(&obLeft,0,0,0,msgs[rc], FONT_8x8, 0, 1);
+    obdFill(&obLeft, OBD_WHITE, 1);
+    obdWriteString(&obLeft,0,0,0,msgs[rc], FONT_8x8, OBD_BLACK, 1);
     delay(2000);
   }
 }
@@ -145,10 +145,10 @@ char szTemp[32];
 unsigned long ms;
 int xpos[NUM_SPRITES], ypos[NUM_SPRITES], index[NUM_SPRITES], velocity[NUM_SPRITES];
 
-  obdFill(&obLeft,0x0, 1);
-  obdWriteString(&obLeft,0,16,0,(char *)"ss_oled Demo", FONT_8x8, 0, 1);
-  obdWriteString(&obLeft,0,0,1,(char *)"Written by Larry Bank", FONT_6x8, 1, 1);
-  obdWriteString(&obLeft,0,0,3,(char *)"**Demo**", FONT_16x32, 0, 1);
+  obdFill(&obLeft, OBD_WHITE, 1);
+  obdWriteString(&obLeft,0,16,0,(char *)"ss_oled Demo", FONT_8x8, OBD_BLACK, 1);
+  obdWriteString(&obLeft,0,0,1,(char *)"Written by Larry Bank", FONT_6x8, OBD_WHITE, 1);
+  obdWriteString(&obLeft,0,0,3,(char *)"**Demo**", FONT_16x32, OBD_BLACK, 1);
   delay(2000);
 
 // Sprites
@@ -162,7 +162,7 @@ int xpos[NUM_SPRITES], ypos[NUM_SPRITES], index[NUM_SPRITES], velocity[NUM_SPRIT
   }
   while (1)
   {
-    obdFill(&obVirt, 0, 0); // erase the virtual display
+    obdFill(&obVirt, OBD_WHITE, 0); // erase the virtual display
     for (i=0; i<NUM_SPRITES; i++)
     {
       int x, y;

@@ -46,8 +46,8 @@ int rc;
 rc = obdI2CInit(&obd, MY_OLED, OLED_ADDR, FLIP180, INVERT, USE_HW_I2C, GROVE_SDA_PIN, GROVE_SCL_PIN, RESET_PIN, 800000L); // use standard I2C bus at 400Khz
   if (rc != OLED_NOT_FOUND)
   {
-    obdFill(&obd, 0, 1);
-    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_8x8, 0, 1);
+    obdFill(&obd, OBD_WHITE, 1);
+    obdWriteString(&obd, 0,0,0,msgs[rc], FONT_8x8, OBD_BLACK, 1);
     delay(2000);
   }
   else
@@ -65,23 +65,23 @@ void loop() {
   uint8_t ucColor;
 
 #ifdef DRAW_ELLIPSES
-  obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Ellipses", FONT_8x8, 0, 1);
+  obdFill(&obd, OBD_WHITE, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Ellipses", FONT_8x8, OBD_BLACK, 1);
   delay(2000);
-  obdFill(&obd, 0, 1);
+  obdFill(&obd, OBD_WHITE, 1);
   for (i=0; i<100; i++)
   {
     x = random(128);
     y = random(64);
     r1 = random(64);
     r2 = random(32);
-    obdEllipse(&obd, x, y, r1, r2, 1, 0);
+    obdEllipse(&obd, x, y, r1, r2, OBD_BLACK, 0);
     obdDumpBuffer(&obd, NULL);    
   }
-  obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Ellipses", FONT_8x8, 0, 1);
+  obdFill(&obd, OBD_WHITE, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Ellipses", FONT_8x8, OBD_BLACK, 1);
   delay(2000);
-  obdFill(&obd, 0, 1);
+  obdFill(&obd, OBD_WHITE, 1);
   for (i=0; i<100; i++)
   {
     x = random(128);
@@ -95,23 +95,23 @@ void loop() {
 #endif // DRAW_ELLIPSES
 
 #ifdef DRAW_RECTS
-  obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Rectangles", FONT_8x8, 0, 1);
+  obdFill(&obd, OBD_WHITE, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Rectangles", FONT_8x8, OBD_BLACK, 1);
   delay(2000);
-  obdFill(&obd, 0, 1);
+  obdFill(&obd, OBD_WHITE, 1);
   for (i=0; i<100; i++)
   {
     x = random(128);
     y = random(64);
     x2 = random(128);
     y2 = random(64);
-    obdRectangle(&obd, x, y, x2, y2, 1, 0);
+    obdRectangle(&obd, x, y, x2, y2, OBD_BLACK, 0);
     obdDumpBuffer(&obd, NULL);
   }
-  obdFill(&obd, 0, 1);
-  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Rects", FONT_8x8, 0, 1);
+  obdFill(&obd, OBD_WHITE, 1);
+  obdWriteString(&obd, 0, 0, 0, (char *)"Filled Rects", FONT_8x8, OBD_BLACK, 1);
   delay(2000);
-  obdFill(&obd, 0, 1);
+  obdFill(&obd, OBD_WHITE, 1);
   for (i=0; i<100; i++)
   {
     x = random(128);

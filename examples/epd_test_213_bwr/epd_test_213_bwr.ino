@@ -33,7 +33,7 @@ void setup() {
   // Set the orientation to draw in the direction we want
   lcd.setRotation(90); // the panel is actually 128 wide by 296 tall, but oriented 90 right
   lcd.allocBuffer(); // allocate a back buffer and keep it internal to the class
-  lcd.fillScreen(0); // 0 for EPDs is white (for OneBitDisplay)
+  lcd.fillScreen(OBD_WHITE); // 0 for EPDs is white (for OneBitDisplay)
   lcd.setFont(FONT_12x16); // use the internal stretched/smoothed font
   lcd.println("This was");
   lcd.setTextColor(2);

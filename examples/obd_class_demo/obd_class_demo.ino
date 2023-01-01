@@ -31,7 +31,7 @@ void setup()
     tft.print("Alloc failed");
   }
 //  tft.setRotation(3); // optionally rotate in 90 degree increments - only supports 0/180 without a RAM backing buffer
-  tft.fillScreen(OLED_BLACK);
+  tft.fillScreen(OBD_WHITE);
   tft.setScroll(true); // enable text printing to scroll the display buffer a line at a time
   tft.setFont(FONT_12x16); // Use the 6x8 (stretched+smoothed) font
   i = 0;

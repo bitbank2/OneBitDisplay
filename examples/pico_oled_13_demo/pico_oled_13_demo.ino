@@ -23,7 +23,7 @@ void setup() {
   lcd.allocBuffer(); // allocate a back buffer and keep it internal to the class
   lcd.setRotation(90); // the panel is actually 64 wide by 128 tall, but oriented 90 right
   // To draw characters rotated 90/270 we need to allocate a back buffer
-  lcd.fillScreen(0); // 0 for EPDs is white (for OneBitDisplay)
+  lcd.fillScreen(OBD_WHITE); // 0 for EPDs is white (for OneBitDisplay)
   lcd.setFont(FONT_12x16); // use the internal stretched/smoothed font
   lcd.println("WaveShare");
   lcd.println("Pico-OLED");
@@ -43,7 +43,7 @@ int i;
  }
  lcd.setFont(FONT_6x8);
  lcd.setScroll(true);
- lcd.fillScreen(0);
+ lcd.fillScreen(OBD_WHITE);
  i = 0;
  while (1) {
   lcd.println(i++, DEC);

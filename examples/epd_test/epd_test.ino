@@ -36,19 +36,19 @@ void setup() {
   // Set the orientation to draw in the direction we want
   lcd.setRotation(90); // the panel is actually 128 wide by 296 tall, but oriented 90 right
   lcd.allocBuffer(); // allocate a back buffer and keep it internal to the class
-  lcd.fillScreen(0); // 0 for EPDs is white (for OneBitDisplay)
+  lcd.fillScreen(OBD_WHITE); // 0 for EPDs is white (for OneBitDisplay)
   lcd.setFont(FONT_12x16); // use the internal stretched/smoothed font
   lcd.print("This was a full update");
   lcd.display(); // do a full update
   for (int i=24; i<120; i += 32) {
     lcd.fillCircle(i, i, 8, 1);
-    lcd.displayPartial(); // draw a ball and show intermediate results with a partial update
+    lcd.displayFast(); // draw a ball and show intermediate results with a partial update
   }
   lcd.setCursor(0, 112);
   lcd.print("then a partial update");
-  lcd.displayPartial(); // final partial update
+  lcd.displayFast(); // final partial update
   delay(4000);
-  lcd.fillScreen(0);
+  lcd.fillScreen(OBD_WHITE);
   lcd.setFreeFont(&Roboto_Black_40);
   lcd.setCursor(0,40);
   lcd.println("Gratuitous");

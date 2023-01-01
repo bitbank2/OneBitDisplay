@@ -47,36 +47,33 @@ void setup()
     mySensor.start(); // start sampling mode
   } else { // can't find the sensor, stop
     lcd.fillScreen(OBD_WHITE);
-    lcd.println("SCD41 not found!");
-    lcd.println("Halted...");
+    lcd.drawString("SCD41 not found!",0,0);
+    lcd.drawString("Halted...", 0, 8);
     lcd.display();
     while (1) {};
   }
 } /* setup() */
 
 void loop() {
+char szTemp[32];
 
   mySensor.getSample();
   lcd.fillScreen(OBD_WHITE); // 0 for EPDs is white (for OneBitDisplay)
   lcd.setTextColor(OBD_BLACK);
   lcd.setFont(FONT_12x16);
-  lcd.println("2.13 250x122 AVR test");
+  lcd.drawString("2.13 250x122 AVR test",0,0);
   lcd.setFreeFont(&Roboto_Black_28);
-  lcd.setCursor(0,48);
   // Display CO2 value
-  lcd.print("CO2 ");
-  lcd.print(mySensor.co2(), DEC);
-  lcd.println("ppm");
+  sprintf(szTemp, "CO2: %dppm", mySensor.co2());
+  lcd.drawString(szTemp, 0, 48);
 
   // Display temperature
-  lcd.print("Temperature: ");
-  lcd.print(mySensor.temperature(), DEC);
-  lcd.println("C");
+  sprintf(szTemp, "Temperature: %dC", mySensor.temperature());
+  lcd.drawString(szTemp, 0, 88);
   
   // Display humidity
-  lcd.println("Humidity: ");
-  lcd.print(mySensor.humidity(), DEC);
-  lcd.println("%");
+  sprintf(szTemp, "Humidity: %d%%", mySensor.humidity());
+  lcd.drawString(szTemp, 0, 122);
 
   // Tell EPD to do a full refresh
   lcd.display();
