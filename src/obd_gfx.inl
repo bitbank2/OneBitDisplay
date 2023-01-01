@@ -1501,21 +1501,21 @@ int iOldFG; // old fg color to make sure red works
                   iLen = pOBD->width - pOBD->iCursorX;
               // we can't directly use the pointer to FLASH memory, so copy to a local buffer
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
-              memcpy_P(u8Temp, s, 16);
-              if (iColor == OBD_WHITE) InvertBytes(u8Temp, 16);
-              obdWriteDataBlock(pOBD, &u8Temp[iFontSkip], iLen, bRender); // write character pattern
+              memcpy_P(u8Cache, s, 16);
+              if (iColor == OBD_WHITE) InvertBytes(u8Cache, 16);
+              obdWriteDataBlock(pOBD, &u8Cache[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
-              memcpy_P(u8Temp, s+16, 16);
-              if (iColor == OBD_WHITE) InvertBytes(u8Temp, 16);
-                 obdWriteDataBlock(pOBD, &u8Temp[iFontSkip], iLen, bRender); // write character pattern
+              memcpy_P(u8Cache, s+16, 16);
+              if (iColor == OBD_WHITE) InvertBytes(u8Cache, 16);
+                 obdWriteDataBlock(pOBD, &u8Cache[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+16, bRender);
-              memcpy_P(u8Temp, s+32, 16);
-              if (iColor == OBD_WHITE) InvertBytes(u8Temp, 16);
-                 obdWriteDataBlock(pOBD, &u8Temp[iFontSkip], iLen, bRender); // write character pattern
+              memcpy_P(u8Cache, s+32, 16);
+              if (iColor == OBD_WHITE) InvertBytes(u8Cache, 16);
+                 obdWriteDataBlock(pOBD, &u8Cache[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+24, bRender);
-              memcpy_P(u8Temp, s+48, 16);
-              if (iColor == OBD_WHITE) InvertBytes(u8Temp, 16);
-                 obdWriteDataBlock(pOBD, &u8Temp[iFontSkip], iLen, bRender); // write character pattern
+              memcpy_P(u8Cache, s+48, 16);
+              if (iColor == OBD_WHITE) InvertBytes(u8Cache, 16);
+                 obdWriteDataBlock(pOBD, &u8Cache[iFontSkip], iLen, bRender); // write character pattern
               pOBD->iCursorX += iLen;
               if (pOBD->iCursorX >= pOBD->width-15 && pOBD->wrap) // word wrap enabled?
               {
@@ -2169,10 +2169,11 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
     }
       if (pOBD->ucScreen) {
           p = &pOBD->ucScreen[iRedOffset + x1 + ((y1 >> 3) * iPitch)]; // point to current spot in back buffer
+          bOld = bNew = p[0]; // current pixels
       } else {
           p = u8Cache;
+          bOld = bNew = ucFill;
       }
-    bOld = bNew = p[0]; // current data at that address
     mask = 1 << (y1 & 7); // current bit offset
     dx = (x2 - x1);
     error = dy >> 1;
@@ -2193,18 +2194,18 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
       {
         if (bOld != bNew)
         {
-          p[0] = bNew; // save to RAM
+            p[0] = bNew; // save to RAM
             if (bRender) {
                 obdSetPosition(pOBD, x, y1, bRender);
                 obdWriteDataBlock(pOBD, &bNew, 1, bRender);
             }
-            if (pOBD->ucScreen) {
-                p += iPitch; // next line
-                bOld = bNew = p[0];
-            } else {
-                bOld = bNew = ucFill;
-            }
         } // data changed
+        if (pOBD->ucScreen) {
+            p += iPitch; // next line
+            bOld = bNew = p[0];
+        } else {
+            bOld = bNew = ucFill;
+        }
         mask = 1; // start at LSB again
       }
       if (error < 0)
@@ -2212,8 +2213,8 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
         error += dy;
         if (bOld != bNew) // write the last byte we modified if it changed
         {
-          p[0] = bNew; // save to RAM
-            if (bRender || !pOBD->ucScreen) {
+            p[0] = bNew; // save to RAM
+            if (bRender) {
                 obdSetPosition(pOBD, x, y1, bRender);
                 obdWriteDataBlock(pOBD, &bNew, 1, bRender);
             }
