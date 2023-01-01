@@ -1,5 +1,5 @@
 //
-// OneBitDisplay (OLED+LCD library)
+// OneBitDisplay (OLED/LCD/E-Paper library)
 // Copyright (c) 2020 BitBank Software, Inc.
 // Written by Larry Bank (bitbank@pobox.com)
 // Project started 3/23/2020
@@ -55,8 +55,8 @@ void delay(int);
 #endif // _LINUX_
 #include "OneBitDisplay.h"
 #include "obd_io.inl" // I/O (non-portable) code is in here
-#include "obd.inl" // All of the drawing code is in here
-
+#include "obd.inl" // All of the display interface code is in here
+#include "obd_gfx.inl" // drawing code
 #ifdef __cplusplus
 //
 // C++ Class implementation
