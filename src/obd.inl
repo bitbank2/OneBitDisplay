@@ -2626,7 +2626,7 @@ int iSize;
         iSize = ((pOBD->native_width+7)>>3) * pOBD->native_height;
     }
     for (int i=0; i<iSize; i++) {
-        RawWriteData(pOBD, &ucPattern, 1);
+        RawWriteData(pOBD, &ucPattern, 1); // slow to go one byte at a time, but not a critical time issue for this feature and we need to support a "zero RAM" environment
     }
 } /* EPDFill() */
 
@@ -3667,7 +3667,7 @@ int i, tx, ty;
         if (y + cy > pOBD->native_width)
             cy = pOBD->native_width - y;
         y &= 0xff8; // fix to byte boundary
-        if (pOBD->iFlags & OBD_FLIPV || pOBD->type == EPD42_400x300)
+        if ((pOBD->iFlags & OBD_FLIPV) || (pOBD->ucScreen == NULL && pOBD->chip_type == OBD_CHIP_SSD16xx)) // flipped Y when drawing with no back buffer
             tx = (pOBD->native_width - y - cy)/8;
         else
             tx = y/8;
