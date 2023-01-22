@@ -3257,7 +3257,7 @@ uint8_t ucMask, uc1, *s, *d;
                 count = 0;
                 if (pOBD->iOrientation == 180) {
                     ucMask = 1<<((pOBD->height-1) & 7);
-                    s = &pBuffer[x + ((pOBD->height-1)>>3)*iPitch];
+                    s = &pBuffer[pOBD->width-2-x + ((pOBD->height-1)>>3)*iPitch];
                     for (y = pOBD->height-1; y >= 0; y--) {
                         uc1 <<= 2;
                         if (s[0] & ucMask) uc1 |= 1;
