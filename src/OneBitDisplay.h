@@ -99,21 +99,27 @@ enum {
   EPD29_128x296,
   EPD29B_128x296,
   EPD29R_128x296,
+  EPD29Y_128x296, // DEPG0290YN
   EPD293_128x296,
   EPD42R_400x300,
-  EPD42R2_400x300,
+  EPD42R2_400x300, // GDEQ042Z21
   EPD213B_104x212,
   EPD213R_104x212,
+  EPD213R2_122x250, // DEPG0213RW
   EPD213R_104x212_d,
   EPD213_104x212,
   EPD213_122x250, // waveshare
   EPD213B_122x250, // GDEY0213B74
   EPD154_152x152, // GDEW0154M10
   EPD154R_152x152,
+  EPD154Y_152x152, // DEPG0154YN
   EPD154_200x200, // waveshare
   EPD27_176x264, // waveshare
   EPD27b_176x264, // GDEY027T91
   EPD266_152x296, // GDEY0266T90
+  EPD31R_168x296, // DEPG0310RW
+  EPD37Y_240x416, // DEPG0370YN
+  EPD37_240x416, // GDEY037T03
   EPD579_792x272, // GDEY0579T93
 #ifndef __AVR__
     // requires too much RAM to run on AVR
@@ -282,6 +288,7 @@ uint8_t com_mode; // communication mode (I2C / SPI)
 uint8_t mode; // data/command mode for 9-bit SPI
 uint8_t iSDAPin, iSCLPin;
 uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
+uint8_t x_offset, y_offset; // memory offsets
 int iLEDPin; // backlight
 uint8_t bBitBang;
 // e-paper variables

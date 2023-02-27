@@ -33,7 +33,6 @@ static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, uint8_t *pBits, int x, in
 void EPD213_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
 void EPD293_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
 void EPD154_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
-void EPD29R_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
 void EPD_CMD2(OBDISP *pOBD, uint8_t cmd, uint8_t param);
 void obdSetDCMode(OBDISP *pOBD, int iMode);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
@@ -320,13 +319,17 @@ const uint8_t epd35r_init_sequence_full[] PROGMEM = {
     0x03, 0x4f, 0x7f, 0x01,
     0x00
 };
+
 // init sequence for GDEW042Z15
 const uint8_t epd42r2_init_sequence_full[] PROGMEM = {
-    0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
+    0x03, UC8151_PSR, 0xcf, 0x8d,
+   0x06, UC8151_PWR, 0x03, 0x10, 0x3f, 0x3f, 0x0d,
     0x01, UC8151_PON, // power on
     BUSY_WAIT,
-    0x02, 0x00, 0x0f, // LUT from OTP
-    0x02, UC8151_CDI, 0x9c, // inverted, white border
+    0x05, UC8151_TRES, 0x01, 0x90, 1, 0x2c, // resolution
+    0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
+//    0x02, 0x00, 0x0f, // LUT from OTP
+    0x02, UC8151_CDI, 0x5c, // inverted, white border
     0x00
 };
 
@@ -340,14 +343,31 @@ const uint8_t EPD213R_104x212_d_init_sequence_full[] PROGMEM = {
     0x00
 };
 
+// initialization sequence for 3.7" 240x416 e-paper
+const uint8_t epd37_init_sequence_full[] PROGMEM = {
+    0x03, UC8151_PSR, 0xdf, 0x8d,
+    0x06, UC8151_PWR, 0x03, 0x10, 0x3f, 0x3f, 0x0d,
+    0x01, UC8151_PON, // power on
+    BUSY_WAIT,
+    0x04, UC8151_TRES, 0xf0, 1, 0xa0, // resolution
+
+    0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
+    0x02, UC8151_PFS, 0x00, // FRAMES_1
+    0x02, UC8151_TSE, 0x00, // TEMP_INTERNAL | OFFSET_0
+    0x02, UC8151_TCON, 0x22,
+    0x02, UC8151_CDI, 0xd7, // inverted, white border
+    0x02, UC8151_PLL, 0x09, // HZ_50
+    0x00 // end of table
+};
 // initialization sequence for 2.9" 296x128 e-paper
 const uint8_t epd29_init_sequence_full[] PROGMEM = {
-    0x02, UC8151_PSR, 0x80 | 0x00 | 0x10 | 0x00 | 0x02 | 0x01, // RES_128x296, LUT_OTP, FORMAT_BW, SHIFT_LEFT, BOOSTER_ON, RESET_NONE
+    0x02, UC8151_PSR, 0x80 | 0x00 | 0x10 | 0x08 | 0x04 | 0x02 | 0x01, // RES_128x296, LUT_OTP, FORMAT_BW, SHIFT_LEFT, BOOSTER_ON, RESET_NONE
     0x06, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x2b,
     0x01, UC8151_PON, // power on
     BUSY_WAIT,
     0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
     0x02, UC8151_PFS, 0x00, // FRAMES_1
+    0x04, UC8151_TRES, 0x80, 1, 0x28, // resolution
     0x02, UC8151_TSE, 0x00, // TEMP_INTERNAL | OFFSET_0
     0x02, UC8151_TCON, 0x22,
     0x02, UC8151_CDI, 0x9c, // inverted, white border
@@ -416,7 +436,8 @@ const uint8_t epd29r_init_sequence[] PROGMEM = {
     0x03, 0x4f, 0x27, 0x01, // RAM Y counter
     0x00
 };
-// for 152x152
+
+// for 152x152 BWR
 const uint8_t epd29r_init_sequence_152[] PROGMEM = {
     0x01, 0x12, // soft reset
     BUSY_WAIT,
@@ -496,7 +517,7 @@ const uint8_t epd154b_init_sequence_full[] PROGMEM =
 {
     1, UC8151_PON,
     BUSY_WAIT,
-    2, UC8151_PSR, 0x1f, // panel setting
+    2, UC8151_PSR, 0xdf, // panel setting
     4, UC8151_TRES, 0x98, 0, 0x98, // resolution
     2, UC8151_CDI, 0x97, // VCOM
     0
@@ -1245,6 +1266,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
     pOBD->iTimeout = 5000; // 5 seconds for most e-ink panels
     pOBD->can_flip = 1; // assume can flip 180
     pOBD->ucScreen = NULL; // start with no backbuffer; user must provide one later
+    pOBD->x_offset = 0; // e-paper memory column offset
     pOBD->iDCPin = iDC;
     pOBD->iCSPin = iCS;
     pOBD->iRSTPin = iReset;
@@ -1432,8 +1454,12 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->iTimeout = 25000; // 3-color need a longer timeout (25 seconds)
       return;
 #endif // !WIMPY_MCU
-  } else if (iType == EPD42R2_400x300 || iType == EPD213R_104x212) {
-      if (iType == EPD213R_104x212) {
+  } else if (iType == EPD42R2_400x300 || iType == EPD213R_104x212 || iType == EPD37Y_240x416) {
+      if (iType == EPD37Y_240x416) {
+          pOBD->native_width = pOBD->width = 240;
+          pOBD->native_height = pOBD->height = 416;
+          pOBD->type = EPD42R2_400x300; // use the same commands
+      }else if (iType == EPD213R_104x212) {
           pOBD->native_width = pOBD->width = 104;
           pOBD->native_height = pOBD->height = 212;
           pOBD->type = EPD42R2_400x300; // use the same commands
@@ -1441,11 +1467,13 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
           pOBD->native_width = pOBD->width = 400;
           pOBD->native_height = pOBD->height = 300;
       }
+      pOBD->pInitFull = epd42r2_init_sequence_full;
       pOBD->can_flip = 0;
       pOBD->busy_idle = HIGH;
       pOBD->iFlags |= OBD_3COLOR;
       pOBD->chip_type = OBD_CHIP_UC8151;
       pOBD->iTimeout = 25000; // 3-color need a longer timeout (25 seconds)
+      EPDSendCMDSequence(pOBD, pOBD->pInitFull);
   } else if (iType == EPD213R_104x212_d) {
       pOBD->native_width = pOBD->width = 104;
       pOBD->native_height = pOBD->height = 212;
@@ -1467,25 +1495,48 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->pInitFull = epd35r_init_sequence_full;
       return;
   }
-  else if (iType == EPD29R_128x296 || iType == EPD154R_152x152 || iType == EPD42R_400x300)
+  else if (iType == EPD29R_128x296 || iType == EPD154R_152x152 || iType == EPD42R_400x300 || iType == EPD31R_168x296 || iType == EPD154Y_152x152 || iType == EPD29Y_128x296 || iType == EPD213R2_122x250)
   { // BLACK/WHITE/RED
-      if (iType == EPD29R_128x296) {
-        pOBD->native_width = pOBD->width = 128;
-        pOBD->native_height = pOBD->height = 296;
+      if (iType == EPD31R_168x296) {
+          pOBD->native_width = pOBD->width = 168;
+          pOBD->native_height = pOBD->height = 296;
+          pOBD->pInitFull = epd29r_init_sequence;
+      } else if (iType == EPD29Y_128x296) {
+          pOBD->native_width = pOBD->width = 128;
+          pOBD->native_height = pOBD->height = 296;
+          pOBD->pInitFull = epd29r_init_sequence;
+          pOBD->x_offset = 1;
+      } else if (iType == EPD29R_128x296) {
+          pOBD->native_width = pOBD->width = 128;
+          pOBD->native_height = pOBD->height = 296;
+          pOBD->pInitFull = epd29r_init_sequence;
+      } else if (iType == EPD154Y_152x152) {
+          pOBD->native_width = pOBD->width = 152;
+          pOBD->native_height = pOBD->height = 152;
+          pOBD->pInitFull = epd29r_init_sequence_152;
+          pOBD->x_offset = 1;
       } else if (iType == EPD154R_152x152){
           pOBD->native_width = pOBD->width = 152;
           pOBD->native_height = pOBD->height = 152;
+          pOBD->pInitFull = epd29r_init_sequence_152;
+      } else if (iType == EPD213R2_122x250) {
+          pOBD->native_width = pOBD->width = 122;
+          pOBD->native_height = pOBD->height = 250;
+          pOBD->pInitFull = epd29r_init_sequence;
+          pOBD->x_offset = 1;
       } else {
           pOBD->native_width = pOBD->width = 400;
           pOBD->native_height = pOBD->height = 300;
+          pOBD->pInitFull = epd42r_init_sequence;
       }
       pOBD->type = EPD29R_128x296; // use the rest of the same code
       pOBD->iTimeout = 25000; // 3-color need a longer timeout (25 seconds)
-        pOBD->iFlags |= OBD_3COLOR;
+      pOBD->iFlags |= OBD_3COLOR;
       pOBD->chip_type = OBD_CHIP_SSD16xx;
-        pOBD->can_flip = 0;
-        pOBD->busy_idle = LOW;
-        return;
+      pOBD->can_flip = 0;
+      pOBD->busy_idle = LOW;
+      EPDSendCMDSequence(pOBD, pOBD->pInitFull);
+      return;
   }
   else if (iType == EPD102_80x128) // not working yet
   {
@@ -1507,6 +1558,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
 //      pOBD->iFlags |= OBD_CS_EVERY_BYTE;
       pOBD->pInitFull = epd154b_init_sequence_full;
       pOBD->pInitFast = epd154b_init_sequence_fast;
+      EPDSendCMDSequence(pOBD, pOBD->pInitFull);
       return;
   }
   else if (iType == EPD154_200x200)
@@ -1520,23 +1572,31 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->pInitFull = epd154_init_sequence_full;
       return;
   }
-  else if (iType == EPD29_128x296 || iType == EPD213B_104x212)
+  else if (iType == EPD29_128x296 || iType == EPD213B_104x212 || iType == EPD37_240x416)
   {
-      if (iType == EPD29_128x296) {
+      pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+      pOBD->chip_type = OBD_CHIP_UC8151;
+      pOBD->can_flip = 0; // flip display commands don't exist
+      if (iType == EPD37_240x416) {
+          pOBD->native_width = pOBD->width = 240;
+          pOBD->native_height = pOBD->height = 416;
+          pOBD->busy_idle = HIGH;
+          pOBD->pInitFull = epd37_init_sequence_full;
+          EPDSendCMDSequence(pOBD, epd37_init_sequence_full);
+          pOBD->type = EPD29_128x296; // tell it to use this config
+      } else if (iType == EPD29_128x296) {
           pOBD->native_width = pOBD->width = 128;
           pOBD->native_height = pOBD->height = 296;
           pOBD->busy_idle = HIGH;
           pOBD->pInitFull = epd29_init_sequence_full;
+          EPDSendCMDSequence(pOBD, pOBD->pInitFull);
       } else {
           pOBD->native_width = pOBD->width = 104;
           pOBD->native_height = pOBD->height = 212;
           pOBD->busy_idle = LOW;
-          pOBD->type = EPD29_128x296; // fool it into using this config
+          pOBD->type = EPD29_128x296; // tell it to use this config
+          EPD29_Init(pOBD);
       }
-      pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
-      pOBD->chip_type = OBD_CHIP_UC8151;
-      pOBD->can_flip = 0; // flip display commands don't exist
-      EPD29_Init(pOBD);
       return;
   } else if (iType == EPD47_540x960) {
       pOBD->native_width = pOBD->width = 540;
@@ -2923,24 +2983,6 @@ void EPD293_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
     }
 } /* EPD293_Begin() */
 
-void EPD29R_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
-{
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    if (bPartial) {
-    } else {
-        if (pOBD->native_width == 152) {
-            EPDSendCMDSequence(pOBD, epd29r_init_sequence_152);
-        } else if (pOBD->native_width == 400) {
-            EPDSendCMDSequence(pOBD, epd42r_init_sequence);
-        } else {
-            EPDSendCMDSequence(pOBD, epd29r_init_sequence);
-        }
-    }
-} /* EPD29R_Begin() */
-
 void EPD47_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 {
     (void)x;
@@ -3034,8 +3076,8 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh)
     }
 #endif // !WIMPY_MCU
     if (pOBD->type == EPD42R2_400x300) {
-        EPDSendCMDSequence(pOBD, epd42r2_init_sequence_full);
-        EPD27_SetLut(pOBD, false);
+        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
+       // EPD27_SetLut(pOBD, false);
 #ifndef WIMPY_MCU
         if (pOBD->ucScreen) {
             EPDWriteImage(pOBD, 0x10, NULL, 0, 0, pOBD->width, pOBD->height, 0); // black/white plane
@@ -3128,7 +3170,7 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh)
         }
     }
   if (pOBD->type == EPD29_128x296) {
-      EPD29_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
+      EPDSendCMDSequence(pOBD, pOBD->pInitFull);
 #ifndef WIMPY_MCU
       if (pOBD->ucScreen) {
           EPDWriteImage(pOBD, UC8151_DTM1, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send buffer to 'old' plane
@@ -3171,7 +3213,7 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh)
     }
     if (pOBD->type == EPD29R_128x296) { // BLACK/WHITE/RED
         uint8_t ucTemp[4];
-        EPD29R_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
+        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
 #ifndef WIMPY_MCU
         if (pOBD->ucScreen) {
             EPDWriteImage(pOBD, 0x26, NULL, 0, 0, pOBD->width, pOBD->height, 1); // red plane
@@ -3667,8 +3709,8 @@ int i, tx, ty;
         if (y + cy > pOBD->native_width)
             cy = pOBD->native_width - y;
         y &= 0xff8; // fix to byte boundary
-        if ((pOBD->iFlags & OBD_FLIPV) || (pOBD->ucScreen == NULL && pOBD->chip_type == OBD_CHIP_SSD16xx)) // flipped Y when drawing with no back buffer
-            tx = (pOBD->native_width - y - cy)/8;
+        if ((pOBD->iFlags & OBD_FLIPV) || (pOBD->ucScreen == NULL/* && pOBD->chip_type == OBD_CHIP_SSD16xx*/)) // flipped Y when drawing with no back buffer
+            tx = (pOBD->native_width /*+ 7*/ - y - cy)/8;
         else
             tx = y/8;
         ty = x;
@@ -3715,8 +3757,10 @@ int i, tx, ty;
                     obdWriteCommand(pOBD, SSD1608_WRITE_RAM); // prepare to start writing pixels
             } else {
                 obdWriteCommand(pOBD, SSD1608_SET_RAMXPOS);
-                uc[0] = tx; // start x (byte boundary)
-                uc[1] = tx+((cx-1)>>3); // end x
+                uc[0] = tx + pOBD->x_offset; // start x (byte boundary)
+               // if (cx == pOBD->native_width && (pOBD->native_width & 7) != 0)
+               //     cx += 7; // needs one more byte for the full display width
+                uc[1] = tx+((cx-1)>>3) + pOBD->x_offset; // end x
                 RawWriteData(pOBD, uc, 2);
                 obdWriteCommand(pOBD, SSD1608_SET_RAMYPOS);
                 if (pOBD->iFlags & OBD_FLIPV) {
@@ -3774,10 +3818,14 @@ int i, tx, ty;
             }
             uc[i++] = 0; // stay inside the partial window3
             RawWriteData(pOBD, uc, i);
-//            if (pOBD->iFG == OBD_RED) // write to red plane
+            if (pOBD->iFlags & OBD_3COLOR) {
+                if (pOBD->iFG == OBD_RED) // write to red plane
+                    obdWriteCommand(pOBD, UC8151_DTM2);
+                else
+                    obdWriteCommand(pOBD, UC8151_DTM1); // prepare to start writing pixels
+            } else {
                 obdWriteCommand(pOBD, UC8151_DTM2);
-//            else
-//                obdWriteCommand(pOBD, UC8151_DTM1); // prepare to start writing pixels
+            }
             break;
         default: // error
             break;

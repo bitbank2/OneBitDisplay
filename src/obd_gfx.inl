@@ -1978,6 +1978,7 @@ uint8_t iCols, iLines;
       else if (pOBD->type >= EPD42_400x300) {
           uint8_t ucPattern1 = 0xff, ucPattern2 = 0xff; // assume white
           uint8_t ucRAM1, ucRAM2;
+          int iOldRotation;
           if (pOBD->iFlags & OBD_3COLOR) {
               ucPattern2 = 0x00; // red plane is not inverted
               if (ucData == OBD_BLACK)
@@ -1990,7 +1991,12 @@ uint8_t iCols, iLines;
           }
           ucRAM1 = (pOBD->chip_type == OBD_CHIP_UC8151) ? (uint8_t)UC8151_DTM1 : (uint8_t)SSD1608_WRITE_RAM;
           ucRAM2 = (pOBD->chip_type == OBD_CHIP_UC8151) ? (uint8_t)UC8151_DTM2 : (uint8_t)SSD1608_WRITE_ALTRAM;
-          EPDSetPosition(pOBD, 0,0,pOBD->width, pOBD->height);
+          // Force 0 rotation because bufferless operation
+          // will miss pixel rows not a multiple of 8
+          // when rotated 90 (e.g. 122x250 resolution)
+          iOldRotation = pOBD->iOrientation;
+          pOBD->iOrientation = 0;
+          EPDSetPosition(pOBD, 0,0,pOBD->native_width, pOBD->native_height);
           if (pOBD->type == EPD579_792x272) {
               EPDFill(pOBD, ucRAM1, ucPattern1);
               EPDFill(pOBD, ucRAM2, ~ucPattern1);
@@ -2000,6 +2006,7 @@ uint8_t iCols, iLines;
               EPDFill(pOBD, ucRAM1, ucPattern1);
               EPDFill(pOBD, ucRAM2, ucPattern2);
           }
+          pOBD->iOrientation = iOldRotation;
       }
 #endif // !MEMORY_ONLY
      return;
