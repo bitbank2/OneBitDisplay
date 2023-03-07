@@ -66,6 +66,11 @@ BBI2C * ONE_BIT_DISPLAY::getBB()
     return &_obd.bbi2c;
 } /* getBB() */
 
+uint32_t ONE_BIT_DISPLAY::getRefreshTime(void)
+{
+    return _obd.iTimeout;
+}
+
 void ONE_BIT_DISPLAY::setBB(BBI2C *pBB)
 {
    memcpy(&_obd.bbi2c, pBB, sizeof(BBI2C));
@@ -572,9 +577,9 @@ void ONE_BIT_DISPLAY::drawString(String text, int x, int y)
     drawString(text.c_str(), x, y);
 } /* drawString() */
 
-int ONE_BIT_DISPLAY::display(bool bRefresh)
+int ONE_BIT_DISPLAY::display(bool bRefresh, bool bWait)
 {
-    return obdDumpBuffer_2(&_obd, NULL, bRefresh);
+    return obdDumpBuffer_2(&_obd, NULL, bRefresh, bWait);
 }
 void ONE_BIT_DISPLAY::setRender(bool bRAMOnly)
 {

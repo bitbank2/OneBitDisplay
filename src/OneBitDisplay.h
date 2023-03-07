@@ -318,7 +318,7 @@ class ONE_BIT_DISPLAY
     void setBB(BBI2C *pBB);
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
-    int display(bool bRefresh = true);
+    int display(bool bRefresh = true, bool bWait = true);
     int displayFast();
     int displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
     void setBitBang(bool bBitBang);
@@ -326,6 +326,7 @@ class ONE_BIT_DISPLAY
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
     void setRotation(int iAngle);
     uint8_t getRotation(void);
+    uint32_t getRefreshTime(void);
     void fillScreen(int iColor);
     void setBuffer(uint8_t *pBuffer);
     int allocBuffer(void);
@@ -622,7 +623,7 @@ int obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height);
 // Dump an entire custom buffer to the display
 // useful for custom animation effects
 //
-int obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh);
+int obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh, int bWait);
 int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
 //
 // Render a window of pixels from a provided buffer or the library's internal buffer

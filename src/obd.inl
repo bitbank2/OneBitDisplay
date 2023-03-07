@@ -3053,7 +3053,7 @@ void EPD102_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 //
 // Special case for e-ink displays
 //
-static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh)
+static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait)
 {
     pOBD->iFlags |= OBD_FULLUPDATE; // mark it for later
     EPDWakeUp(pOBD);
@@ -3071,7 +3071,9 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh)
         if (bRefresh) {
             obdWriteCommand(pOBD, 0x12); // master activation
         }
-        EPDWaitBusy(pOBD, 0);
+        if (bWait) {
+            EPDWaitBusy(pOBD, 0);
+        }
         return OBD_SUCCESS;
     }
 #endif // !WIMPY_MCU
@@ -3255,8 +3257,10 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh)
             EPD154_Finish(pOBD, false);
         }
     }
-  EPDWaitBusy(pOBD, 0);
-  EPDSleep(pOBD);
+    if (bWait) {
+        EPDWaitBusy(pOBD, 0);
+        EPDSleep(pOBD);
+    }
     return OBD_SUCCESS;
 } /* EPDDumpBuffer() */
 //
@@ -3563,7 +3567,7 @@ int obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height)
             pOBD->iFlags &= ~OBD_FULLUPDATE; // mark it for later
             return rc;
         } else {
-            return EPDDumpBuffer(pOBD, true);
+            return EPDDumpBuffer(pOBD, true, true);
         }
     } else { // use the default full screen dump function
         return obdDumpBuffer(pOBD, NULL);
@@ -3573,7 +3577,7 @@ int obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height)
 // Dump a screen's worth of data directly to the display
 // Try to speed it up by comparing the new bytes with the existing buffer
 //
-int obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh)
+int obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh, int bWait)
 {
 int x, y;
 int iLines;
@@ -3590,7 +3594,7 @@ int iLines;
     
   if (pOBD->type >= EPD42_400x300) // all e-ink panels
   {
-     return EPDDumpBuffer(pOBD, bRefresh);
+     return EPDDumpBuffer(pOBD, bRefresh, bWait);
   }
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
   if (pOBD->type == LCD_ST7302) // special case for ST7302
@@ -3678,7 +3682,7 @@ int iLines;
 
 int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
-    return obdDumpBuffer_2(pOBD, pBuffer, true);
+    return obdDumpBuffer_2(pOBD, pBuffer, true, true);
 }
 
 // Send a single byte command to the OLED controller
