@@ -2387,6 +2387,13 @@ static int EPDDumpFast(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, int 
     
     EPDWakeUp(pOBD);
     
+    if (pOBD->type == EPD37_240x416) {
+        // supports a new type of fast update
+        // with built-in fast LUTs
+        obdWriteCommand2(pOBD, 0xe0, 0x02);
+        obdWriteCommand2(pOBD, 0xe5, 0x5a);
+    } /* EPD37_240x416 */
+    
     if (pOBD->type == EPD29R_128x296 || pOBD->type == EPD154R_152x152 || pOBD->type == EPD42R_400x300) {
         if (pOBD->iFlags & OBD_FULLUPDATE) {
             // Kludge alert - fool it into going into B&W mode to allow partial updates. Need to combine the black+red pixels and send them to the ALTRAM first

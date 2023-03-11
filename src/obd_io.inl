@@ -106,7 +106,10 @@ if (pOBD->bBitBang)
     (void)iMOSI; (void)iCLK; (void)iCS;
     mySPI->begin();
     mySPI->beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
+#ifndef ARDUINO_ARCH_NRF52
     mySPI->endTransaction(); // N.B. - if you call beginTransaction() again without a matching endTransaction(), it will hang on ESP32
+    // BUT!!! if you do call endTransaction on NRF52, it won't send any data at all
+#endif
 #endif // _LINUX_
 } /* initSPI() */
 
