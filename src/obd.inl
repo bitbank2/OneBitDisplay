@@ -705,6 +705,21 @@ const uint8_t epd213_122x250_init_sequence_full[] PROGMEM = {
     BUSY_WAIT,
     0
 };
+const uint8_t epd75_init_sequence_full[] PROGMEM = {
+    2, UC8151_PSR, 0x9f,
+    6, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x2b,
+    1, UC8151_PON,
+    BUSY_WAIT,
+    4, UC8151_BTST, 0x17, 0x17, 0x17,
+    2, UC8151_PFS, 0x00,
+    2, UC8151_TSE, 0x00,
+    2, UC8151_TCON, 0x22,
+    2, UC8151_CDI, 0xd7,
+    2, UC8151_PLL, 0x3a,
+    5, UC8151_TRES, 0x03, 0x20, 0x01, 0xe0,
+    2, UC8151_VDCS, 0x12,
+    0
+};
 const uint8_t epd42_init_sequence_full[] PROGMEM = {
     2, UC8151_PSR, 0x9f,
     6, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x2b,
@@ -851,6 +866,19 @@ const unsigned char oled80_initbuf[] PROGMEM = {0x00,0xae,0xa1,0xc8,0xaf
 const unsigned char oled72_initbuf[] PROGMEM ={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x40,0xa1,0xc8,
       0xda,0x12,0x81,0xff,0xad,0x30,0xd9,0xf1,0xa4,0xa6,0xd5,0x80,0x8d,0x14,
       0xaf,0x20,0x02};
+
+const unsigned char st7567_initbuf[] PROGMEM  = {0xa2, // 1/9 bias @ 1/65 duty
+    0x40, // set start line to 0
+    0xa1, // normal segment direction
+    0xa6, // not inverse display
+    0xa4, // not all pixel on (normal display)
+    0xc0, // flipped com direction
+    0x2f, // power control (booster/regulator/follower all on)
+    0x23, // regulation ratio = 3 ?
+    0xf8, 0x00, // set booster level x4 (1=x5)
+    0x81, 0x3c, // set EV (electronic volume = contrast)
+    0xaf // display on
+};
 
 const unsigned char uc1701_initbuf[] PROGMEM  = {0xe2, 0x40, 0xa0, 0xc8, 0xa2, 0x2c, 0x2e, 0x2f, 0xf8, 0x00, 0x23, 0x81, 0x28, 0xac, 0x00, 0xa6};
 
@@ -1027,10 +1055,15 @@ static void LCDPowerUp(OBDISP *pOBD)
         s = (uint8_t *)hx1230_initbuf;
         iLen = sizeof(hx1230_initbuf);
     }
-    else // Nokia 5110
+    else if (pOBD->type == LCD_NOKIA5110) // Nokia 5110
     {
         s = (uint8_t *)nokia5110_initbuf;
         iLen = sizeof(nokia5110_initbuf);
+    }
+    else if (pOBD->type == LCD_ST7567)
+    {
+        s = (uint8_t *)st7567_initbuf;
+        iLen = sizeof(st7567_initbuf);
     }
     memcpy_P(&u8Cache[1], s, iLen);
     RawWrite(pOBD, u8Cache, iLen+1);
@@ -1344,6 +1377,17 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->can_flip = 0;
         pOBD->iDCPin = 0xff; // no D/C wire on this display
     }
+    else if (iType == EPD75_800x480) {
+        pOBD->native_width = pOBD->width = 800;
+        pOBD->native_height = pOBD->height = 480;
+        pOBD->busy_idle = HIGH;
+        pOBD->can_flip = 0;
+        pOBD->chip_type = OBD_CHIP_UC8151;
+        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->type = EPD42_400x300; // same for the rest
+        pOBD->pInitFull = epd75_init_sequence_full;
+        return; // nothing else to do yet
+    }
     else if (iType == EPD27b_176x264)
     {
         pOBD->native_width = pOBD->width = 176;
@@ -1605,6 +1649,11 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->busy_idle = HIGH;
       return;
   }
+  else if (iType == LCD_ST7567)
+  {
+      pOBD->native_width = pOBD->width = 32;
+      pOBD->native_height = pOBD->height = 64;
+  }
   else if (iType == LCD_UC1609)
   {
       pOBD->native_width = pOBD->width = 192;
@@ -1678,7 +1727,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
      s = (uint8_t *)oled132_initbuf;
      iLen = sizeof(oled132_initbuf);
   }
-  else if (iType < LCD_UC1701) // 128x64 and 64x32
+  else if (iType < LCD_UC1701) // 128x64 and 64x32 oleds
   {
      s = (uint8_t *)oled64_initbuf;
      iLen = sizeof(oled64_initbuf);
@@ -1745,7 +1794,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       return;
   } /* ST7302 */
 #endif // !WIMPY_MCU
-  if (iType == LCD_UC1701 || iType == LCD_HX1230)
+  if (iType == LCD_UC1701 || iType == LCD_HX1230 || iType == LCD_ST7567)
   {
       uint8_t cCOM = 0xc0;
       LCDPowerUp(pOBD);
@@ -1835,7 +1884,7 @@ void obdSetFlip(OBDISP *pOBD, int iOnOff)
    if (!pOBD->can_flip) return; // don't try it on some displays
     
    pOBD->flip = iOnOff;
-   if (pOBD->type == LCD_UC1701 || pOBD->type == LCD_UC1609)
+   if (pOBD->type == LCD_UC1701 || pOBD->type == LCD_UC1609 || pOBD->type == LCD_ST7567)
    {
       if (iOnOff) // rotate display 180
       {
@@ -3878,6 +3927,10 @@ int iPitch = pOBD->width;
   if (pOBD->type == OLED_80x128) // visible portion starts at column 24, row 0
   {
     x += 24;
+  }
+  else if (pOBD->type == LCD_ST7567)
+  {
+      x += 50;
   }
   else if (pOBD->type == OLED_64x32) // visible display starts at column 32, row 4
   {

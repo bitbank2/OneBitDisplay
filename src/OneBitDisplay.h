@@ -88,6 +88,7 @@ enum {
   LCD_UC1701,
   LCD_UC1609,
   LCD_HX1230,
+  LCD_ST7567, // 64x32
   LCD_NOKIA5110,
   LCD_VIRTUAL,
   SHARP_144x168,
@@ -125,6 +126,7 @@ enum {
     // requires too much RAM to run on AVR
   EPD583R_600x448,
   EPD74R_640x384,
+  EPD75_800x480, // GDEY075T7
 #endif
   EPD102_80x128, // not working yet
   EPD47_540x960, // not working yet
@@ -316,6 +318,7 @@ class ONE_BIT_DISPLAY
     void setI2CPins(int iSDA, int iSCL, int iReset=-1);
     BBI2C *getBB();
     void setBB(BBI2C *pBB);
+    OBDISP *getOBD();
     void setFlags(int iFlags);
     void setContrast(uint8_t ucContrast);
     int display(bool bRefresh = true, bool bWait = true);
@@ -329,6 +332,7 @@ class ONE_BIT_DISPLAY
     uint32_t getRefreshTime(void);
     void fillScreen(int iColor);
     void setBuffer(uint8_t *pBuffer);
+    void backlight(int bOn);
     int allocBuffer(void);
     void * getBuffer(void);
     void freeBuffer(void);

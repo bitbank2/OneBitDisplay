@@ -577,6 +577,14 @@ void ONE_BIT_DISPLAY::drawString(String text, int x, int y)
     drawString(text.c_str(), x, y);
 } /* drawString() */
 
+void ONE_BIT_DISPLAY::backlight(int bOn)
+{
+    obdBacklight(&_obd, bOn);
+}
+OBDISP * ONE_BIT_DISPLAY::getOBD()
+{
+    return &_obd;
+}
 int ONE_BIT_DISPLAY::display(bool bRefresh, bool bWait)
 {
     return obdDumpBuffer_2(&_obd, NULL, bRefresh, bWait);
