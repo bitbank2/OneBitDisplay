@@ -867,6 +867,9 @@ const unsigned char oled72_initbuf[] PROGMEM ={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x4
       0xda,0x12,0x81,0xff,0xad,0x30,0xd9,0xf1,0xa4,0xa6,0xd5,0x80,0x8d,0x14,
       0xaf,0x20,0x02};
 
+// 128x64 ST7567 LCD in I2C mode (addr 0x3f)
+const unsigned char lcd128x64_initbuf[] PROGMEM = {0x00,0xa2,0xa0,0xc8,0x25,0x81,0x20,0x2c,0x2e,0x2f,0xaf};
+
 const unsigned char st7567_initbuf[] PROGMEM  = {0xa2, // 1/9 bias @ 1/65 duty
     0x40, // set start line to 0
     0xa1, // normal segment direction
@@ -971,7 +974,7 @@ void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine)
     int iPitch = pOBD->width / 8;
     static int iVCOM = 0;
 
-//    if (pOBD == NULL || pSrc == NULL || pOBD->type < SHARP_144x168)
+//    if (pOBD == NULL || pSrc == NULL || pOBD->type < SHARP_128x128)
 //        return; // invalid request
     if (iLine < 0 || iLine >= pOBD->height)
         return;
@@ -1060,7 +1063,7 @@ static void LCDPowerUp(OBDISP *pOBD)
         s = (uint8_t *)nokia5110_initbuf;
         iLen = sizeof(nokia5110_initbuf);
     }
-    else if (pOBD->type == LCD_ST7567)
+    else if (pOBD->type == LCD_32x64)
     {
         s = (uint8_t *)st7567_initbuf;
         iLen = sizeof(st7567_initbuf);
@@ -1321,7 +1324,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
     if (pOBD->iCSPin != 0xff)
     {
         pinMode(pOBD->iCSPin, OUTPUT);
-        digitalWrite(pOBD->iCSPin, HIGH); //(pOBD->type < SHARP_144x168)); // set to not-active
+        digitalWrite(pOBD->iCSPin, HIGH); //(pOBD->type < SHARP_128x128)); // set to not-active
     }
     if (bBitBang)
     {
@@ -1362,6 +1365,13 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
     {
         pOBD->native_width = pOBD->width = 80;
         pOBD->native_height = pOBD->height = 128;
+    }
+    else if (iType == SHARP_128x128)
+    {
+        pOBD->native_width = pOBD->width = 128;
+        pOBD->native_height = pOBD->height = 128;
+        pOBD->can_flip = 0;
+        pOBD->iDCPin = 0xff; // no D/C wire on this display
     }
     else if (iType == SHARP_144x168)
     {
@@ -1649,7 +1659,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->busy_idle = HIGH;
       return;
   }
-  else if (iType == LCD_ST7567)
+  else if (iType == LCD_32x64)
   {
       pOBD->native_width = pOBD->width = 32;
       pOBD->native_height = pOBD->height = 64;
@@ -1794,7 +1804,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       return;
   } /* ST7302 */
 #endif // !WIMPY_MCU
-  if (iType == LCD_UC1701 || iType == LCD_HX1230 || iType == LCD_ST7567)
+  if (iType == LCD_UC1701 || iType == LCD_HX1230 || iType == LCD_32x64)
   {
       uint8_t cCOM = 0xc0;
       LCDPowerUp(pOBD);
@@ -1884,7 +1894,7 @@ void obdSetFlip(OBDISP *pOBD, int iOnOff)
    if (!pOBD->can_flip) return; // don't try it on some displays
     
    pOBD->flip = iOnOff;
-   if (pOBD->type == LCD_UC1701 || pOBD->type == LCD_UC1609 || pOBD->type == LCD_ST7567)
+   if (pOBD->type == LCD_UC1701 || pOBD->type == LCD_UC1609 || pOBD->type == LCD_32x64)
    {
       if (iOnOff) // rotate display 180
       {
@@ -2017,6 +2027,15 @@ uint8_t u8Len, *s;
       s = (uint8_t *)oled64x128_initbuf;
       u8Len = sizeof(oled64x128_initbuf);
       pOBD->can_flip = 0; // this display can't flip 180 (don't know why)
+  }
+  else if (iType == LCD_128x64_I2C)
+  {
+      obdWriteCommand(pOBD, 0xe2); // Need to be reset after power-on
+      _delay(10);
+      s = (uint8_t *)lcd128x64_initbuf;
+      u8Len = sizeof(lcd128x64_initbuf);
+      rc = LCD_OK;
+      memcpy_P(uc, s, u8Len);
   }
   else // 132x64, 128x64, 64x48 and 64x32
   {
@@ -3658,7 +3677,7 @@ int iLines;
       return ST7302DumpBuffer(pOBD, pBuffer);
   }
 #endif // !WIMPY_MCU
-  if (pOBD->type >= SHARP_144x168) // special case for Sharp Memory LCDs
+  if (pOBD->type >= SHARP_128x128) // special case for Sharp Memory LCDs
   {
     return SharpDumpBuffer(pOBD, pBuffer);
   }
@@ -3913,7 +3932,7 @@ int iPitch = pOBD->width;
     y >>= 3; // DEBUG - since we address the display by lines of 8 pixels
   pOBD->iScreenOffset = (y*iPitch)+x;
 
-  if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_144x168)
+  if (pOBD->type == LCD_VIRTUAL || pOBD->type >= SHARP_128x128)
     return; // nothing to do
   if (!bRender)
       return; // don't send the commands to the OLED if we're not rendering the graphics now
@@ -3928,7 +3947,7 @@ int iPitch = pOBD->width;
   {
     x += 24;
   }
-  else if (pOBD->type == LCD_ST7567)
+  else if (pOBD->type == LCD_32x64)
   {
       x += 50;
   }
@@ -4002,7 +4021,7 @@ if (pOBD->ucScreen && (iLen + pOBD->iScreenOffset) <= iBufferSize)
   if (pOBD->iScreenOffset >= iBufferSize)
     pOBD->iScreenOffset -= iBufferSize;
 }
-if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_144x168 || pOBD->type == SHARP_400x240)
+if (pOBD->type == LCD_VIRTUAL || pOBD->type == SHARP_128x128 || pOBD->type == SHARP_144x168 || pOBD->type == SHARP_400x240)
   return; // nothing else to do
 #ifndef MEMORY_ONLY
   if (bRender)
