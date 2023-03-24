@@ -984,14 +984,13 @@ void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine)
 
       ucStart = 0x80; // write command
       iVCOM++;
-      if (iVCOM & 0x100) // flip it every 256 lines
+      if (iVCOM & 0x40) // flip it every 64 lines
         ucStart |= 0x40; // VCOM bit
-      ucLineBuf[1] = ucStart;
-      // this code assumes I2C, so the first byte is ignored
-      RawWrite(pOBD, ucLineBuf, 2); // write command(01) + vcom(02)
+      ucLineBuf[0] = ucStart;
+      RawWriteData(pOBD, ucLineBuf, 1); // write command(01) + vcom(02)
 
-     d = &ucLineBuf[2];
-     ucLineBuf[1] = pgm_read_byte(&ucMirror[iLine+1]); // current line number
+     d = &ucLineBuf[1];
+     ucLineBuf[0] = pgm_read_byte(&ucMirror[iLine+1]); // current line number
      for (x=0; x<iPitch; x++)
      {
          c = pSrc[0] ^ ucInvert; // we need to brute-force invert it
@@ -999,10 +998,10 @@ void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine)
          pSrc++;
      } // for x
     // write this line to the display
-    ucLineBuf[iPitch+2] = 0; // end of line
-    RawWrite(pOBD, ucLineBuf, iPitch+3);
-    ucLineBuf[1] = 0;
-    RawWrite(pOBD, ucLineBuf, 2); // final transfer
+    ucLineBuf[iPitch+1] = 0; // end of line
+    RawWriteData(pOBD, ucLineBuf, iPitch+2);
+    ucLineBuf[0] = 0;
+    RawWriteData(pOBD, ucLineBuf, 1); // final transfer
     digitalWrite(pOBD->iCSPin, LOW); // de-activate
 } /* obdWriteLCDLine() */
 

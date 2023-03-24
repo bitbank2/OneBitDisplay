@@ -255,10 +255,10 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
       write(pOBD->bbi2c.file_i2c, pData, iLen);
   } else { // must be SPI
       obdSetDCMode(pOBD, (pData[0] == 0) ? MODE_COMMAND : MODE_DATA);
-      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240 && pOBD->type != SHARP_128x128)
          digitalWrite(pOBD->iCSPin, LOW);
       AIOWriteSPI(pOBD->bbi2c.file_i2c, &pData[1], iLen-1);
-      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240 && pOBD->type != SHARP_128x128)
          digitalWrite(pOBD->iCSPin, HIGH);
       //obdSetDCMode(pOBD, MODE_DATA);
   }
@@ -280,10 +280,10 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
       digitalWrite(pOBD->iCSPin, HIGH);
        }
     } else {
-      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240 && pOBD->type != SHARP_128x128)
          digitalWrite(pOBD->iCSPin, LOW);
       AIOWriteSPI(pOBD->bbi2c.file_i2c, pData, iLen);
-      if (pOBD->iCSPin != 0xff &&pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+      if (pOBD->iCSPin != 0xff &&pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240 && pOBD->type != SHARP_128x128)
          digitalWrite(pOBD->iCSPin, HIGH);
     }
       //obdSetDCMode(pOBD, MODE_DATA);
@@ -302,7 +302,7 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
     {
       digitalWrite(pOBD->iDCPin, (pData[0] == 0) ? LOW : HIGH); // data versus command
     }
-    if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+    if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240 && pOBD->type != SHARP_128x128)
     {
         digitalWrite(pOBD->iCSPin, LOW);
     }
@@ -322,7 +322,7 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
             mySPI->transfer(pData[i]);
     }
 #endif
-      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240) {
+      if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240 && pOBD->type != SHARP_128x128) {
           digitalWrite(pOBD->iCSPin, HIGH);
       }
       if (pOBD->iDCPin != 0xff && pData[0] == 0) { // was command mode, set back to data mode
@@ -357,7 +357,7 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
   {
     if (pOBD->iDCPin != 0xff)
       digitalWrite(pOBD->iDCPin, HIGH); // data mode
-    if (pOBD->iCSPin != 0xff)
+    if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240 && pOBD->type != SHARP_128x128)
       digitalWrite(pOBD->iCSPin, LOW);
 //#ifdef HAL_ESP32_HAL_H_
 //   {
@@ -377,7 +377,7 @@ static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
           }
       }
 //#endif
-    if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240)
+    if (pOBD->iCSPin != 0xff && pOBD->type != SHARP_144x168 && pOBD->type != SHARP_400x240 && pOBD->type != SHARP_128x128)
       digitalWrite(pOBD->iCSPin, HIGH);
   }
   else // must be I2C
