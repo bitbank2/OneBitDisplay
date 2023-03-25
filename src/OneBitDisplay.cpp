@@ -209,6 +209,11 @@ int ONE_BIT_DISPLAY::loadBMP(uint8_t *pBMP, int x, int y, int iFG, int iBG)
     return obdLoadBMP(&_obd, pBMP, x, y, iFG, iBG);
 } /* loadBMP() */
 
+int ONE_BIT_DISPLAY::drawEPDGFX(int x, int y, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1)
+{
+    return obdDrawEPDGFX(&_obd, x, y, cx, cy, pPlane0, pPlane1);
+} /* drawEPDGFX() */
+
 int ONE_BIT_DISPLAY::loadBMP3(uint8_t *pBMP, int x, int y)
 {
     return obdLoadBMP3(&_obd, pBMP, x, y);

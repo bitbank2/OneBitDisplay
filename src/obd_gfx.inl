@@ -1297,6 +1297,39 @@ uint8_t ucColorMap[16];
   return OBD_SUCCESS;
 } /* obdLoadBMP3() */
 //
+// Draw 1 or 2 planes of raw image into a specific spot
+// in e-paper memory
+//
+int obdDrawEPDGFX(OBDISP *pOBD, int xdest, int ydest, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1)
+{
+    int y, iPitch = ((cx + 7)/8);
+    uint8_t *s;
+    
+    if (xdest < 0 || xdest >= pOBD->native_width || xdest+cx > pOBD->native_width || ydest < 0 || ydest > pOBD->native_height || ydest+cy > pOBD->native_height || pPlane0 == NULL)
+        return OBD_ERROR_BAD_PARAMETER; // invalid
+    // Write plane 0
+    pOBD->iFG = OBD_BLACK; // make sure we write to plane 0
+    EPDSetPosition(pOBD, xdest, ydest, cx, cy);
+    s = pPlane0;
+    for (y=0; y<cy; y++)
+    {
+        RawWriteData(pOBD, s, iPitch);
+        s += iPitch;
+    } // for y
+    if (pPlane1) {
+        pOBD->iFG = OBD_RED; // write to plane 1
+        EPDSetPosition(pOBD, xdest, ydest, cx, cy);
+        s = pPlane1;
+        for (y=0; y<cy; y++)
+        {
+            RawWriteData(pOBD, s, iPitch);
+            s += iPitch;
+        } // for y
+    }
+    return OBD_SUCCESS;
+
+} /* obdDrawEPDGFX() */
+//
 // Set the current cursor position
 // The column represents the pixel column (0-127)
 // The row represents the text row (0-7)

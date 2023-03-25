@@ -348,6 +348,7 @@ class ONE_BIT_DISPLAY
     void setTextColor(int iFG, int iBG = -1);
     void setCursor(int x, int y);
     void setPower(bool bOn);
+    int drawEPDGFX(int x, int y, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1);
     int loadBMP(uint8_t *pBMP, int x, int y, int iFG, int iBG);
     int loadBMP3(uint8_t *pBMP, int x, int y);
     int16_t getCursorX(void);
@@ -686,6 +687,13 @@ int obdScrollBuffer(OBDISP *pOBD, int iStartCol, int iEndCol, int iStartRow, int
 // the destination where bits are set.
 //
 void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, int x, int y, uint8_t iPriority);
+
+//
+// Draw 1 or 2 planes of raw image into a specific spot
+// in e-paper memory
+//
+int obdDrawEPDGFX(OBDISP *pOBD, int x, int y, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1);
+
 //
 // Draw a 16x16 tile in any of 4 rotated positions
 // Assumes input image is laid out like "normal" graphics with
