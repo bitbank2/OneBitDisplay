@@ -2035,6 +2035,13 @@ uint8_t iCols, iLines;
               EPDFill(pOBD, ucRAM2, ~ucPattern1);
               EPDFill(pOBD, ucRAM1 | 0x80, ucPattern1);
               EPDFill(pOBD, ucRAM2 | 0x80, ~ucPattern1);
+          } else if (pOBD->type == EPD74R_640x384) {
+              if (ucData == OBD_BLACK)
+                  ucPattern1 = 0;
+              else if (ucData == OBD_WHITE)
+                  ucPattern1 = 0x33;
+              else ucPattern1 = 0x44; // red
+              EPDFill(pOBD, 0x10, ucPattern1);
           } else {
               EPDFill(pOBD, ucRAM1, ucPattern1);
               EPDFill(pOBD, ucRAM2, ucPattern2);

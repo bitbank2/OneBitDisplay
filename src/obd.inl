@@ -643,6 +643,21 @@ const uint8_t epd27_init_sequence_full[] PROGMEM =
     0x00 // end of table
 }; /* epd27_init_sequence_full[] */
 
+const uint8_t epd42b_init_sequence_full[] PROGMEM =
+{   
+    0x02, 0x11, 0x03, // data entry mode 
+    0x03, 0x44, 0x00, 0x15, // ram address 
+    0x05, 0x45, 0x00, 0x00, 0xdf, 0x01,
+    0x02, 0x3c, 0x80, // border color
+    0x02, 0x18, 0x80, // read built-in temp sensor
+    0x02, 0x4e, 0x00, // ram counter x
+    0x03, 0x4f, 0x00, 0x00, // ram counter y
+    0x02, 0x22, 0xb1,
+    0x01, 0x20, 
+    BUSY_WAIT,
+    0x00 // end of table
+}; /* epd27_init_sequence_full[] */
+
 const uint8_t epd579_init_sequence_full[] PROGMEM =
 {
     2, 0x11, 0x03, // data format
@@ -717,6 +732,21 @@ const uint8_t epd75_init_sequence_full[] PROGMEM = {
     2, UC8151_CDI, 0xd7,
     2, UC8151_PLL, 0x3a,
     5, UC8151_TRES, 0x03, 0x20, 0x01, 0xe0,
+    2, UC8151_VDCS, 0x12,
+    0
+};
+const uint8_t epd583_init_sequence_full[] PROGMEM = {
+    2, UC8151_PSR, 0x9f,
+    6, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x2b,
+    1, UC8151_PON,
+    BUSY_WAIT,
+    4, UC8151_BTST, 0x17, 0x17, 0x17,
+    2, UC8151_PFS, 0x00,
+    2, UC8151_TSE, 0x00,
+    2, UC8151_TCON, 0x22,
+    2, UC8151_CDI, 0xd7,
+    2, UC8151_PLL, 0x3a,
+    5, UC8151_TRES, 0x02, 0x88, 0x01, 0xe0,
     2, UC8151_VDCS, 0x12,
     0
 };
@@ -1386,6 +1416,17 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->can_flip = 0;
         pOBD->iDCPin = 0xff; // no D/C wire on this display
     }
+    else if (iType == EPD583_648x480) {
+        pOBD->native_width = pOBD->width = 648;
+        pOBD->native_height = pOBD->height = 480;
+        pOBD->busy_idle = HIGH;
+        pOBD->can_flip = 0;
+        pOBD->chip_type = OBD_CHIP_UC8151;
+        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->type = EPD42_400x300; // same for the rest 
+        pOBD->pInitFull = epd583_init_sequence_full;
+        return; // nothing else to do yet
+    }
     else if (iType == EPD75_800x480) {
         pOBD->native_width = pOBD->width = 800;
         pOBD->native_height = pOBD->height = 480;
@@ -1397,7 +1438,19 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->pInitFull = epd75_init_sequence_full;
         return; // nothing else to do yet
     }
-    else if (iType == EPD27b_176x264)
+    else if (iType == EPD42B_400x300)
+    {
+        pOBD->native_width = pOBD->width = 400;
+        pOBD->native_height = pOBD->height = 300;
+        pOBD->busy_idle = LOW;
+        pOBD->can_flip = 0;
+        pOBD->chip_type = OBD_CHIP_SSD16xx;
+        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->pInitFull = epd42b_init_sequence_full;
+        pOBD->type = EPD293_128x296; // same for the rest
+        return; // nothing else to do yet
+    }
+    else if (iType == EPD27B_176x264)
     {
         pOBD->native_width = pOBD->width = 176;
         pOBD->native_height = pOBD->height = 264;
@@ -1430,7 +1483,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->iFlags |= OBD_CS_EVERY_BYTE;
         pOBD->can_flip = 0;
     }
-    else if (iType == EPD266_152x296) {
+    else if (iType == EPD266_152x296 || iType == EPD266B_152x296) {
         pOBD->native_width = pOBD->width = 152;
         pOBD->native_height = pOBD->height = 296;
         pOBD->pInitFull = epd266_init_sequence_full;
@@ -1439,6 +1492,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
         pOBD->can_flip = 0;
         pOBD->type = EPD293_128x296; // same for the rest
+        pOBD->x_offset = (iType == EPD266B_152x296) ? 0:1;
         return; // nothing else to do yet
     }
     else if (iType == EPD42_400x300)
@@ -1503,6 +1557,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->can_flip = 0;
       pOBD->busy_idle = HIGH;
       pOBD->iFlags |= OBD_3COLOR;
+      pOBD->chip_type = OBD_CHIP_UC8151;
 //      pOBD->iFlags |= OBD_CS_EVERY_BYTE;
       pOBD->iTimeout = 25000; // 3-color need a longer timeout (25 seconds)
       return;
@@ -1548,9 +1603,14 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->pInitFull = epd35r_init_sequence_full;
       return;
   }
-  else if (iType == EPD29R_128x296 || iType == EPD154R_152x152 || iType == EPD42R_400x300 || iType == EPD31R_168x296 || iType == EPD154Y_152x152 || iType == EPD29Y_128x296 || iType == EPD213R2_122x250)
-  { // BLACK/WHITE/RED
-      if (iType == EPD31R_168x296) {
+  else if (iType == EPD29R_128x296 || iType == EPD154R_152x152 || iType == EPD42R_400x300 || iType == EPD31R_168x296 || iType == EPD154Y_152x152 || iType == EPD29Y_128x296 || iType == EPD213R2_122x250 || iType == EPD266Y_152x296 || iType == EPD42Y_400x300)
+  { // BLACK/WHITE/RED (or yellow)
+      if (iType == EPD266Y_152x296) {
+          pOBD->native_width = pOBD->width = 152;
+          pOBD->native_height = pOBD->height = 296;
+          pOBD->pInitFull = epd29r_init_sequence;
+          pOBD->x_offset = 1;
+      } else  if (iType == EPD31R_168x296) {
           pOBD->native_width = pOBD->width = 168;
           pOBD->native_height = pOBD->height = 296;
           pOBD->pInitFull = epd29r_init_sequence;
@@ -1577,7 +1637,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
           pOBD->native_height = pOBD->height = 250;
           pOBD->pInitFull = epd29r_init_sequence;
           pOBD->x_offset = 1;
-      } else {
+      } else { // EPD42R_400x300 and EPD42Y_400x300
           pOBD->native_width = pOBD->width = 400;
           pOBD->native_height = pOBD->height = 300;
           pOBD->pInitFull = epd42r_init_sequence;
@@ -2756,6 +2816,8 @@ int iSize;
     }
     if (pOBD->type == EPD579_792x272) {
         iSize = 400*(272>>3);
+    } else if (pOBD->type == EPD74R_640x384) {
+        iSize = (pOBD->native_width * pOBD->native_height)/2; // 4bpp
     } else {
         iSize = ((pOBD->native_width+7)>>3) * pOBD->native_height;
     }
