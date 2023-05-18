@@ -131,9 +131,9 @@ void ONE_BIT_DISPLAY::setBuffer(uint8_t *pBuffer)
 int ONE_BIT_DISPLAY::allocBuffer(void)
 {
     int iSize = _obd.width * ((_obd.height+7)>>3);
-    _obd.ucScreen = (uint8_t *)malloc(iSize);
-    if (_obd.iFlags & OBD_3COLOR)
+    if (_obd.iFlags & (OBD_3COLOR | OBD_4COLOR))
         iSize *= 2; // 2 bit planes
+    _obd.ucScreen = (uint8_t *)malloc(iSize);
     if (_obd.ucScreen != NULL) {
         _obd.render = false; // draw into RAM only
         return OBD_SUCCESS;
@@ -188,7 +188,7 @@ void ONE_BIT_DISPLAY::setTextColor(int iFG, int iBG)
 {
     if (iFG > OBD_RED) iFG = OBD_BLACK;
     if (iBG > OBD_RED) iBG = OBD_BLACK;
-    if ((_obd.iFlags & OBD_3COLOR) == 0) {
+    if ((_obd.iFlags & (OBD_3COLOR | OBD_4COLOR)) == 0) {
         if (iFG == OBD_RED) iFG = OBD_BLACK; // can't set red color
         if (iBG == OBD_RED) iBG = OBD_BLACK;
     }
@@ -542,6 +542,10 @@ void ONE_BIT_DISPLAY::setPosition(int x, int y, int w, int h)
     else
         obdSetPosition(&_obd, x, y, 1);
 } /* setPosition() */
+void ONE_BIT_DISPLAY::writeCommand(uint8_t ucCMD)
+{
+   obdWriteCommand(&_obd, ucCMD);
+}
 void ONE_BIT_DISPLAY::pushPixels(uint8_t *pPixels, int iCount)
 {
     RawWriteData(&_obd, pPixels, iCount);

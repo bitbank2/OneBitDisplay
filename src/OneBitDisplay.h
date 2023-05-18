@@ -135,6 +135,12 @@ enum {
   EPD75_800x480, // GDEY075T7
 #endif
   EPD583_648x480, // DEPG0583BN
+  EPD29_BWYR_128x296, // GDEY029F51
+  EPD29_BWYR_168x384, // GDEY029F51H
+  EPD266_BWYR_184x360, // GDEY0266F51
+  EPD30_BWYR_168x400, // Waveshare 3" B/W/Y/R
+  EPD164_BWYR_168x168, // Waveshare 1.64" B/W/Y/R
+  EPD236_BWYR_168x296, // Waveshare 2.36" B/W/Y/R
   EPD102_80x128, // not working yet
   EPD47_540x960, // not working yet
   EPD35R_184x384, // Hanshow Nebular 3.5" BWR
@@ -142,19 +148,21 @@ enum {
 };
 
 // flag bits
-#define OBD_INVERTED 1
-#define OBD_FLIP180 2
-#define OBD_FLIPV 4
-#define OBD_FLIPH 8
-#define OBD_BITBANG 16
-#define OBD_3COLOR 32
-#define OBD_FULLUPDATE 64
-#define OBD_CS_EVERY_BYTE 128
-#define OBD_HAS_FAST_UPDATE 256
+#define OBD_INVERTED 0x0001
+#define OBD_FLIP180  0x0002  
+#define OBD_FLIPV    0x0004
+#define OBD_FLIPH    0x0008
+#define OBD_BITBANG  0x0010
+#define OBD_3COLOR   0x0020
+#define OBD_4COLOR   0x0040
+#define OBD_FULLUPDATE 0x0080 
+#define OBD_CS_EVERY_BYTE 0x0100
+#define OBD_HAS_FAST_UPDATE 0x0200
 
 #define OBD_WHITE 0
 #define OBD_BLACK 1
-#define OBD_RED 2
+#define OBD_YELLOW 2
+#define OBD_RED 3
 
 #define OBD_ANY_ADDRESS -1
 // Rotation and flip angles to draw tiles
@@ -370,6 +378,7 @@ class ONE_BIT_DISPLAY
     void setPosition(int x, int y, int w, int h);
     int scrollBuffer(int iStartCol, int iEndCol, int iStartRow, int iEndRow, int bUp);
     void pushPixels(uint8_t *pPixels, int iCount);
+    void writeCommand(uint8_t ucCMD);
     void pushImage(int x, int y, int w, int h, uint16_t *pixels);
     void drawString(const char *pText, int x, int y);
     void drawString(String text, int x, int y);

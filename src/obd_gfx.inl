@@ -1009,9 +1009,23 @@ int iPitch, iSize;
     if (i < 0 || i > iSize-1) { // off the screen
         return OBD_ERROR_BAD_PARAMETER;
     }
-    // Special case for 3-color e-ink
+    // Special case for 4-color e-ink
+    if (pOBD->iFlags & OBD_4COLOR) {
+        uint8_t ucMask = (1 << (y & 7));
+        ucColor ^= 1; // invert low bit
+        if (ucColor & 1)
+           pOBD->ucScreen[i] |= ucMask;
+        else
+           pOBD->ucScreen[i] &= ~ucMask;
+        if (ucColor & 2)
+            pOBD->ucScreen[iSize + i] |= ucMask;
+        else
+            pOBD->ucScreen[iSize + i] &= ~ucMask;
+        return OBD_SUCCESS;
+    }
+    // special case for 3-color e-ink
     if (pOBD->iFlags & OBD_3COLOR) {
-        if (ucColor == OBD_RED) { // red has priority
+        if (ucColor >= OBD_YELLOW) { // yellow/red has priority
             pOBD->ucScreen[iSize + i] |= (1 << (y & 7));
         } else {
             pOBD->ucScreen[iSize + i] &= ~(1 << (y & 7)); // clear red plane bit
@@ -1133,7 +1147,7 @@ uint8_t bFlipped = 0;
     iPitch = -iPitch;
   }
     ucFill = (iBG == OBD_WHITE && pOBD->type < EPD42_400x300) ? iBG : 0xff;
-    if (!pOBD->ucScreen || iFG == OBD_RED) { // this will override the B/W plane, so invert things
+    if (!pOBD->ucScreen || iFG >= OBD_YELLOW) { // this will override the B/W plane, so invert things
         ucFill = 0x00;
         x = iFG;
         iFG = iBG;
@@ -1480,7 +1494,7 @@ int iOldFG; // old fg color to make sure red works
 
     obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
     iOldFG = pOBD->iFG; // save old fg color
-    if (iColor == OBD_RED) {
+    if (iColor >= OBD_YELLOW) {
        pOBD->iFG = iColor;
     }
     if (iSize == FONT_8x8) // 8x8 font
@@ -1852,7 +1866,7 @@ int iPitch, iRedOffset = 0;
         x = pOBD->iCursorX;
     if (y == -1)
         y = pOBD->iCursorY;
-    if (ucColor == OBD_RED && pOBD->iFlags & OBD_3COLOR) {
+    if (ucColor >= OBD_YELLOW && pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
         // use the second half of the image buffer
         iRedOffset = pOBD->width * ((pOBD->height+7)/8);
         ucFill = 0x00;
@@ -1992,18 +2006,18 @@ uint8_t iCols, iLines;
           int iSize = pOBD->width * ((pOBD->height+7)/8);
           if (ucData == OBD_WHITE) {
               memset(pOBD->ucScreen, ucData, iSize);
-              if (pOBD->iFlags & OBD_3COLOR)
+              if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR))
                   memset(&pOBD->ucScreen[iSize], ucData, iSize);
           } else if (ucData == OBD_BLACK) {
               memset(pOBD->ucScreen, 0xff, iSize);
-              if (pOBD->iFlags & OBD_3COLOR)
+              if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR))
                   memset(&pOBD->ucScreen[iSize], 0, iSize);
           } else if (ucData == OBD_RED) {
               memset(pOBD->ucScreen, 0, iSize);
-              if (pOBD->iFlags & OBD_3COLOR)
+              if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR))
                   memset(&pOBD->ucScreen[iSize], 0xff, iSize);
           } else { // write pattern
-              if (pOBD->iFlags & OBD_3COLOR) iSize *= 2;
+              if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) iSize *= 2;
               memset(pOBD->ucScreen, ucData, iSize);
           }
       }
@@ -2012,7 +2026,7 @@ uint8_t iCols, iLines;
           uint8_t ucPattern1 = 0xff, ucPattern2 = 0xff; // assume white
           uint8_t ucRAM1, ucRAM2;
           int iOldRotation;
-          if (pOBD->iFlags & OBD_3COLOR) {
+          if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
               ucPattern2 = 0x00; // red plane is not inverted
               if (ucData == OBD_BLACK)
                   ucPattern1 = 0x00;
@@ -2119,7 +2133,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
 
   if (x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 || x1 >= pOBD->width || x2 >= pOBD->width || y1 >= pOBD->height || y2 >= pOBD->height)
      return;
-  if (ucColor == OBD_RED && pOBD->iFlags & OBD_3COLOR) {
+  if (ucColor >= OBD_YELLOW && pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
         // use the second half of the image buffer
         iRedOffset = pOBD->width * ((pOBD->height+7)/8);
     }
@@ -2127,7 +2141,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
         bRender = 1; // make sure it gets transmitted
         if (pOBD->type >= EPD42_400x300) {
             // no back buffer on EPD means we may need to invert the color
-            if (ucColor == OBD_RED)
+            if (ucColor >= OBD_YELLOW)
                 ucColor = OBD_BLACK;
             else
                 ucColor = 1-ucColor; // swap black/white
@@ -2297,7 +2311,7 @@ static void DrawScaledPixel(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_
     int iRedOffset = 0;
 
     iPitch = pOBD->width;
-    if (ucColor == OBD_RED && pOBD->iFlags & OBD_3COLOR) {
+    if (ucColor >= OBD_YELLOW && pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
           // use the second half of the image buffer
           iRedOffset = pOBD->width * ((pOBD->height+7)/8);
       }
@@ -2323,7 +2337,7 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
     int iPitch;
     int iRedOffset = 0;
 
-    if (ucColor == OBD_RED && pOBD->iFlags & OBD_3COLOR) {
+    if (ucColor >= OBD_YELLOW && pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
           // use the second half of the image buffer
           iRedOffset = pOBD->width * ((pOBD->height+7)/8);
       }
@@ -2438,8 +2452,8 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
     int iPitch;
     int iRedOffset = 0;
 
-    if (ucColor == OBD_RED) {
-        if (pOBD->iFlags & OBD_3COLOR) {
+    if (ucColor >= OBD_YELLOW) {
+        if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
           // use the second half of the image buffer
           iRedOffset = pOBD->width * ((pOBD->height+7)/8);
         } else { // force red to black if not present
