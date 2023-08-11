@@ -49,6 +49,7 @@ enum {
     OBD_CHIP_SH11xx, // OLED
     OBD_CHIP_SSD16xx, // EPD
     OBD_CHIP_UC8151, // EPD
+    OBD_CHIP_SHARP, // all Sharp LCDs
     OBD_CHIP_COUNT
 };
 
@@ -95,10 +96,12 @@ enum {
   SHARP_128x128,
   SHARP_144x168,
   SHARP_400x240,
+  SHARP_160x68,
 #ifndef __AVR__
   LCD_ST7302,
 #endif
   EPD42_400x300, // WFT0420CZ15
+  EPD42_4GRAY_400x300, // WFT0420CZ15
   EPD42B_400x300, // DEPG0420BN
   EPD42Y_400x300, // DEPG0420YN
   EPD29_128x296,
@@ -128,12 +131,9 @@ enum {
   EPD37Y_240x416, // DEPG0370YN
   EPD37_240x416, // GDEY037T03
   EPD579_792x272, // GDEY0579T93
-#ifndef __AVR__
-    // requires too much RAM to run on AVR
   EPD583R_600x448,
   EPD74R_640x384,
   EPD75_800x480, // GDEY075T7
-#endif
   EPD583_648x480, // DEPG0583BN
   EPD29_BWYR_128x296, // GDEY029F51
   EPD29_BWYR_168x384, // GDEY029F51H
@@ -155,14 +155,21 @@ enum {
 #define OBD_BITBANG  0x0010
 #define OBD_3COLOR   0x0020
 #define OBD_4COLOR   0x0040
-#define OBD_FULLUPDATE 0x0080 
-#define OBD_CS_EVERY_BYTE 0x0100
-#define OBD_HAS_FAST_UPDATE 0x0200
+#define OBD_4GRAY    0x0080
+#define OBD_FULLUPDATE 0x0100 
+#define OBD_CS_EVERY_BYTE 0x0200
+#define OBD_HAS_FAST_UPDATE 0x0400
 
 #define OBD_WHITE 0
 #define OBD_BLACK 1
 #define OBD_YELLOW 2
 #define OBD_RED 3
+
+// 4 gray levels
+#define OBD_GRAY0 0
+#define OBD_GRAY1 1
+#define OBD_GRAY2 2
+#define OBD_GRAY3 3
 
 #define OBD_ANY_ADDRESS -1
 // Rotation and flip angles to draw tiles
@@ -195,6 +202,7 @@ enum reg {
     UC8151_LUT_BW   = 0x22,
     UC8151_LUT_WB   = 0x23,
     UC8151_LUT_BB   = 0x24,
+    UC8151_LUT_VCOM2 = 0x25,
     UC8151_PLL      = 0x30,
     UC8151_TSC      = 0x40,
     UC8151_TSE      = 0x41,
@@ -335,9 +343,11 @@ class ONE_BIT_DISPLAY
     void setBB(BBI2C *pBB);
     OBDISP *getOBD();
     void setFlags(int iFlags);
+    uint32_t capabilities();
     void setContrast(uint8_t ucContrast);
     int display(bool bRefresh = true, bool bWait = true);
     int displayFast();
+    int displayFast(int x, int y, int w, int h);
     int displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
@@ -379,6 +389,7 @@ class ONE_BIT_DISPLAY
     int scrollBuffer(int iStartCol, int iEndCol, int iStartRow, int iEndRow, int bUp);
     void pushPixels(uint8_t *pPixels, int iCount);
     void writeCommand(uint8_t ucCMD);
+    void writeRaw(uint8_t *pData, int iLen);
     void pushImage(int x, int y, int w, int h, uint16_t *pixels);
     void drawString(const char *pText, int x, int y);
     void drawString(String text, int x, int y);

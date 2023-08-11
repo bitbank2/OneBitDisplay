@@ -141,6 +141,11 @@ int ONE_BIT_DISPLAY::allocBuffer(void)
     return OBD_ERROR_NO_MEMORY; // failed
 } /* allocBuffer() */
 
+uint32_t ONE_BIT_DISPLAY::capabilities(void)
+{
+  return _obd.iFlags;
+}
+
 void * ONE_BIT_DISPLAY::getBuffer(void)
 {
     return (void *)_obd.ucScreen;
@@ -542,6 +547,11 @@ void ONE_BIT_DISPLAY::setPosition(int x, int y, int w, int h)
     else
         obdSetPosition(&_obd, x, y, 1);
 } /* setPosition() */
+void ONE_BIT_DISPLAY::writeRaw(uint8_t *pData, int iLen)
+{
+   RawWrite(&_obd, pData, iLen);
+}
+
 void ONE_BIT_DISPLAY::writeCommand(uint8_t ucCMD)
 {
    obdWriteCommand(&_obd, ucCMD);
@@ -557,6 +567,13 @@ void ONE_BIT_DISPLAY::pushImage(int x, int y, int w, int h, uint16_t *pixels)
     (void)x; (void)y; (void)w; (void)h; (void)pixels;
 }
 
+int ONE_BIT_DISPLAY::displayFast(int x, int y, int cx, int cy) {
+    if (_obd.type >= EPD42_400x300 && _obd.iFlags & OBD_HAS_FAST_UPDATE) {
+        obdDumpFast(&_obd, x, y, cx, cy);
+        return OBD_SUCCESS;
+    }
+    return OBD_ERROR_NOT_SUPPORTED;
+}
 int ONE_BIT_DISPLAY::displayFast()
 {
     if (_obd.type >= EPD42_400x300 && _obd.iFlags & OBD_HAS_FAST_UPDATE) {
