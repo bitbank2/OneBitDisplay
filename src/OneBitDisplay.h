@@ -695,6 +695,7 @@ uint8_t * obdPlayAnimFrame(OBDISP *pOBD, uint8_t *pAnimation, uint8_t *pCurrent,
 void obdWriteCommand(OBDISP *pOBD, unsigned char c);
 void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender);
 void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender);
+void RawWriteData(OBDISP *pOBD, unsigned char *ucBuf, int iLen);
 //
 // Scroll the internal buffer by 1 scanline (up/down)
 // width is in pixels, lines is group of 8 rows

@@ -36,7 +36,8 @@
 // On the Raspberry PI, see /boot/config.txt
 #define DISPLAY_WIDTH 400 
 #define DISPLAY_HEIGHT 240
-static uint8_t ucBuffer[12000];
+#define DISPLAY_PITCH ((DISPLAY_WIDTH>>3)+2)
+static uint8_t ucBuffer[(DISPLAY_PITCH * DISPLAY_HEIGHT)+2];
 static OBDISP obd;
 volatile int iStop = 0;
 
@@ -52,8 +53,8 @@ void DrawPixel(int x, int y, uint8_t ucColor)
 {
 uint8_t *d, ucMask;
 
-  ucMask = 1 << (y & 7);
-  d = &ucBuffer[x + ((y>>3) * DISPLAY_WIDTH)];
+  ucMask = 0x80 >> (x & 7);
+  d = &ucBuffer[2 + (x>>3) + (y*DISPLAY_PITCH)];
   if (ucColor)
      *d &= ~ucMask;
   else
@@ -63,8 +64,9 @@ uint8_t *d, ucMask;
 // Draw a line of image into our 1-bpp virtual display buffers
 void GIFDraw(GIFDRAW *pDraw)
 {
-    uint8_t *s;
+    uint8_t *s, *d = &ucBuffer[2];
     int x, y, iWidth;
+    int iX = pDraw->iX;
     static uint8_t ucPalette[256]; // thresholded palette
 
     if (pDraw->y == 0) // first line, convert palette to 0/1
@@ -79,6 +81,7 @@ void GIFDraw(GIFDRAW *pDraw)
       }
     }
     y = pDraw->iY + pDraw->y; // current line
+    d += (y * DISPLAY_PITCH);
     iWidth = pDraw->iWidth;
     if (iWidth > DISPLAY_WIDTH)
        iWidth = DISPLAY_WIDTH;
@@ -101,21 +104,62 @@ void GIFDraw(GIFDRAW *pDraw)
       for(x=0; x < iWidth; x++)
       {
         c = *s++;
-        if (c != ucTransparent)
-             DrawPixel(pDraw->iX + x, y, ucPalette[c]);
+        if (c != ucTransparent) {
+           //  DrawPixel(iX + x, y, ucPalette[c]);
+           if (ucPalette[c]) d[((iX+x)>>3)] |= (0x80 >> ((iX+x)&7));
+	   else d[((iX+x)>>3)] &= ~(0x80 >> ((iX+x)&7));
+	}
       }
     }
     else
     {
       s = pDraw->pPixels;
       // Translate the 8-bit pixels through the RGB565 palette (already byte reversed)
-      for (x=0; x<pDraw->iWidth; x++)
-        DrawPixel(pDraw->iX + x, y, ucPalette[*s++]);
+      for (x=0; x<pDraw->iWidth; x++) {
+         if (ucPalette[*s++]) d[((iX+x)>>3)] |= (0x80 >> ((iX+x)&7));
+	 else d[((iX+x)>>3)] &= ~(0x80 >> ((iX+x)&7));
+         //DrawPixel(pDraw->iX + x, y, ucPalette[*s++]);
+      }
     }
     if (pDraw->y == pDraw->iHeight-1) { // last line, render it to the display
-       obdDumpBuffer(&obd, NULL);
+//       obdDumpBuffer(&obd, NULL);
+        AIOWriteGPIO(CS_PIN, HIGH);
+	ucBuffer[0] ^= 0x40; // toggle VCOM bit
+        AIOWriteSPI(obd.bbi2c.file_i2c, ucBuffer, sizeof(ucBuffer));
+	//	RawWriteData(&obd, ucBuffer, sizeof(ucBuffer));
+	AIOWriteGPIO(CS_PIN, LOW);
     }
 } /* GIFDraw() */
+
+// Less efficient than a lookup table, but it's only used at init time
+// This saves a couple hundred bytes of FLASH
+uint8_t MirrorBits(uint8_t v)
+{
+	uint8_t r = v & 1;
+	uint8_t s = 7;
+	for (v >>= 1; v; v >>= 1) {
+		r <<= 1;
+		r |= (v & 1);
+		s--;
+	}
+	r <<= s; // adjust for 0's
+	return r;
+} /* MirrorBits() */
+
+void PrepBuffer(void)
+{
+uint8_t *d;
+int i;
+
+   d = ucBuffer;
+   *d++ = 0x80; // start byte
+   for (i=0; i<DISPLAY_HEIGHT; i++) {
+	d[0] = MirrorBits(i+1); // line number
+        d[DISPLAY_PITCH-1] = 0; // end byte for this line
+	d += DISPLAY_PITCH;
+   }
+   ucBuffer[(DISPLAY_HEIGHT*DISPLAY_PITCH)+1] = 0; // double 0 to terminate the multi-line mode
+} /* PrepBuffer() */
 
 int main(int argc, const char * argv[])
 {
@@ -147,6 +191,7 @@ struct sigaction sigIntHandler;
     obdSetBackBuffer(&obd, ucBuffer);
     obdFill(&obd, 0, 0);
     obdDumpBuffer(&obd, NULL);
+    PrepBuffer(); // prepare memory for a single SPI write of all lines
     GIF_begin(&gif, GIF_PALETTE_RGB565_LE);
     while (!iStop) {
        rc = GIF_openRAM(&gif, (uint8_t *)pattern_400x240, sizeof(pattern_400x240), GIFDraw);

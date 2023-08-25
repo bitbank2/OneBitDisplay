@@ -266,7 +266,7 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
     (void)pOBD; (void)pData; (void)iLen;
 #endif // MEMORY_ONLY
 } /* RawWrite() */
-static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
+void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
 #if !defined( MEMORY_ONLY ) && !defined(WIMPY_MCU)
   if (pOBD->com_mode == COM_I2C) {// I2C device

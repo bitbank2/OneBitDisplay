@@ -39,7 +39,7 @@ void obdSetDCMode(OBDISP *pOBD, int iMode);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
 void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin);
 static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen);
-static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen);
+void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen);
 // EPD look up tables
 // new waveform created by Jean-Marc Zingg for the actual panel
 #define T1 25 // color change charge balance pre-phase
