@@ -4236,7 +4236,7 @@ int iLines;
         if (pOBD->iOrientation == 0 || (pOBD->iOrientation == 180 && pOBD->can_flip)) {
             for (y=0; y<iLines; y++) {
                 obdSetPosition(pOBD, 0, y*8, 1);
-                obdWriteDataBlock(pOBD, pBuffer, pOBD->width, 1);
+                RawWriteData(pOBD, pBuffer, pOBD->width);
                 pBuffer += pOBD->width;
             }
         } else { // have to manually do 180 flipped
@@ -4245,7 +4245,7 @@ int iLines;
                 for (int x=0; x<pOBD->width; x++) {
                     u8Cache[pOBD->width-1-x] = ucMirror[pBuffer[x]];
                 }
-                obdWriteDataBlock(pOBD, u8Cache, pOBD->width, 1);
+                RawWriteData(pOBD, u8Cache, pOBD->width);
                 pBuffer += pOBD->width;
             }
         }
