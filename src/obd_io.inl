@@ -350,7 +350,7 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
     }
   } // I2C
 } /* RawWrite() */
-static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
+void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
 #if !defined( WIMPY_MCU )
   if (pOBD->com_mode == COM_SPI) // we're writing to SPI, treat it differently
