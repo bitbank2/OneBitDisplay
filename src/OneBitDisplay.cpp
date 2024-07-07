@@ -76,6 +76,11 @@ void ONE_BIT_DISPLAY::setBB(BBI2C *pBB)
    memcpy(&_obd.bbi2c, pBB, sizeof(BBI2C));
 } /* setBB() */
 
+void ONE_BIT_DISPLAY::createVirtualDisplay(int width, int height, uint8_t *buffer)
+{
+   obdCreateVirtualDisplay(&_obd, width, height, buffer);
+}
+
 void ONE_BIT_DISPLAY::SPIbegin(int iType, int32_t iSpeed)
 {
     obdSPIInit(&_obd, iType, _obd.iDCPin, _obd.iCSPin, _obd.iRSTPin, _obd.iMOSIPin, _obd.iCLKPin, _obd.iLEDPin, _obd.flip, _obd.invert, _obd.bBitBang, iSpeed);

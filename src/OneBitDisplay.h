@@ -351,6 +351,7 @@ class ONE_BIT_DISPLAY
     int displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
+    void createVirtualDisplay(int width, int height, uint8_t *buffer);
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
     void setRotation(int iAngle);
     uint8_t getRotation(void);

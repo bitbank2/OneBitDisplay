@@ -140,7 +140,7 @@ uint8_t port, bitSCK, bitMOSI; // bit mask for the chosen pins
    {
       c = *pData++;
       iLen--;
-      if (pOBD->iDCPin == 0xff) // 3-wire SPI, write D/C bit first
+      if (pOBD->iDCPin == 0xff && pOBD->chip_type != OBD_CHIP_SHARP) // 3-wire SPI, write D/C bit first
       {
 #ifdef __AVR__
           if (pOBD->mode == MODE_DATA)

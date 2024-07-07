@@ -1575,7 +1575,11 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
     if (pOBD->iCSPin != 0xff)
     {
         pinMode(pOBD->iCSPin, OUTPUT);
-        digitalWrite(pOBD->iCSPin, HIGH); // set to not-active
+        if (iType == SHARP_400x240 || iType == SHARP_128x128 || iType == SHARP_160x68) {
+            digitalWrite(pOBD->iCSPin, LOW);
+        } else {
+            digitalWrite(pOBD->iCSPin, HIGH); // set to not-active
+        }
     }
     if (bBitBang)
     {
@@ -1648,6 +1652,8 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->chip_type = OBD_CHIP_SHARP;
         pOBD->can_flip = 0;
         pOBD->iDCPin = 0xff; // no D/C wire on this display
+        pOBD->iOrientation = 0;
+        return;
     }
     else if (iType == EPD583_648x480) {
         pOBD->native_width = pOBD->width = 648;
@@ -2890,6 +2896,7 @@ static int EPDDumpFast(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, int 
         EPD154_Finish(pOBD, true);
     }
     if (pOBD->type == EPD29_128x296) {
+        pOBD->iOrientation = (pOBD->iOrientation + 180) % 360; // fix 180 deg offset of this init
         EPD29_Begin(pOBD, x, y, w, h, true);
 #ifndef WIMPY_MCU
         EPDWriteImage(pOBD, UC8151_DTM2, NULL, x, y, w, h, 0);
@@ -2901,6 +2908,7 @@ static int EPDDumpFast(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, int 
         EPDWriteImage(pOBD, UC8151_DTM1, NULL, x, y, w, h, 0);
         EPDWriteImage(pOBD, UC8151_DTM2, NULL, x, y, w, h, 0);
 #endif
+        pOBD->iOrientation = (pOBD->iOrientation + 180) % 360; // restore original rotation
     } else if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
         EPD213_Begin(pOBD, x, y, w, h, true);
 #ifndef WIMPY_MCU
@@ -4026,17 +4034,16 @@ uint8_t ucMask, uc1, *s, *d;
 static int SharpDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
 int x, y;
-uint8_t c, ucInvert, *s, *d, ucStart;
-uint8_t ucLineBuf[56];
+uint8_t c, ucInvert, ucStart, ucMask;
+uint8_t *s, *d;
+uint8_t ucLineBuf[64];
 int iPitch = pOBD->native_width / 8;
-static uint8_t ucVCOM = 0;
+static int ucVCOM = 0;
 int iBit;
-uint8_t ucMask;
 
   ucInvert = (pOBD->invert) ? 0x00 : 0xff;
   digitalWrite(pOBD->iCSPin, HIGH); // active high
- 
-    ucLineBuf[0] = 0;
+    ucLineBuf[0] = 0; // Tell RawWrite that it's command (doesn't matter for Sharp LCDs)
   ucStart = 0x80; // write command
   if (ucVCOM)
     ucStart |= 0x40; // VCOM bit
@@ -4078,7 +4085,6 @@ uint8_t ucMask;
         ucMask = 1 << (y & 7);
         s = &pBuffer[pOBD->width * (y >> 3)]; // point to last line first
         d = &ucLineBuf[2];
-        
         ucLineBuf[1] = pgm_read_byte(&ucMirror[y+1]); // current line number
         for (x=0; x<pOBD->width/8; x++)
         {
@@ -4090,11 +4096,11 @@ uint8_t ucMask;
                 s++;
             }
            *d++ = c;
-        } // for y
+        } // for x
         // write this line to the display
-        ucLineBuf[iPitch+2] = 0; // end of line
+        *d++ = 0; // end of line
         RawWrite(pOBD, ucLineBuf, iPitch+3);
-     } // for x
+     } // for y
   } else if (pOBD->iOrientation == 90) {
      for (x=0; x<pOBD->width; x++) {
 	s = &pBuffer[x+((pOBD->height-1)>>3)*pOBD->width];
