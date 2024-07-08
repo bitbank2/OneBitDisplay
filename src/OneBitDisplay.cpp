@@ -572,6 +572,11 @@ void ONE_BIT_DISPLAY::pushImage(int x, int y, int w, int h, uint16_t *pixels)
     (void)x; (void)y; (void)w; (void)h; (void)pixels;
 }
 
+void ONE_BIT_DISPLAY::displayLines(int iStartLine, int iLineCount)
+{
+    obdWriteLCDLines(&_obd, iStartLine, iLineCount);
+} /* displayLines() */
+
 int ONE_BIT_DISPLAY::displayFast(int x, int y, int cx, int cy) {
     if (_obd.type >= EPD42_400x300 && _obd.iFlags & OBD_HAS_FAST_UPDATE) {
         obdDumpFast(&_obd, x, y, cx, cy);

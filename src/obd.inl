@@ -1214,24 +1214,20 @@ int iPitch;
 } /* obdDumpWindow() */
 
 //
-// Write a single line to a Sharp memory LCD
-// You must provide the exact number of bytes needed for a complete line
-// e.g. for the 144x168 display, pSrc must provide 144 pixels (18 bytes)
+// Write a subset of lines to a Sharp memory LCD
 //
-void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine)
+void obdWriteLCDLines(OBDISP *pOBD, int iStart, int iCount)
 {
-    int x;
-    uint8_t c, ucInvert, *d, ucStart;
-    uint8_t ucLineBuf[54]; // 400 pixels is max supported width = 50 bytes + 4
+    int x, y, j;
+    uint8_t uc, c, ucMask, *s, *d, ucStart;
+    uint8_t ucLineBuf[56]; // 400 pixels is max supported width = 50 bytes + 4
     int iPitch = pOBD->width / 8;
     static int iVCOM = 0;
 
-//    if (pOBD == NULL || pSrc == NULL || pOBD->chip_type != OBD_CHIP_SHARP)
-//        return; // invalid request
-    if (iLine < 0 || iLine >= pOBD->height)
-        return;
+    if (pOBD == NULL || pOBD->chip_type != OBD_CHIP_SHARP || pOBD->ucScreen == NULL || iStart < 0 || iStart > pOBD->native_height-1 || iStart+iCount < 0 || iStart+iCount > pOBD->native_height-1) {
+        return; // invalid request
+    }
     
-      ucInvert = (pOBD->invert) ? 0x00 : 0xff;
       digitalWrite(pOBD->iCSPin, HIGH); // active high
 
       ucStart = 0x80; // write command
@@ -1241,21 +1237,27 @@ void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine)
       ucLineBuf[0] = ucStart;
       RawWriteData(pOBD, ucLineBuf, 1); // write command(01) + vcom(02)
 
-     d = &ucLineBuf[1];
-     ucLineBuf[0] = pgm_read_byte(&ucMirror[iLine+1]); // current line number
-     for (x=0; x<iPitch; x++)
-     {
-         c = pSrc[0] ^ ucInvert; // we need to brute-force invert it
-         *d++ = pgm_read_byte(&ucMirror[c]);
-         pSrc++;
-     } // for x
-    // write this line to the display
-    ucLineBuf[iPitch+1] = 0; // end of line
-    RawWriteData(pOBD, ucLineBuf, iPitch+2);
+     for (y=iStart; y<iStart+iCount; y++) {
+     	d = &ucLineBuf[1];
+        ucMask = 1 << (y & 7);
+        s = &pOBD->ucScreen[(y >> 3) * pOBD->native_width];
+     	ucLineBuf[0] = pgm_read_byte(&ucMirror[y+1]); // current line number
+     	for (x=0; x<iPitch; x++) {
+           uc = 0xff;
+           for (j=7; j>=0; j--) {
+               c = *s++;
+               if (c & ucMask) uc ^= (1 << j);
+           }
+           *d++ = uc;
+        } // for x
+        // write this line to the display
+        ucLineBuf[iPitch+1] = 0; // end of line
+        RawWriteData(pOBD, ucLineBuf, iPitch+2);
+     } // for y
     ucLineBuf[0] = 0;
     RawWriteData(pOBD, ucLineBuf, 1); // final transfer
     digitalWrite(pOBD->iCSPin, LOW); // de-activate
-} /* obdWriteLCDLine() */
+} /* obdWriteLCDLines() */
 
 //
 // Turn the display on or off

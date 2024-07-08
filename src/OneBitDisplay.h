@@ -346,6 +346,7 @@ class ONE_BIT_DISPLAY
     uint32_t capabilities();
     void setContrast(uint8_t ucContrast);
     int display(bool bRefresh = true, bool bWait = true);
+    void displayLines(int iStartLine, int iLineCount);
     int displayFast();
     int displayFast(int x, int y, int w, int h);
     int displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
@@ -525,11 +526,9 @@ int obdCopy(OBDISP *pOBD, int iFlags, uint8_t *pDestination);
 //
 void obdDumpWindow(OBDISP *pOBDSrc, OBDISP *pOBDDest, int srcx, int srcy, int destx, int desty, int width, int height);
 //
-// Write a single line to a Sharp memory LCD
-// You must provide the exact number of bytes needed for a complete line
-// e.g. for the 144x168 display, pSrc must provide 144 pixels (18 bytes)
+// Write one of more lines to a Sharp memory LCD
 //
-void obdWriteLCDLine(OBDISP *pOBD, uint8_t *pSrc, int iLine);
+void obdWriteLCDLines(OBDISP *pOBD, int iStart, int iCount);
 //
 // Initializes the display controller into "page mode" on I2C
 // If SDAPin and SCLPin are not -1, then bit bang I2C on those pins
