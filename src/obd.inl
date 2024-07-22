@@ -791,6 +791,51 @@ const uint8_t epd213b_init_sequence_full[] PROGMEM =
     0x00 // end of table
 }; /* epd213b_init_sequence_full[] */
 
+// Controller IL3820/IL3829
+#define GxGDEH029A1_X_PIXELS 128
+#define GxGDEH029A1_Y_PIXELS 296
+const uint8_t epd_IL3820_init_sequence_full[] PROGMEM =
+{
+    0x04, IL3820_DRIVER_CONTROL, (GxGDEH029A1_Y_PIXELS - 1) % 256, (GxGDEH029A1_Y_PIXELS - 1) / 256, 0x00,  // Pannel configuration, Gate selection
+    0x04, IL3820_BOOSTER_SOFT_START, 0xd7, 0xd6, 0x9d,  // softstart // X decrease, Y decrease
+    0x02, IL3820_WRITE_VCOM, 0xa8, // VCOMVol// VCOM setting
+    0x02, IL3820_WRITE_DUMMY, 0x1a, // dummy line per gate
+    0x02, IL3820_WRITE_GATELINE, 0x08,  // Gate time setting
+    0x02, IL3820_DATA_MODE, 0x03, //(em)
+    0x03, IL3820_SET_RAMXPOS, 0x00, (GxGDEH029A1_X_PIXELS - 1) / 8,
+    0x05, IL3820_SET_RAMYPOS, 0x00, 0x00, (GxGDEH029A1_Y_PIXELS -1) % 256, (GxGDEH029A1_Y_PIXELS -1) / 256, // X-source area,Y-gate area
+    0x02, IL3820_SET_RAMXCOUNT, 0x00, // set ram pointer 
+    0x03, IL3820_SET_RAMYCOUNT, 0x00, 0x00,
+    0x1F, IL3820_WRITE_LUT,  // command
+          0x50, 0xAA, 0x55, 0xAA, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //LUTDefault_full
+          0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //LUTDefault_full
+    0x02, IL3820_DISP_CTRL2, 0xC0 , // Begin poweron
+    0x01, IL3820_MASTER_ACTIVATE,
+    BUSY_WAIT,              // End poweron
+    0x00
+}; /* epd_IL3820_init_sequence_full[] */
+
+const uint8_t epd_IL3820_init_sequence_fast[] PROGMEM =
+{
+    0x04, IL3820_DRIVER_CONTROL, (GxGDEH029A1_Y_PIXELS - 1) % 256, (GxGDEH029A1_Y_PIXELS - 1) / 256, 0x00,  // Pannel configuration, Gate selection
+    0x04, IL3820_BOOSTER_SOFT_START, 0xd7, 0xd6, 0x9d,  // softstart // X decrease, Y decrease
+    0x02, IL3820_WRITE_VCOM, 0xa8, // VCOMVol// VCOM setting
+    0x02, IL3820_WRITE_DUMMY, 0x1a, // dummy line per gate
+    0x02, IL3820_WRITE_GATELINE, 0x08,  // Gate time setting
+    0x02, IL3820_DATA_MODE, 0x03, //(em)
+    0x03, IL3820_SET_RAMXPOS, 0x00, (GxGDEH029A1_X_PIXELS - 1) / 8,
+    0x05, IL3820_SET_RAMYPOS, 0x00, 0x00, (GxGDEH029A1_Y_PIXELS -1) % 256, (GxGDEH029A1_Y_PIXELS -1) / 256, // X-source area,Y-gate area
+    0x02, IL3820_SET_RAMXCOUNT, 0x00, // set ram pointer 
+    0x03, IL3820_SET_RAMYCOUNT, 0x00, 0x00,
+    0x1F, IL3820_WRITE_LUT,  // command
+          0x10, 0x18, 0x18, 0x08, 0x18, 0x18, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //LUTDefault_part
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x13, 0x14, 0x44, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  //LUTDefault_part
+    0x02, IL3820_DISP_CTRL2, 0xC0 , // Begin poweron
+    0x01, IL3820_MASTER_ACTIVATE,
+    BUSY_WAIT,              // End poweron
+    0x00
+}; /* epd_IL3820_init_sequence_fast[] */
+
 const uint8_t epd293_init_sequence_full[] PROGMEM =
 {
 //    0x01, SSD1608_SW_RESET,
@@ -1997,6 +2042,19 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->pInitFull = epd154_init_sequence_full;
       return;
   }
+  else if (iType == EPD29G_128x296)
+  {
+      pOBD->native_width = pOBD->width = 128;
+      pOBD->native_height = pOBD->height = 296;
+      pOBD->type = EPD29G_128x296; // the rest is the same
+      pOBD->pInitFull = epd_IL3820_init_sequence_full;
+      pOBD->pInitFast = epd_IL3820_init_sequence_fast;
+      pOBD->busy_idle = LOW;
+      pOBD->chip_type = OBD_CHIP_IL3820;
+      pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+      pOBD->can_flip = 0;
+      return; // nothing else to do yet
+  }
   else if (iType == EPD29_128x296 || iType == EPD213B_104x212 || iType == EPD37_240x416)
   {
       pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
@@ -2787,6 +2845,22 @@ void EPD154_Finish(OBDISP *pOBD, int bPartial)
     EPDWaitBusy(pOBD, 0);
 } /* EPD154_Finish() */
 
+void EPD_IL3820_Finish(OBDISP *pOBD, int bPartial) {
+    if (bPartial) {
+        EPD_CMD2(pOBD, IL3820_DISP_CTRL2, 0x04);
+    } else {
+        EPD_CMD2(pOBD, IL3820_DISP_CTRL2, 0xc4);
+    }
+    obdWriteCommand(pOBD, IL3820_MASTER_ACTIVATE);
+    EPDWaitBusy(pOBD, 0);
+
+    /*Serial.println("EPD_IL3820_Finish - Power off");
+    EPD_CMD2(pOBD, IL3820_DISP_CTRL2, 0xc3);
+    obdWriteCommand(pOBD, IL3820_MASTER_ACTIVATE);
+    delay(80);
+    EPDWaitBusy(pOBD, 0);*/
+} /* EPD_IL3820_Finish() */
+
 void EPD75_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 {
     uint8_t ucLine[16];
@@ -2809,6 +2883,7 @@ void EPD75_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 //        RawWriteData(pOBD, ucLine, 9); // boundaries
     }
 }
+
 void EPD29_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 {
 uint8_t ucLine[8];
@@ -2953,6 +3028,13 @@ static int EPDDumpFast(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, int 
         EPD27_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, true);
 #ifndef WIMPY_MCU
         EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 0);
+#endif
+        obdWriteCommand(pOBD, UC8151_DRF);
+    }
+    if (pOBD->type == EPD29G_128x296) {
+        EPDSendCMDSequence(pOBD, pOBD->pInitFast);
+#ifndef WIMPY_MCU
+        EPDWriteImage(pOBD, IL3820_WRITE_RAM, NULL, 0, 0, pOBD->width, pOBD->height, 0);
 #endif
         obdWriteCommand(pOBD, UC8151_DRF);
     }
@@ -3817,6 +3899,18 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait)
           EPD29_Finish(pOBD, false);
       }
   }
+
+    if (pOBD->type == EPD29G_128x296){
+        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
+#ifndef WIMPY_MCU
+      if (pOBD->ucScreen) {
+          EPDWriteImage(pOBD, IL3820_WRITE_RAM, NULL, 0, 0, pOBD->width, pOBD->height, 0);
+      }
+#endif
+      if (bRefresh) {
+          EPD_IL3820_Finish(pOBD, false);
+      }
+    }
     if (pOBD->type == EPD27_176x264) {
         EPD27_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
         obdWriteCommand(pOBD, UC8151_DTM1);
