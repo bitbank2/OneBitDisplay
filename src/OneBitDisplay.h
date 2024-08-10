@@ -109,6 +109,7 @@ enum {
   EPD29R_128x296,
   EPD29Y_128x296, // DEPG0290YN
   EPD293_128x296,
+  EPD294_128x296, // Waveshare newer 2.9" 1-bit 128x296
   EPD42R_400x300,
   EPD42R2_400x300, // GDEQ042Z21
   EPD213B_104x212,
@@ -374,8 +375,8 @@ class ONE_BIT_DISPLAY
     void setCursor(int x, int y);
     void setPower(bool bOn);
     int drawEPDGFX(int x, int y, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1);
-    int loadBMP(uint8_t *pBMP, int x, int y, int iFG, int iBG);
-    int loadBMP3(uint8_t *pBMP, int x, int y);
+    int loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG);
+    int loadBMP3(const uint8_t *pBMP, int x, int y);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
     void wake(void);
@@ -566,7 +567,7 @@ void obdSetContrast(OBDISP *pOBD, unsigned char ucContrast);
 // Pass the pointer to the beginning of the BMP file
 // First pass version assumes a full screen bitmap
 //
-int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int x, int y, int iFG, int iBG);
+int obdLoadBMP(OBDISP *pOBD, const uint8_t *pBMP, int x, int y, int iFG, int iBG);
 //
 // load a 4-bpp Windows bitmap
 // into memory for 3-color (BLACK/WHITE/RED)
@@ -574,7 +575,7 @@ int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int x, int y, int iFG, int iBG);
 // It does a 'best match' of the colors to
 // B/W/R
 //
-int obdLoadBMP3(OBDISP *pOBD, uint8_t *pBMP, int dx, int dy);
+int obdLoadBMP3(OBDISP *pOBD, const uint8_t *pBMP, int dx, int dy);
 //
 // Power up/down the display
 // useful for low power situations

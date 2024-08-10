@@ -214,7 +214,7 @@ void ONE_BIT_DISPLAY::setCursor(int x, int y)
     _obd.iCursorY = y;
 } /* setCursor() */
 
-int ONE_BIT_DISPLAY::loadBMP(uint8_t *pBMP, int x, int y, int iFG, int iBG)
+int ONE_BIT_DISPLAY::loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG)
 {
     return obdLoadBMP(&_obd, pBMP, x, y, iFG, iBG);
 } /* loadBMP() */
@@ -224,7 +224,7 @@ int ONE_BIT_DISPLAY::drawEPDGFX(int x, int y, int cx, int cy, uint8_t *pPlane0, 
     return obdDrawEPDGFX(&_obd, x, y, cx, cy, pPlane0, pPlane1);
 } /* drawEPDGFX() */
 
-int ONE_BIT_DISPLAY::loadBMP3(uint8_t *pBMP, int x, int y)
+int ONE_BIT_DISPLAY::loadBMP3(const uint8_t *pBMP, int x, int y)
 {
     return obdLoadBMP3(&_obd, pBMP, x, y);
 } /* loadBMP3() */

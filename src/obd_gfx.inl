@@ -572,7 +572,7 @@ static void obdCachedWrite(OBDISP *pOBD, uint8_t *pData, uint8_t u8Len, int bRen
        obdCachedFlush(pOBD, bRender); // write the old data
    }
    memcpy(&u8Cache[u8End], pData, u8Len);
-   u8End += u8Len;
+   u8End = u8End + u8Len;
   
 } /* obdCachedWrite() */
 //
@@ -1104,12 +1104,12 @@ uint8_t i;
 // draw the 1's bits as the FG color and leave
 // the background (0 pixels) unchanged - aka transparent.
 //
-int obdLoadBMP(OBDISP *pOBD, uint8_t *pBMP, int dx, int dy, int iFG, int iBG)
+int obdLoadBMP(OBDISP *pOBD, const uint8_t *pBMP, int dx, int dy, int iFG, int iBG)
 {
 int16_t i16, cx, cy;
 int iOffBits; // offset to bitmap data
-int iPitch;
-uint8_t x, y, b=0, *s, *d=NULL;
+int x, y, iPitch;
+uint8_t b=0, *s, *d=NULL;
 uint8_t ucFill, dst_mask=0, src_mask;
 uint8_t bFlipped = 0;
 
@@ -1162,7 +1162,7 @@ uint8_t bFlipped = 0;
         if ((y & 7) == 0)
            memset(u8Cache, ucFill, sizeof(u8Cache));
      }
-     s = &pBMP[iOffBits + (y*iPitch)];
+     s = (uint8_t *)&pBMP[iOffBits + (y*iPitch)];
      src_mask = 0;
       if (!pOBD->ucScreen) // direct to display
       {
@@ -1220,7 +1220,7 @@ uint8_t bFlipped = 0;
 // Pass the pointer to the beginning of the BMP file
 // First pass version assumes a full screen bitmap
 //
-int obdLoadBMP3(OBDISP *pOBD, uint8_t *pBMP, int dx, int dy)
+int obdLoadBMP3(OBDISP *pOBD, const uint8_t *pBMP, int dx, int dy)
 {
 int16_t i16, cx, cy, bpp;
 int x, y, iOffBits; // offset to bitmap data
@@ -1288,7 +1288,7 @@ uint8_t ucColorMap[16];
   {
      dst_mask = 1 << ((y+dy) & 7);
       d = &pOBD->ucScreen[(((y+dy)>>3)*iDestPitch)+dx];
-     s = &pBMP[iOffBits+(y*iPitch)];
+     s = (uint8_t *)&pBMP[iOffBits+(y*iPitch)];
      for (x=0; x<cx; x+=2) // work with pixel pairs
      {
          b = pgm_read_byte(s++);
