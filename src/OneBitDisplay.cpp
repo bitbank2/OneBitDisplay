@@ -111,6 +111,11 @@ void ONE_BIT_DISPLAY::setPower(bool bOn)
     obdPower(&_obd, bOn);
 } /* setPower() */
 
+int ONE_BIT_DISPLAY::getFlags(void)
+{
+    return _obd.iFlags;
+}
+
 void ONE_BIT_DISPLAY::setFlags(int iFlags)
 {
     _obd.iFlags = iFlags;
@@ -136,11 +141,12 @@ void ONE_BIT_DISPLAY::setBuffer(uint8_t *pBuffer)
 int ONE_BIT_DISPLAY::allocBuffer(void)
 {
     int iSize = _obd.width * ((_obd.height+7)>>3);
-    if (_obd.iFlags & (OBD_3COLOR | OBD_4COLOR))
+    if (_obd.iFlags & (OBD_3COLOR | OBD_4COLOR) || _obd.chip_type == OBD_CHIP_UC8151)
         iSize *= 2; // 2 bit planes
     _obd.ucScreen = (uint8_t *)malloc(iSize);
     if (_obd.ucScreen != NULL) {
         _obd.render = false; // draw into RAM only
+        memset(_obd.ucScreen, 0xff, iSize);
         return OBD_SUCCESS;
     }
     return OBD_ERROR_NO_MEMORY; // failed
@@ -413,7 +419,7 @@ int w, h;
         if (_obd.iCursorY >= _obd.height && _obd.ucScreen && _obd.bScroll) {
             obdScroll1Line(&_obd, h/8);
             if (_obd.render) {
-                obdDumpBuffer(&_obd, NULL);
+                obdDumpBuffer(&_obd, NULL, false, false, false);
             }
             _obd.iCursorY -= h;
         }
@@ -425,7 +431,7 @@ int w, h;
           if (_obd.iCursorY >= _obd.height && _obd.ucScreen && _obd.bScroll) {
               obdScroll1Line(&_obd, h/8);
               if (_obd.render) {
-                  obdDumpBuffer(&_obd, NULL);
+                  obdDumpBuffer(&_obd, NULL, false, false, false);
               }
               _obd.iCursorY -= h;
           }
@@ -483,13 +489,13 @@ uint8_t ONE_BIT_DISPLAY::getRotation(void)
 void ONE_BIT_DISPLAY::wake(void)
 {
     if (_obd.type >= EPD42_400x300) {
-        EPDWakeUp(&_obd);
+        EPDWakeUp(&_obd, 1);
     }
 }
-void ONE_BIT_DISPLAY::sleep(void)
+void ONE_BIT_DISPLAY::sleep(int bDeep)
 {
     if (_obd.type >= EPD42_400x300) {
-        EPDSleep(&_obd);
+        EPDSleep(&_obd, bDeep);
     }
 }
 
@@ -507,6 +513,14 @@ void ONE_BIT_DISPLAY::getTextBounds(const char *string, int16_t x, int16_t y, in
 void ONE_BIT_DISPLAY::getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
 {
     getTextBounds(str.c_str(), x, y, x1, y1, w, h);
+}
+int ONE_BIT_DISPLAY::dataTime(void)
+{
+    return _obd.iDataTime;
+}
+int ONE_BIT_DISPLAY::opTime(void)
+{
+    return _obd.iOpTime;
 }
 int16_t ONE_BIT_DISPLAY::width(void)
 {
@@ -577,24 +591,25 @@ void ONE_BIT_DISPLAY::displayLines(int iStartLine, int iLineCount)
     obdWriteLCDLines(&_obd, iStartLine, iLineCount);
 } /* displayLines() */
 
-int ONE_BIT_DISPLAY::displayFast(int x, int y, int cx, int cy) {
-    if (_obd.type >= EPD42_400x300 && _obd.iFlags & OBD_HAS_FAST_UPDATE) {
-        obdDumpFast(&_obd, x, y, cx, cy);
-        return OBD_SUCCESS;
-    }
-    return OBD_ERROR_NOT_SUPPORTED;
-}
-int ONE_BIT_DISPLAY::displayFast()
+int ONE_BIT_DISPLAY::display(bool bRefresh, bool bWait, bool bFast)
 {
-    if (_obd.type >= EPD42_400x300 && _obd.iFlags & OBD_HAS_FAST_UPDATE) {
-        obdDumpFast(&_obd, 0, 0, _obd.width, _obd.height);
-        return OBD_SUCCESS;
+    return obdDumpBuffer(&_obd, NULL, bRefresh, bWait, bFast);
+}
+
+void ONE_BIT_DISPLAY::wait(bool bQuick)
+{
+    EPDWaitBusy(&_obd, bQuick);
+}
+int ONE_BIT_DISPLAY::displayPartial()
+{
+    if (_obd.type >= EPD42_400x300 && (_obd.iFlags & OBD_HAS_PARTIAL_UPDATE)) {
+        return EPDDumpPartial(&_obd, NULL, 0, 0, _obd.width, _obd.height);
     }
     return OBD_ERROR_NOT_SUPPORTED;
 }
 int ONE_BIT_DISPLAY::displayPartial(int x, int y, int w, int h, uint8_t *pBuffer)
 {
-    if (_obd.type >= EPD42_400x300 && _obd.chip_type == OBD_CHIP_UC8151) {
+    if (_obd.type >= EPD42_400x300 && (_obd.iFlags & OBD_HAS_PARTIAL_UPDATE)) {
         return obdDumpPartial(&_obd, x, y, w, h, pBuffer);
     } else {
         return OBD_ERROR_NOT_SUPPORTED;
@@ -620,10 +635,6 @@ void ONE_BIT_DISPLAY::backlight(int bOn)
 OBDISP * ONE_BIT_DISPLAY::getOBD()
 {
     return &_obd;
-}
-int ONE_BIT_DISPLAY::display(bool bRefresh, bool bWait)
-{
-    return obdDumpBuffer_2(&_obd, NULL, bRefresh, bWait);
 }
 void ONE_BIT_DISPLAY::setRender(bool bRAMOnly)
 {

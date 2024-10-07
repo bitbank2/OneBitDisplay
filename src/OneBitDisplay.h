@@ -99,17 +99,20 @@ enum {
   SHARP_160x68,
 #ifndef __AVR__
   LCD_ST7302,
+  LCD_ST7305,
 #endif
   EPD42_400x300, // WFT0420CZ15
   EPD42_4GRAY_400x300, // WFT0420CZ15
-  EPD42B_400x300, // DEPG0420BN
+  EPD42B_400x300, // DEPG0420BN / GDEY042T81
   EPD42Y_400x300, // DEPG0420YN
+  EPD102_80x128, // GDEW0102T4
   EPD29_128x296,
   EPD29B_128x296,
   EPD29R_128x296,
   EPD29Y_128x296, // DEPG0290YN
   EPD293_128x296,
   EPD294_128x296, // Waveshare newer 2.9" 1-bit 128x296
+  EPD295_128x296, // harvested from Solum 2.9" BW ESLs
   EPD42R_400x300,
   EPD42R2_400x300, // GDEQ042Z21
   EPD213B_104x212,
@@ -123,6 +126,7 @@ enum {
   EPD154R_152x152,
   EPD154Y_152x152, // DEPG0154YN
   EPD154_200x200, // waveshare
+  EPD154B_200x200, // DEPG01540BN
   EPD27_176x264, // waveshare
   EPD27B_176x264, // GDEY027T91
   EPD266_152x296, // GDEY0266T90
@@ -133,16 +137,16 @@ enum {
   EPD37_240x416, // GDEY037T03
   EPD579_792x272, // GDEY0579T93
   EPD583R_600x448,
-  EPD74R_640x384,
   EPD75_800x480, // GDEY075T7
+  EPD74R_640x384,
   EPD583_648x480, // DEPG0583BN
+  EPD122_192x176, // GEDM0122T61
   EPD29_BWYR_128x296, // GDEY029F51
   EPD29_BWYR_168x384, // GDEY029F51H
   EPD266_BWYR_184x360, // GDEY0266F51
   EPD30_BWYR_168x400, // Waveshare 3" B/W/Y/R
   EPD164_BWYR_168x168, // Waveshare 1.64" B/W/Y/R
   EPD236_BWYR_168x296, // Waveshare 2.36" B/W/Y/R
-  EPD102_80x128, // not working yet
   EPD47_540x960, // not working yet
   EPD35R_184x384, // Hanshow Nebular 3.5" BWR
   LCD_COUNT
@@ -160,6 +164,8 @@ enum {
 #define OBD_FULLUPDATE 0x0100 
 #define OBD_CS_EVERY_BYTE 0x0200
 #define OBD_HAS_FAST_UPDATE 0x0400
+#define OBD_HAS_PARTIAL_UPDATE 0x0800
+#define OBD_FAST_INVERTED 0x1000
 
 #define OBD_WHITE 0
 #define OBD_BLACK 1
@@ -188,7 +194,7 @@ enum {
 enum reg {
     UC8151_PSR      = 0x00,
     UC8151_PWR      = 0x01,
-    UC8151_POF      = 0x02,
+    UC8151_POFF     = 0x02,
     UC8151_PFS      = 0x03,
     UC8151_PON      = 0x04,
     UC8151_PMES     = 0x05,
@@ -290,6 +296,23 @@ typedef struct {
   uint8_t yAdvance; ///< Newline distance (y axis)
 } GFXfont;
 #endif // _ADAFRUIT_GFX_H
+//
+// Structure containing everything needed to
+// perform every type of e-paper update event
+// This can be executed on the main CPU or
+// passed to an ULP (ultra low power) coprocessor
+//
+typedef struct epd_event
+{
+    uint32_t u32Size; // size of each plane in bytes
+    uint8_t *pInit; // initialization command table
+    uint8_t *pUpdate; // update command table
+    uint8_t *pPlane[2]; // pointer to 1 or 2 memory planes
+    uint8_t u8PlaneCMD[2]; // commands to write to plane 0/1
+    uint8_t u8InvertFlags; // invert flag for plane 0/1
+    uint8_t u8BusyIdle; // high or low to signal not busy
+    uint8_t u8CLK, u8MOSI, u8DC, u8BUSY, u8CS; // GPIOs for bit-banging SPI (if needed)
+} EPDEvent;
 
 typedef struct obdstruct
 {
@@ -305,6 +328,7 @@ uint8_t bScroll;
 int iScreenOffset, iOrientation;
 int iFG, iBG; //current color
 int iFont, iFlags;
+int iDataTime, iOpTime; // time in milliseconds for data transmission and operation
 uint32_t u32FontScaleX, u32FontScaleY;
 uint32_t iSpeed;
 uint32_t iTimeout; // for e-ink panels
@@ -318,8 +342,9 @@ uint8_t x_offset, y_offset; // memory offsets
 int iLEDPin; // backlight
 uint8_t bBitBang;
 // e-paper variables
-const uint8_t *pInitFull; // full update initialization sequence
-const uint8_t *pInitFast; // fast update initialization sequence
+const uint8_t *pInitFull; // full update init sequence
+const uint8_t *pInitFast; // fast update init sequence
+const uint8_t *pInitPart; // partial update init sequence
 } OBDISP;
 
 #ifdef __cplusplus
@@ -344,13 +369,16 @@ class ONE_BIT_DISPLAY
     void setBB(BBI2C *pBB);
     OBDISP *getOBD();
     void setFlags(int iFlags);
+    int getFlags();
     uint32_t capabilities();
     void setContrast(uint8_t ucContrast);
-    int display(bool bRefresh = true, bool bWait = true);
+    int display(bool bRefresh = true, bool bWait = true, bool bFast = false);
     void displayLines(int iStartLine, int iLineCount);
-    int displayFast();
-    int displayFast(int x, int y, int w, int h);
+    int displayPartial();
     int displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
+    void wait(bool bQuick = false);
+    int dataTime();
+    int opTime();
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     void createVirtualDisplay(int width, int height, uint8_t *buffer);
@@ -380,7 +408,7 @@ class ONE_BIT_DISPLAY
     int16_t getCursorX(void);
     int16_t getCursorY(void);
     void wake(void);
-    void sleep(void);
+    void sleep(int bDeep);
     void getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
     void getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
     void setTextWrap(bool bWrap);
@@ -498,6 +526,9 @@ enum {
   LCD_OK,
   LCD_ERROR
 };
+void EPDFill(OBDISP *pOBD, uint8_t ucCMD, uint8_t ucPattern);
+void EPDSetPosition(OBDISP *pOBD, int x, int y, int cx, int cy);
+
 //
 // Create a virtual display of any size
 // The memory buffer must be provided at the time of creation
@@ -648,16 +679,10 @@ int obdSetPixel(OBDISP *pOBD, int x, int y, unsigned char ucColor, int bRender);
 //
 int obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height, uint8_t *pBuffer);
 //
-// Dump a screen faster to an e-ink display
-// Not all displays have support for this
-// if not, the slow update will be used
-int obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height);
-//
 // Dump an entire custom buffer to the display
 // useful for custom animation effects
 //
-int obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh, int bWait);
-int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
+int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh, int bWait, int bFast);
 //
 // Render a window of pixels from a provided buffer or the library's internal buffer
 // to the display. The row values refer to byte rows, not pixel rows due to the memory

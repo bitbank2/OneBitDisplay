@@ -22,18 +22,14 @@
 #endif
 void initSPI(OBDISP *pOBD, int iSpeed, int iMOSI, int iCLK, int iCS);
 void _delay(int iDelay);
-void EPDSetPosition(OBDISP *pOBD, int x, int y, int cx, int cy);
 static void EPDWaitBusy(OBDISP *pOBD, int bQuick);
-static void EPDSleep(OBDISP *pOBD);
-static void EPDFill(OBDISP *pOBD, uint8_t ucCMD, uint8_t ucPattern);
+static void EPDSleep(OBDISP *pOBD, int bDeep);
 #ifndef WIMPY_MCU
 static void EPDWriteImage4bpp(OBDISP *pOBD, uint8_t ucCMD, int x, int y, int w, int h);
 static void EPDWriteImage2bpp(OBDISP *pOBD, uint8_t ucCMD, int x, int y, int w, int h);
-static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, uint8_t *pBits, int x, int y, int w, int h, int bRed);
+static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, uint8_t *pBits, int x, int y, int w, int h, int bInvert);
 #endif
 void EPD213_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
-void EPD293_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
-void EPD154_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
 void EPD_CMD2(OBDISP *pOBD, uint8_t cmd, uint8_t param);
 void obdSetDCMode(OBDISP *pOBD, int iMode);
 void InvertBytes(uint8_t *pData, uint8_t bLen);
@@ -41,41 +37,7 @@ void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8
 static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen);
 void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen);
 // EPD look up tables
-// new waveform created by Jean-Marc Zingg for the actual panel
-#define T1 25 // color change charge balance pre-phase
-#define T2  1 // color change or sustain charge balance pre-phase
-#define T3  2 // color change or sustain phase
-#define T4 25 // color change phase
 
-const unsigned char lut_20_vcom0_partial[] PROGMEM =
-{
-  0x00, T1, T2, T3, T4, 1, // 00 00 00 00
-  0x00,  1,  0,  0,  0, 1, // gnd phase
-};
-
-const unsigned char lut_21_ww_partial[] PROGMEM =
-{ // 10 w
-  0x18, T1, T2, T3, T4, 1, // 00 01 10 00
-  0x00,  1,  0,  0,  0, 1, // gnd phase
-};
-
-const unsigned char lut_22_bw_partial[] PROGMEM =
-{ // 10 w
-  0x5A, T1, T2, T3, T4, 1, // 01 01 10 10
-  0x00,  1,  0,  0,  0, 1, // gnd phase
-};
-
-const unsigned char lut_23_wb_partial[] PROGMEM =
-{ // 01 b
-  0xA5, T1, T2, T3, T4, 1, // 10 10 01 01
-  0x00,  1,  0,  0,  0, 1, // gnd phase
-};
-
-const unsigned char lut_24_bb_partial[] PROGMEM =
-{ // 01 b
-  0x24, T1, T2, T3, T4, 1, // 00 10 01 00
-  0x00,  1,  0,  0,  0, 1, // gnd phase
-};
 // 2.7" 176x264 LUTs
 const uint8_t lut_fast_vcom_dc[] PROGMEM = {
     0x00, 0x00,
@@ -188,70 +150,6 @@ const unsigned char lut_vcom0_full[] PROGMEM =
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
-const unsigned char lut_ww_full[] PROGMEM =
-{
-  0x40, 0x17, 0x00, 0x00, 0x00, 0x02,
-  0x90, 0x17, 0x17, 0x00, 0x00, 0x02,
-  0x40, 0x0A, 0x01, 0x00, 0x00, 0x01,
-  0xA0, 0x0E, 0x0E, 0x00, 0x00, 0x02,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-
-const unsigned char lut_bw_full[] PROGMEM =
-{
-  0x40, 0x17, 0x00, 0x00, 0x00, 0x02,
-  0x90, 0x17, 0x17, 0x00, 0x00, 0x02,
-  0x40, 0x0A, 0x01, 0x00, 0x00, 0x01,
-  0xA0, 0x0E, 0x0E, 0x00, 0x00, 0x02,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-const unsigned char lut_wb_full[] PROGMEM =
-{
-  0x80, 0x17, 0x00, 0x00, 0x00, 0x02,
-  0x90, 0x17, 0x17, 0x00, 0x00, 0x02,
-  0x80, 0x0A, 0x01, 0x00, 0x00, 0x01,
-  0x50, 0x0E, 0x0E, 0x00, 0x00, 0x02,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-
-const unsigned char lut_bb_full[] PROGMEM =
-{
-  0x80, 0x17, 0x00, 0x00, 0x00, 0x02,
-  0x90, 0x17, 0x17, 0x00, 0x00, 0x02,
-  0x80, 0x0A, 0x01, 0x00, 0x00, 0x01,
-  0x50, 0x0E, 0x0E, 0x00, 0x00, 0x02,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-
-const unsigned char epd102_lut_w_full[] PROGMEM =
-{
-  0x60, 0x5A, 0x5A, 0x00, 0x00, 0x01,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-
-const unsigned char epd102_lut_b_full[] PROGMEM =
-{
-  0x90, 0x5A, 0x5A, 0x00, 0x00, 0x01,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
 const unsigned char lut42_4gray_vcom[] PROGMEM = {
 0x00    ,0x0A   ,0x00   ,0x00   ,0x00   ,0x01,
 0x60    ,0x14   ,0x14   ,0x00   ,0x00   ,0x01,
@@ -487,8 +385,26 @@ const uint8_t EPD213R_104x212_d_init_sequence_full[] PROGMEM = {
     0x00
 };
 
-// initialization sequence for 3.7" 240x416 e-paper
 const uint8_t epd37_init_sequence_full[] PROGMEM = {
+    0x01, UC8151_PON, // Power on
+    BUSY_WAIT,
+    0x02, 0x00, 0x1f, // flip x
+    0x02, 0x50, 0x97, // VCOM
+    0x00
+};
+
+const uint8_t epd37_init_sequence_part[] PROGMEM = {
+    0x01, UC8151_PON, // Power on
+    BUSY_WAIT,
+    0x02, 0x00, 0x1f, // flip x
+    0x02, 0xe0, 0x02,
+    0x02, 0xe5, 0x6e,
+    0x02, 0x50, 0xd7, // VCOM
+    0x00
+};
+
+// initialization sequence for 3.7" 240x416 e-paper
+const uint8_t epd37xx_init_sequence_full[] PROGMEM = {
     0x03, UC8151_PSR, 0xdf, 0x8d,
     0x06, UC8151_PWR, 0x03, 0x10, 0x3f, 0x3f, 0x0d,
     0x01, UC8151_PON, // power on
@@ -516,25 +432,6 @@ const uint8_t epd29_init_sequence_full[] PROGMEM = {
     0x02, UC8151_TCON, 0x22,
     0x02, UC8151_CDI, 0x9c, // inverted, white border
     0x02, UC8151_PLL, 0x3a, // HZ_100
-    0x00 // end of table
-};
-
-// initialization sequence for 1.02" 80x128 e-paper
-const uint8_t epd102_init_sequence_full[] PROGMEM = {
-//    0x02, 0xd2, 0x3f, // ?
-    0x02, 0x00, 0x5f,
-//    0x05, 0x01, 0x03, 0x00, 0x2b, 0x2b,
-//    0x02, 0x06, 0x3f,
-    0x03, 0x2a, 0x00, 0x00,
-//    0x02, 0x30, 0x13, // PLL 30Hz
-//    0x02, 0x50, 0x57, // VCOM default
-//    0x02, 0x60, 0x22, // TCON 24us
-//    0x03, 0x61, 0x50,0x80, // resolution
-//    0x02, 0x82, 0x12, // VCOM -1v
-//    0x02, 0xe3, 0x33, // power saving
-    0x01, 0x04, // power on
-    BUSY_WAIT,
-    0x02, 0x50, 0x97, // panel setting
     0x00 // end of table
 };
 
@@ -666,61 +563,8 @@ const uint8_t epd75_init_sequence_partial[] PROGMEM = {
 //#endif // FUTURE
     0x00 // end of table
 };
-const uint8_t epd29_init_sequence_partial[] PROGMEM = {
-    0x02, UC8151_PSR, 0x80 | 0x20 | 0x10 | 0x00 | 0x02 | 0x01, // RES_128x296, LUT_REG, FORMAT_BW, SHIFT_LEFT, BOOSTER_ON, RESET_NONE
-    0x06, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x03,
-    0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
-    0x01, UC8151_PON, // power on
-    BUSY_WAIT,
-    0x02, UC8151_PLL, 0x3a, // HZ_100
-    0x02, UC8151_VDCS, 0x12, // VCOM DC setting
-//    0x02, UC8151_CDI, 0x97,
-    0x2d, UC8151_LUT_VCOM, // VCOM LUT
-        0x00, 0x19, 0x01, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-        ,0x00, 0x00,
-    0x2b, UC8151_LUT_WW, // WW LUT
-        0x00, 0x19, 0x01, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x2b, UC8151_LUT_BW,
-        0x80, 0x19, 0x01, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x2b, UC8151_LUT_WB,
-        0x40, 0x19, 0x01, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x2b, UC8151_LUT_BB,
-        0x00, 0x19, 0x01, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-
-    0x00 // end of table
-};
 // 1.54" 152x152
-const uint8_t epd154b_init_sequence_full[] PROGMEM =
+const uint8_t epd154a_init_sequence_full[] PROGMEM =
 {
     1, UC8151_PON,
     BUSY_WAIT,
@@ -729,7 +573,7 @@ const uint8_t epd154b_init_sequence_full[] PROGMEM =
     2, UC8151_CDI, 0x97, // VCOM
     0
 };
-const uint8_t epd154b_init_sequence_fast[] PROGMEM =
+const uint8_t epd154a_init_sequence_part[] PROGMEM =
 {
     1, UC8151_PON,
     BUSY_WAIT,
@@ -764,32 +608,99 @@ const uint8_t epd154b_init_sequence_fast[] PROGMEM =
 // 1.54" 200x200
 const uint8_t epd154_init_sequence_full[] PROGMEM =
 {
-    1, SSD1608_SW_RESET,
+    0x01, 0x12, // sw reset
     BUSY_WAIT,
-    4, SSD1608_DRIVER_CONTROL, 199, 0, 0,
-    2, SSD1608_DATA_MODE, 0x03,
-    2, SSD1608_WRITE_BORDER, 0x01,
+    0x04, 0x01, 199, 0x00, 0x00, // driver output control
+    0x02, 0x11, 0x03, // data entry mode
+    0x03, 0x44, 0x00, 0x18,
+    0x05, 0x45, 0x00, 0x00, 0xc7, 0x00,
+    0x02, 0x3c, 0x05, // border waveform
+    0x02, 0x18, 0x80, // read temp sensor
+//    0x03, 0x21, 0x00, 0x80, // display update control
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+    BUSY_WAIT,
+    0x00 // end of table
+};
+
+const uint8_t epd154_init_sequence_part[] PROGMEM =
+{
+    0x02, 0x11, 0x03,
+    0x03, 0x44, 0x00, 0x18,
+    0x05, 0x45, 0x00, 0x00, 199, 0x00,
+    0x02, 0x3c, 0x80, // border waveform
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
     0
 };
+
+// partial (no flash) updates
+const uint8_t epd154b_init_sequence_part[] PROGMEM =
+{  
+    0x02, 0x11, 0x03, 
+    0x02, 0x3c, 0x80, // border waveform 
+    0x03, 0x44, 0x00, 0x18,
+    0x05, 0x45, 0x00, 0x00, 199, 0x00,
+    0x02, 0x4e, 0x00, 
+    0x03, 0x4f, 0x00, 0x00,
+      
+    154, 0x32, // LUT
+    0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x80,0x80,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x40,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x80,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0xF,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x1,0x1,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+    0x22,0x22,0x22,0x22,0x22,0x22,0x0,0x0,0x0,
+
+    2, 0x3f, 0x2, // ??
+    2, 0x03, 0x17, // gate voltage
+    4, 0x04, 0x41, 0xb0, 0x32, // source voltage
+    2, 0x2c, 0x28, // VCOM
+    11, 0x37, 0,0,0,0,0,0x40,0,0,0,0, // ??
+    2, 0x3c, 0x80, // VCOM ??
+    
+    0x00 // end of table
+};
+
 const uint8_t epd213b_init_sequence_full[] PROGMEM =
 {
-    0x02, 0x74, 0x54,
-    0x02, 0x7e, 0x3b,
-    0x03, 0x2b, 0x04, 0x63,
-    0x05, 0x0c, 0x8f, 0x8f, 0x8f, 0x3f,
+    0x01, 0x12, // sw reset
+    BUSY_WAIT,
     0x04, 0x01, 0xf9, 0x00, 0x00,
     0x02, 0x11, 0x03,
     0x03, 0x44, 0x00, 0x0f,
     0x05, 0x45, 0x00, 0x00, 0xf9, 0x00,
-    0x02, 0x3c, 0xc0,
+    0x02, 0x3c, 0x05, // border waveform
+    0x03, 0x21, 0x00, 0x80, // display update control
     0x02, 0x18, 0x80,
-    0x02, 0x22, 0xb1,
-    0x01, 0x20,
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
     BUSY_WAIT,
+    0x00 // end of table
+};
+
+const uint8_t epd213b_init_sequence_part[] PROGMEM =
+{
+    0x02, 0x11, 0x03, // data direction
+    0x03, 0x44, 0x00, 0x0f, // x start/end
+    0x05, 0x45, 0x00, 0x00, 0xf9, 0x00, // y start/end
+    0x02, 0x3c, 0x80, // border waveform
     0x02, 0x4e, 0x00,
     0x03, 0x4f, 0x00, 0x00,
     0x00 // end of table
-}; /* epd213b_init_sequence_full[] */
+};
 
 const uint8_t epd294_init_sequence_full[] PROGMEM =
 {   
@@ -812,52 +723,214 @@ const uint8_t epd294_init_sequence_full[] PROGMEM =
     0x00 // end of table
 }; /* epd294_init_sequence_full[] */
 
+const uint8_t epd102_init_sequence_full[] PROGMEM =
+{
+  2, 0x00, 0x5f, // panel setting
+  3, 0x2a, 0x00, 0x00, // IC hidden instructions
+  1, 0x04, // power on
+  BUSY_WAIT,
+  2, 0x50, 0x97, // VCOM
+  0
+};
+const uint8_t epd102_init_sequence_part[] PROGMEM =
+{
+  0x2, 0xd2, 0x3f,
+  0x2, 0x00, 0x6f, // panel setting
+  0x5, 0x01, 0x03, 0x00, 0x26, 0x26, // power
+  0x2, 0x06, 0x3f,
+  0x3, 0x2a, 0x00, 0x00,
+  0x2, 0x30, 0x13, // 50Hz
+  0x2, 0x50, 0xf2,
+  0x2, 0x60, 0x22,
+  0x2, 0x82, 0x12, // -0.1v
+  0x2, 0xe3, 0x33,
+// send LUTs
+  43, 0x23,       // white
+    0x60  ,0x01 ,0x01 ,0x00 ,0x00 ,0x01 ,
+    0x80  ,0x0f ,0x00 ,0x00 ,0x00 ,0x01 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+  43, 0x24,       // black
+    0x90  ,0x01 ,0x01 ,0x00 ,0x00 ,0x01 ,
+    0x40  ,0x0f ,0x00 ,0x00 ,0x00 ,0x01 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+    0x00  ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,
+  0x1, 0x4, // power on
+  BUSY_WAIT,
+  0
+};
+
+const uint8_t epd122_init_sequence_full[] PROGMEM =
+{
+    0x01, SSD1608_SW_RESET,
+    BUSY_WAIT,
+
+    0x04, 0x01, 0xaf, 0x00, 0x00, // driver output control
+    0x02, 0x11, 0x03, // data entry mode
+    0x03, 0x44, 0x00, 0x17, // ram start/end
+    0x05, 0x45, 0x00, 0x00, 0xbf, 0x00,
+    0x02, 0x3c, 0x05, // border waveform
+    0x02, 0x18, 0x80, // read built-in temp sensor
+
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+    BUSY_WAIT,
+    0x00 // end of table
+};
+
+const uint8_t epd122_init_sequence_fast[] PROGMEM =
+{
+    0x01, SSD1608_SW_RESET,
+    BUSY_WAIT,
+
+    0x02, 0x11, 0x03, // data entry mode
+    0x02, 0x18, 0x80, // read built-in temp sensor
+    0x02, 0x22, 0xb1, // load temp value
+    0x01, 0x20, // execute
+    BUSY_WAIT,
+    0x03, 0x1a, 0x64, 0x00, // write temp value
+    0x02, 0x22, 0x91, // load temp
+    0x01, 0x20, // execute
+    BUSY_WAIT,
+    0x03, 0x44, 0x00, 0x17, // ram start/end
+    0x05, 0x45, 0x00, 0x00, 0xaf, 0x00,
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+    BUSY_WAIT,
+    0x00 // end of table
+};
+
+const uint8_t epd122_init_sequence_part[] PROGMEM =
+{
+    0x02, 0x3c, 0x80, // border waveform
+    0x02, 0x11, 0x03, // data entry mode
+    0x03, 0x44, 0x00, 0x17, // ram start/end
+    0x05, 0x45, 0x00, 0x00, 0xaf, 0x00,
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+    BUSY_WAIT,
+    0x00 // end of table
+};
 const uint8_t epd293_init_sequence_full[] PROGMEM =
 {
-//    0x01, SSD1608_SW_RESET,
-//    BUSY_WAIT,
-    0x02, 0x74, 0x54,
-    0x02, 0x7e, 0x3b,
-    0x03, 0x2b, 0x04, 0x63,
-    0x05, 0x0c, 0x8f, 0x8f, 0x8f, 0x3f,
-    0x04, 0x01, 0x27, 0x01, 0x00,
+    0x01, SSD1608_SW_RESET,
+    BUSY_WAIT,
+
+    0x04, 0x01, 0x27, 0x01, 0x00, // driver output control
+    0x02, 0x11, 0x03, // data entry mode
+    0x03, 0x44, 0x00, 0x0f, // ram start/end
+    0x05, 0x45, 0x00, 0x00, 0x27, 0x01,
+    0x02, 0x3c, 0xc0, // border waveform
+    0x03, 0x21, 0x00, 0x80, // display update control
+    0x02, 0x18, 0x80, // read built-in temp sensor
+
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+    BUSY_WAIT,
+    0x00 // end of table
+};
+// less flashing (fast) updates
+const uint8_t epd293_init_sequence_fast[] PROGMEM =
+{
+    0x01, SSD1608_SW_RESET,
+    BUSY_WAIT,
+    0x02, 0x18, 0x80, // read built-in temp sensor
+    0x02, 0x22, 0xb1, // load temp value
+    0x01, 0x20, // execute
+    BUSY_WAIT,
+    0x03, 0x1a, 0x64, 0x00, // write temp register
+    0x02, 0x22, 0x91, // load temp value
+    0x01, 0x20, // execute
+    BUSY_WAIT,
+    0x02, 0x11, 0x03, // data entry mode
+    0x03, 0x44, 0x00, 0x0f, // ram start/end
+    0x05, 0x45, 0x00, 0x00, 0x27, 0x01,
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+    BUSY_WAIT,
+    0x00 // end of table
+};
+
+// partial (no flash) updates
+const uint8_t epd293_init_sequence_part[] PROGMEM =
+{
     0x02, 0x11, 0x03,
+    0x02, 0x3c, 0x80, // border waveform
     0x03, 0x44, 0x00, 0x0f,
     0x05, 0x45, 0x00, 0x00, 0x27, 0x01,
-    0x02, 0x3c, 0xc0,
-    0x02, 0x18, 0x80,
-    0x02, 0x22, 0xb1,
-    0x01, 0x20,
-    BUSY_WAIT,
     0x02, 0x4e, 0x00,
     0x03, 0x4f, 0x00, 0x00,
     0x00 // end of table
-}; /* epd293_init_sequence_full[] */
+};
+
+// partial (no flash) updates
+const uint8_t epd295_init_sequence_part[] PROGMEM =
+{   
+    0x02, 0x11, 0x03, 
+    0x02, 0x3c, 0x80, // border waveform
+    0x03, 0x44, 0x00, 0x0f,
+    0x05, 0x45, 0x00, 0x00, 0x27, 0x01,
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+
+    91, 0x32, // LUT
+    0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x0A, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00,
+
+    0x00 // end of table
+}; 
 
 const uint8_t epd266_init_sequence_full[] PROGMEM =
 {
+    0x01, SSD1608_SW_RESET,
+    BUSY_WAIT,
+
     0x04, 0x01, 0x27, 0x01, 0x00, // driver output control
     0x02, 0x11, 0x03, // data entry mode
-    0x03, 0x44, 0x00, 0x0f, // ram address
+    0x03, 0x44, 0x00, 0x12, // ram start/end
     0x05, 0x45, 0x00, 0x00, 0x27, 0x01,
-    0x02, 0x3c, 0x05, // border color
-    0x03, 0x21, 0x00, 0x80, // display update ctrl
+    0x02, 0x3c, 0x05, // border waveform
+    0x03, 0x21, 0x00, 0x80, // display update control
     0x02, 0x18, 0x80, // read built-in temp sensor
-    0x02, 0x4e, 0x00, // ram counter x
-    0x03, 0x4f, 0x00, 0x00, // ram counter y
 
-    0x02, 0x74, 0x54,
-    0x02, 0x7e, 0x3b,
-    0x03, 0x2b, 0x04, 0x63,
-    0x05, 0x0c, 0x8f, 0x8f, 0x8f, 0x3f,
-    0x02, 0x22, 0xb1,
-    0x01, 0x20,
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
     BUSY_WAIT,
     0x00 // end of table
 }; /* epd266_init_sequence_full[] */
 
+const uint8_t epd266_init_sequence_part[] PROGMEM =
+{
+    0x02, 0x11, 0x03,
+    0x02, 0x3c, 0x80, // border waveform
+    0x03, 0x44, 0x00, 0x12,
+    0x05, 0x45, 0x00, 0x00, 0x27, 0x01,
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+
+    0x00 // end of table
+};
+
 const uint8_t epd27_init_sequence_full[] PROGMEM =
 {
+    0x04, 0x01, 0x07, 0x01, 0x00, // driver output control
     0x02, 0x11, 0x03, // data entry mode
     0x03, 0x44, 0x00, 0x15, // ram address
     0x05, 0x45, 0x00, 0x00, 0x07, 0x01,
@@ -869,22 +942,69 @@ const uint8_t epd27_init_sequence_full[] PROGMEM =
     0x01, 0x20,
     BUSY_WAIT,
     0x00 // end of table
-}; /* epd27_init_sequence_full[] */
+};
+
+const uint8_t epd27_init_sequence_part[] PROGMEM =
+{
+    0x02, 0x11, 0x03, // data entry mode
+    0x02, 0x3c, 0x80, // border color
+    0x03, 0x44, 0x00, 0x15, // ram address
+    0x05, 0x45, 0x00, 0x00, 0x07, 0x01,
+    0x02, 0x4e, 0x00, // ram counter x
+    0x03, 0x4f, 0x00, 0x00, // ram counter y
+    
+    0x00 // end of table
+};
 
 const uint8_t epd42b_init_sequence_full[] PROGMEM =
 {   
-    0x02, 0x11, 0x03, // data entry mode 
-    0x03, 0x44, 0x00, 0x15, // ram address 
-    0x05, 0x45, 0x00, 0x00, 0xdf, 0x01,
-    0x02, 0x3c, 0x80, // border color
+    0x01, SSD1608_SW_RESET,
+    BUSY_WAIT,
+
+    0x04, 0x01, 0x2b, 0x01, 0x00, // driver output control
+    0x03, 0x21, 0x40, 0x00, // display update control
+    0x02, 0x11, 0x03, // data entry mode
+    0x03, 0x44, 0x00, 0x31, // ram start/end
+    0x05, 0x45, 0x00, 0x00, 0x2b, 0x01,
+    0x02, 0x3c, 0x05, // border waveform
     0x02, 0x18, 0x80, // read built-in temp sensor
-    0x02, 0x4e, 0x00, // ram counter x
-    0x03, 0x4f, 0x00, 0x00, // ram counter y
-    0x02, 0x22, 0xb1,
-    0x01, 0x20, 
+
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
     BUSY_WAIT,
     0x00 // end of table
-}; /* epd27_init_sequence_full[] */
+};
+
+const uint8_t epd42b_init_sequence_fast[] PROGMEM =
+{
+    0x01, SSD1608_SW_RESET,
+    BUSY_WAIT,
+    3, 0x21, 0x40, 0x00,
+    2, 0x3c, 0x05,
+    2, 0x1a, 0x6e, // temp register
+    2, 0x22, 0x91, // load temp
+    1, 0x20,
+    BUSY_WAIT,
+    2, 0x11, 0x3, // data entry mode
+    0x03, 0x44, 0x00, 0x31, // ram start/end
+    0x05, 0x45, 0x00, 0x00, 0x2b, 0x01,
+    0x02, 0x4e, 0x00,
+    0x03, 0x4f, 0x00, 0x00,
+    BUSY_WAIT,
+    0
+};
+const uint8_t epd42b_init_sequence_part[] PROGMEM =
+{
+    0x03, 0x21, 0x00, 0x00,
+    0x02, 0x11, 0x03, // data entry mode
+    0x02, 0x3c, 0x80, // border color
+    0x03, 0x44, 0x00, 0x31, // ram address
+    0x05, 0x45, 0x00, 0x00, 0x2b, 0x01,
+    0x02, 0x4e, 0x00, // ram counter x
+    0x03, 0x4f, 0x00, 0x00, // ram counter y
+    
+    0x00 // end of table
+};
 
 const uint8_t epd579_init_sequence_full[] PROGMEM =
 {
@@ -948,6 +1068,17 @@ const uint8_t epd213_122x250_init_sequence_full[] PROGMEM = {
     BUSY_WAIT,
     0
 };
+
+const uint8_t epd213_122x250_init_sequence_part[] PROGMEM = {
+    2, 0x3c, 0x80, // border
+    2, 0x11, 0x3, // data entry mode
+    3, 0x44, 0x00, 0xf,
+    5, 0x45, 0x00, 0x00, 0xf9, 0x00,
+    2, 0x4e, 0x00, // ram x start
+    3, 0x4f, 0x00, 0x00, // ram y start
+    
+    0
+};
 const uint8_t epd75_init_sequence_full[] PROGMEM = {
     6, UC8151_PWR, 0x07, 0x07, 0x3f, 0x3f, 0x03,
     1, UC8151_PON,
@@ -964,6 +1095,18 @@ const uint8_t epd75_init_sequence_full[] PROGMEM = {
 //    2, UC8151_VDCS, 0x12,
     0
 };
+
+const uint8_t epd75_init_sequence_fast[] PROGMEM = {
+   2, 0x00, 0x1f, // panel setting
+   3, 0x50, 0x10, 0x07, // VCOM
+   1, 0x04, // Power On
+   BUSY_WAIT,
+   5, 0x06, 0x27, 0x27, 0x18, 0x17, // booster soft start
+   2, 0xe0, 0x02,
+   2, 0xe5, 0x5a,
+   0
+};
+
 const uint8_t epd583_init_sequence_full[] PROGMEM = {
     2, UC8151_PSR, 0x9f,
     6, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x2b,
@@ -979,7 +1122,64 @@ const uint8_t epd583_init_sequence_full[] PROGMEM = {
     2, UC8151_VDCS, 0x12,
     0
 };
-const uint8_t epd42_4gray_init_sequence_full[] PROGMEM = {
+
+const uint8_t epd583_init_sequence_part[] PROGMEM = {
+    1, UC8151_PON,
+    BUSY_WAIT,
+    3, 0x00, 0x1f, 0x0b, // panel setting
+    2, 0x50, 0x97, // VCOM
+    5, 0x01, 0x03,0x00,0x2b,0x2b, // power setting
+    4, 0x06, 0x17,0x17,0x17, // boost soft start
+    1, 0x04, // power on
+    BUSY_WAIT,
+    3, 0x00, 0xbf, 0x0b, // panel setting
+    2, 0x30, 0x3c, // 3A 100HZ
+    5, 0x61, 0x02, 0x88, 0x01, 0xe0, // resolution 648x480
+    2, 0x82, 0x12, // vcom_DC
+    2, 0x50, 0x47, // mode
+    45, 0x20, // VCOM LUT
+  0x00, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    43, 0x21, // WW LUT
+  0x00, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    43, 0x22, // BW LUT
+  0x20, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    43, 0x23, // WB LUT
+  0x10, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    43, 0x24, // BB LUT
+  0x00, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+    0x00 // end of table
+};const uint8_t epd42_4gray_init_sequence_full[] PROGMEM = {
     6, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x13,
     4, UC8151_BTST, 0x17, 0x17, 0x17,
     1, UC8151_PON,
@@ -993,75 +1193,103 @@ const uint8_t epd42_4gray_init_sequence_full[] PROGMEM = {
 };          
 
 const uint8_t epd42_init_sequence_full[] PROGMEM = {
-    2, UC8151_PSR, 0x9f,
-    6, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x2b,
     1, UC8151_PON,
     BUSY_WAIT,
-    4, UC8151_BTST, 0x17, 0x17, 0x17,
-    2, UC8151_PFS, 0x00,
-    2, UC8151_TSE, 0x00,
-    2, UC8151_TCON, 0x22,
-    2, UC8151_CDI, 0xd7,
-    2, UC8151_PLL, 0x3a,
+    3, 0x00, 0x1f, 0x0b, // panel setting
     5, UC8151_TRES, 0x01, 0x90, 0x01, 0x2c,
-    2, UC8151_VDCS, 0x12,
+    2, 0x50, 0x97, // VCOM
     0
 };
 
-const uint8_t epd42_init_sequence_partial[] PROGMEM = {
-    0x02, UC8151_PSR, 0x80 | 0x20 | 0x10 | 0x00 | 0x02 | 0x01, // RES_128x296, LUT_REG, FORMAT_BW, SHIFT_LEFT, BOOSTER_ON, RESET_NONE
-    0x06, UC8151_PWR, 0x03, 0x00, 0x2b, 0x2b, 0x03,
-    0x04, UC8151_BTST, 0x17,0x17,0x17, // booster soft-start config - START_10MS | STRENGTH_3 | OFF_6_58US
-    0x01, UC8151_PON, // power on
+const uint8_t epd42_init_sequence_part[] PROGMEM = {
+    1, UC8151_PON,
     BUSY_WAIT,
-    0x02, UC8151_PLL, 0x3a, // HZ_100
-    0x02, UC8151_VDCS, 0x12, // VCOM DC setting
-//    0x02, UC8151_CDI, 0x97,
-    0x2d, UC8151_LUT_VCOM, // VCOM LUT
-    0x00, 0x0E, 0x00, 0x00, 0x00, 0x01,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x2b, UC8151_LUT_WW, // WW LUT
-    0xA0, 0x0E, 0x00, 0x00, 0x00, 0x01,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x2b, UC8151_LUT_BW,
-    0xA0, 0x0E, 0x00, 0x00, 0x00, 0x01,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x2b, UC8151_LUT_WB,
-    0x50, 0x0E, 0x00, 0x00, 0x00, 0x01,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x2b, UC8151_LUT_BB,
-    0x50, 0x0E, 0x00, 0x00, 0x00, 0x01,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    3, 0x00, 0x1f, 0x0b, // panel setting
+    2, 0x50, 0x97, // VCOM
+    5, 0x01, 0x03,0x00,0x2b,0x2b, // power setting
+    4, 0x06, 0x17,0x17,0x17, // boost soft start
+    1, 0x04, // power on
+    BUSY_WAIT,
+    3, 0x00, 0xbf, 0x0b, // panel setting
+    2, 0x30, 0x3c, // 3A 100HZ
+    5, 0x61, 0x01, 0x90, 0x01, 0x2c, // resolution 400x300
+    2, 0x82, 0x12, // vcom_DC
+    2, 0x50, 0x47, // mode
+    45, 0x20, // VCOM LUT
+  0x00, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    43, 0x21, // WW LUT
+  0x00, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    43, 0x22, // BW LUT
+  0x20, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    43, 0x23, // WB LUT
+  0x10, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    43, 0x24, // BB LUT
+  0x00, 0x01, 0x20, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
     0x00 // end of table
 };
 #ifndef WIMPY_MCU
-const uint8_t st7302_wenting[] PROGMEM PROGMEM = {
+const uint8_t st7305_init[] PROGMEM = {
+    3, 0xd7, 0x17, 0x02, // NVM load ctrl
+    2, 0xd1, 0x01, // booster enable
+    3, 0xc0, 0x0e, 0x02, // gate voltage
+    5, 0xc1, 0x23, 0x23, 0x23, 0x23, // VSHP setting (4.4V)
+    5, 0xc2, 0x1e, 0x1e, 0x1e, 0x1e, // VSLP setting (0.6V)
+    5, 0xc4, 0x3c, 0x3c, 0x3c, 0x3c, // VSHN setting (-3.7V)
+    5, 0xc5, 0x14, 0x14, 0x14, 0x14, // VSLN setting (0.6V)
+    3, 0xd8, /*0x80, 0xe9,*/ 0xa6, 0xe9, // OSC setting
+    2, 0xb2, 0x02, // frame rate (HPM=16Hz, LPM=1Hz)
+    11, 0xb3, 0xe5, 0xf6, 0x05, 0x46, 0x77, 0x77, 0x77, 0x77, 0x76, 0x45, // HPM EQ Control
+    9, 0xb4, 0x05, 0x46, 0x77, 0x77, 0x77, 0x77, 0x76, 0x45, // LPM EQ ctrl
+    4, 0x62, 0x32, 0x03, 0x1f, // gate timing ctrl
+    2, 0xb7, 0x13, // source EQ enable
+    2, 0xb0, 0x60, // 384 lines
+    1, 0x11, // sleep out
+    1, 0xff, 200, // 200ms delay
+    2, 0xc9, 0x00, // source voltage select
+    2, 0x36, 0x00, // memory data access control
+    2, 0x3a, 0x11, // data format select (11 = 3 writes for 24bits)
+    2, 0xb9, 0x20, // gamma mode (23: mono, 03: 4 grayscale)
+    2, 0xb8, 0x29, // panel setting
+    3, 0x2a, 0x17, 0x24, // column address setting
+    3, 0x2b, 0x00, 0xbf, // row address setting
+    2, 0x35, 0x00, // TE
+    2, 0xd0, 0xff, // auto power down
+    1, 0x39, // 0x39=LPM, 0x38=HPM
+    1, 0x29, // display on
+    0
+};
+const uint8_t st7302_wenting[] PROGMEM = {
     0x02, 0xEB, 0x02, // Enable OTP
     0x02, 0xD7, 0x68, // OTP Load Control
     0x02, 0xD1, 0x01, // Auto Power Control
@@ -1294,6 +1522,7 @@ uint8_t ucCMD;
             break;
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
         case LCD_ST7302:
+        case LCD_ST7305:
             ucCMD = (bOn) ? 0x29 : 0x28;
             break;
 #endif
@@ -1363,13 +1592,16 @@ uint8_t *s;
     while (pgm_read_byte(s) != 0) {
         iLen = pgm_read_byte(s++);
         if (iLen == BUSY_WAIT) {
+            Serial.println("Calling busy_wait from cmd list");
             EPDWaitBusy(pOBD, 1);
         } else {
             obdWriteCommand(pOBD, pgm_read_byte(s));
             s++;
-            memcpy_P(u8Cache, s, iLen-1);
-            s += (iLen-1);
-            RawWriteData(pOBD, u8Cache, iLen-1);
+            if (iLen > 1) {
+               memcpy_P(u8Cache, s, iLen-1);
+               s += (iLen-1);
+               RawWriteData(pOBD, u8Cache, iLen-1);
+            }
         }
     } // while more commands to send
 } /* EPDSendCMDSequence() */
@@ -1387,7 +1619,7 @@ uint8_t ucTemp[4];
     ucTemp[2] = (uint8_t)(pOBD->native_height & 0xff);
     RawWriteData(pOBD, ucTemp, 3);
 //    obdWriteCommand(pOBD, UC8151_CDI);
-    EPDSleep(pOBD);
+    EPDSleep(pOBD, 0);
 } /* EPD29_Init() */
 
 const unsigned char lut_w_full[] PROGMEM =
@@ -1452,56 +1684,6 @@ static const uint8_t epd294_lut_partial[] PROGMEM = {
 0x0,0x0,0x0,0x0,0x0,0x0,0x0,
 0x22,0x22,0x22,0x22,0x22,0x22,0x0,0x0,0x0,
 //0x22,0x17,0x41,0xB0,0x32,0x36,
-};
-
-static const uint8_t epd293_lut_partial[] PROGMEM = {
-    0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-
-    0x0A, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00,
-#ifdef FUTURE
-//lut0 (KEEP) voltages
-0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//lut1 (W2B) voltages
-0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//lut2 (B2W) voltages
-0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//lut3 (unused) voltages
-0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//lut4 (vcom) voltages
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-
-//group0 phase lengths and repeat count
-0xa, 0x00, 0x00, 0x00, 0x00,
-
-//group1 not used
-0x00, 0x00, 0x00, 0x00, 0x00,
-
-//group2 not used
-0x00, 0x00, 0x00, 0x00, 0x00,
-
-//group3 phase lengths and repeat count
-0x00, 0x00, 0x00, 0x00, 0x00,
-
-//group4 phase lengths and repeat count
-0x00, 0x00, 0x00, 0x00, 0x00,
-
-//group5 phase lengths and repeat count
-0x00, 0x00, 0x00, 0x00, 0x00,
-
-//group6 phase lengths and repeat count
-0x00, 0x00, 0x00, 0x00, 0x00
-#endif
 };
 
 const uint8_t epd213_lut2_partial[] PROGMEM =
@@ -1658,7 +1840,13 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
     {
         pOBD->native_width = pOBD->width = 250;
         pOBD->native_height = pOBD->height = 122;
-        pOBD->can_flip = 0;
+        pOBD->flip = 0;
+    }
+    if (iType == LCD_ST7305)
+    {
+        pOBD->native_width = pOBD->width = 384;
+        pOBD->native_height = pOBD->height = 168;
+        pOBD->flip = 0;
     }
 #endif
     if (iType == OLED_80x128)
@@ -1706,9 +1894,10 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->busy_idle = HIGH;
         pOBD->can_flip = 0;
         pOBD->chip_type = OBD_CHIP_UC8151;
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
-        pOBD->type = EPD583_648x480; //EPD42_400x300; // same for the rest
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
+        pOBD->type = EPD583_648x480; // same for the rest
         pOBD->pInitFull = epd583_init_sequence_full;
+        pOBD->pInitPart = epd583_init_sequence_part;
         return; // nothing else to do yet
     }
 #ifndef __AVR__
@@ -1718,9 +1907,11 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->busy_idle = HIGH;
         pOBD->can_flip = 0;
         pOBD->chip_type = OBD_CHIP_UC8151;
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
-        pOBD->type = EPD75_800x480; //EPD42_400x300; // same for the rest
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
+        pOBD->type = EPD75_800x480; // same for the rest
         pOBD->pInitFull = epd75_init_sequence_full;
+        pOBD->pInitFast = epd75_init_sequence_fast;
+        pOBD->pInitPart = epd75_init_sequence_partial;
         return; // nothing else to do yet
     }
 #endif // __AVR__
@@ -1732,9 +1923,22 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->can_flip = 0;
         //pOBD->x_offset = 2; // column byte offset
         pOBD->chip_type = OBD_CHIP_SSD16xx;
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
-        pOBD->pInitFull = epd294_init_sequence_full; 
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
+        pOBD->pInitFull = epd294_init_sequence_full;
         pOBD->type = EPD293_128x296; // same for the rest
+        return; // nothing else to do yet
+    }
+    else if (iType == EPD102_80x128)
+    {
+        pOBD->native_width = pOBD->width = 80;
+        pOBD->native_height = pOBD->height = 130;
+        pOBD->busy_idle = HIGH;
+        pOBD->can_flip = 0;
+        pOBD->type = iType;
+        pOBD->chip_type = OBD_CHIP_UC8151;
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
+        pOBD->pInitFull = epd102_init_sequence_full;
+        pOBD->pInitPart = epd102_init_sequence_part;
         return; // nothing else to do yet
     }
     else if (iType == EPD42B_400x300)
@@ -1743,10 +1947,12 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->native_height = pOBD->height = 300;
         pOBD->busy_idle = LOW;
         pOBD->can_flip = 0;
+        pOBD->type = iType;
         pOBD->chip_type = OBD_CHIP_SSD16xx;
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
         pOBD->pInitFull = epd42b_init_sequence_full;
-        pOBD->type = EPD293_128x296; // same for the rest
+        pOBD->pInitFast = epd42b_init_sequence_fast;
+        pOBD->pInitPart = epd42b_init_sequence_part;
         return; // nothing else to do yet
     }
     else if (iType == EPD27B_176x264)
@@ -1756,9 +1962,9 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->busy_idle = LOW;
         pOBD->can_flip = 0;
         pOBD->chip_type = OBD_CHIP_SSD16xx;
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
         pOBD->pInitFull = epd27_init_sequence_full;
-        pOBD->type = EPD293_128x296; // same for the rest
+        pOBD->pInitPart = epd27_init_sequence_part;
         return; // nothing else to do yet
     }
     else if (iType == EPD27_176x264)
@@ -1769,7 +1975,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->can_flip = 0;
         pOBD->chip_type = OBD_CHIP_UC8151;
         pOBD->iFlags |= OBD_CS_EVERY_BYTE; // unfortunately needs this
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
         return; // nothing else to do yet
     }
     else if (iType == EPD579_792x272) {
@@ -1778,7 +1984,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->pInitFull = epd579_init_sequence_full;
         pOBD->busy_idle = LOW;
         pOBD->chip_type = OBD_CHIP_SSD16xx;
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
         pOBD->iFlags |= OBD_CS_EVERY_BYTE;
         pOBD->can_flip = 0;
     }
@@ -1786,12 +1992,13 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->native_width = pOBD->width = 152;
         pOBD->native_height = pOBD->height = 296;
         pOBD->pInitFull = epd266_init_sequence_full;
+        pOBD->pInitPart = epd266_init_sequence_part;
         pOBD->busy_idle = LOW;
         pOBD->chip_type = OBD_CHIP_SSD16xx;
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
         pOBD->can_flip = 0;
-        pOBD->type = EPD293_128x296; // same for the rest
-        pOBD->x_offset = (iType == EPD266B_152x296) ? 0:1;
+        pOBD->type = iType;
+      //  pOBD->x_offset = (iType == EPD266B_152x296) ? 0:1;
         return; // nothing else to do yet
     }
     else if (iType == EPD42_400x300 || iType == EPD42_4GRAY_400x300)
@@ -1802,29 +2009,52 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->chip_type = OBD_CHIP_UC8151;
         pOBD->can_flip = 0;
         if (iType == EPD42_400x300) {
-           pOBD->pInitFull = epd42_init_sequence_full;
-           pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+            pOBD->pInitFull = epd42_init_sequence_full;
+            pOBD->pInitPart = epd42_init_sequence_part;
+            pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
+            pOBD->iFlags |= OBD_FAST_INVERTED;
         } else {
-           pOBD->pInitFull = epd42_4gray_init_sequence_full;
-           pOBD->iFlags |= OBD_4COLOR | OBD_4GRAY;
+            pOBD->pInitFull = epd42_4gray_init_sequence_full;
+            pOBD->iFlags |= OBD_4COLOR | OBD_4GRAY;
         }
         return; // nothing else to do yet
     }
-    else if (iType == EPD293_128x296 || iType == EPD213B_122x250)
+    else if (iType == EPD122_192x176)
+    {
+        pOBD->native_width = pOBD->width = 192;
+        pOBD->native_height = pOBD->height = 176;
+        pOBD->pInitFull = epd122_init_sequence_full;
+        pOBD->pInitFast = epd122_init_sequence_fast;
+        pOBD->pInitPart = epd122_init_sequence_part;
+        pOBD->busy_idle = LOW;
+        pOBD->chip_type = OBD_CHIP_SSD16xx;
+        pOBD->iFlags |= (OBD_HAS_PARTIAL_UPDATE | OBD_HAS_FAST_UPDATE);
+        pOBD->can_flip = 0;
+        return; // nothing else to do yet
+    }
+    else if (iType == EPD293_128x296 || iType == EPD213B_122x250 || iType == EPD295_128x296)
     {
         if (iType == EPD213B_122x250) {
             pOBD->native_width = pOBD->width = 122;
             pOBD->native_height = pOBD->height = 250;
-            pOBD->type = EPD293_128x296; // the rest is the same
             pOBD->pInitFull = epd213b_init_sequence_full;
-        } else {
+            pOBD->pInitPart = epd213b_init_sequence_part;
+        } else if (iType == EPD293_128x296) {
             pOBD->native_width = pOBD->width = 128;
             pOBD->native_height = pOBD->height = 296;
             pOBD->pInitFull = epd293_init_sequence_full;
+            pOBD->pInitFast = epd293_init_sequence_fast;
+            pOBD->pInitPart = epd293_init_sequence_part;
+        } else { // EPD295_128x296
+            pOBD->native_width = pOBD->width = 128;
+            pOBD->native_height = pOBD->height = 296;
+            pOBD->pInitFull = epd293_init_sequence_full;
+            pOBD->pInitFast = epd293_init_sequence_fast;
+            pOBD->pInitPart = epd295_init_sequence_part;
         }
         pOBD->busy_idle = LOW;
         pOBD->chip_type = OBD_CHIP_SSD16xx;
-        pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+        pOBD->iFlags |= (OBD_HAS_PARTIAL_UPDATE | OBD_HAS_FAST_UPDATE);
         pOBD->can_flip = 0;
         return; // nothing else to do yet
     } else if (iType == EPD29_BWYR_128x296) {
@@ -1897,7 +2127,9 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         if (iType == EPD213_122x250) {
             pOBD->native_width = pOBD->width = 122;
             pOBD->native_height = pOBD->height = 250;
+            pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
             pOBD->pInitFull = epd213_122x250_init_sequence_full;
+            pOBD->pInitPart = epd213_122x250_init_sequence_part;
         } else if (iType == EPD213_104x212) {
             pOBD->native_width = pOBD->width = 104;
             pOBD->native_height = pOBD->height = 212;
@@ -1990,6 +2222,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       } else if (iType == EPD29R_128x296) {
           pOBD->native_width = pOBD->width = 128;
           pOBD->native_height = pOBD->height = 296;
+          pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
           pOBD->pInitFull = epd29r_init_sequence;
       } else if (iType == EPD154Y_152x152) {
           pOBD->native_width = pOBD->width = 152;
@@ -2016,16 +2249,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->chip_type = OBD_CHIP_SSD16xx;
       pOBD->can_flip = 0;
       pOBD->busy_idle = LOW;
-      EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-      return;
-  }
-  else if (iType == EPD102_80x128) // not working yet
-  {
-      pOBD->native_width = pOBD->width = 80;
-      pOBD->native_height = pOBD->height = 128;
-      pOBD->can_flip = 0; // flip display commands don't exist
-      pOBD->busy_idle = HIGH;
-      pOBD->iFlags |= OBD_CS_EVERY_BYTE;
+//      EPDSendCMDSequence(pOBD, pOBD->pInitFull);
       return;
   }
   else if (iType == EPD154_152x152) // GDEW0154M10
@@ -2035,27 +2259,27 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->can_flip = 0; // flip display commands don't exist
       pOBD->busy_idle = HIGH;
       pOBD->chip_type = OBD_CHIP_UC8151;
-      pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+      pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
 //      pOBD->iFlags |= OBD_CS_EVERY_BYTE;
-      pOBD->pInitFull = epd154b_init_sequence_full;
-      pOBD->pInitFast = epd154b_init_sequence_fast;
-      EPDSendCMDSequence(pOBD, pOBD->pInitFull);
+      pOBD->pInitFull = epd154a_init_sequence_full;
+      pOBD->pInitPart = epd154a_init_sequence_part;
       return;
   }
-  else if (iType == EPD154_200x200)
+  else if (iType == EPD154_200x200 || iType == EPD154B_200x200)
   {
       pOBD->native_width = pOBD->width = 200;
       pOBD->native_height = pOBD->height = 200;
       pOBD->can_flip = 0; // flip display commands don't exist
       pOBD->busy_idle = LOW;
       pOBD->chip_type = OBD_CHIP_SSD16xx;
-      pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+      pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
       pOBD->pInitFull = epd154_init_sequence_full;
+      pOBD->pInitPart = (iType == EPD154B_200x200) ? epd154b_init_sequence_part : epd154_init_sequence_part;
       return;
   }
   else if (iType == EPD29_128x296 || iType == EPD213B_104x212 || iType == EPD37_240x416)
   {
-      pOBD->iFlags |= OBD_HAS_FAST_UPDATE;
+      pOBD->iFlags |= OBD_HAS_PARTIAL_UPDATE;
       pOBD->chip_type = OBD_CHIP_UC8151;
       pOBD->can_flip = 0; // flip display commands don't exist
       if (iType == EPD37_240x416) {
@@ -2063,20 +2287,20 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
           pOBD->native_height = pOBD->height = 416;
           pOBD->busy_idle = HIGH;
           pOBD->pInitFull = epd37_init_sequence_full;
-          EPDSendCMDSequence(pOBD, epd37_init_sequence_full);
-          pOBD->type = EPD29_128x296; // tell it to use this config
+          pOBD->pInitPart = epd37_init_sequence_part;
+//          EPDSendCMDSequence(pOBD, epd37_init_sequence_full);
       } else if (iType == EPD29_128x296) {
           pOBD->native_width = pOBD->width = 128;
           pOBD->native_height = pOBD->height = 296;
           pOBD->busy_idle = HIGH;
           pOBD->pInitFull = epd29_init_sequence_full;
-          EPDSendCMDSequence(pOBD, pOBD->pInitFull);
+ //         EPDSendCMDSequence(pOBD, pOBD->pInitFull);
       } else {
           pOBD->native_width = pOBD->width = 104;
           pOBD->native_height = pOBD->height = 212;
           pOBD->busy_idle = LOW;
           pOBD->type = EPD29_128x296; // tell it to use this config
-          EPD29_Init(pOBD);
+//          EPD29_Init(pOBD);
       }
       return;
   } else if (iType == EPD47_540x960) {
@@ -2194,10 +2418,10 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       }
   } // OLED
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
-  if (iType == LCD_ST7302)
+  if (iType == LCD_ST7302 || iType == LCD_ST7305)
   {
  //     uint8_t *s = (uint8_t *)st7302_hpm_init;
-      const uint8_t *s = (uint8_t *)st7302_wenting; //st7302_lpm_init;
+      const uint8_t *s = (iType == LCD_ST7302) ? (uint8_t *)st7302_wenting : (uint8_t *)st7305_init; //st7302_lpm_init;
     iLen = 1;
 
       while (iLen) {
@@ -2229,7 +2453,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
 //      uc[1] = 0x23;
 //      RawWrite(pOBD, uc, 2);
       return;
-  } /* ST7302 */
+  } /* ST7302/ST7305 */
 #endif // !WIMPY_MCU
   if (iType == LCD_UC1701 || iType == LCD_HX1230 || iType == LCD_32x64)
   {
@@ -2586,26 +2810,31 @@ static void EPDWaitBusy(OBDISP *pOBD, int bQuick)
 #ifndef MEMORY_ONLY
 int iTimeout = 0;
 int iEndTime = (int)pOBD->iTimeout;
-    
-    if (bQuick)
-        iEndTime /= 5; // 1/5th for short waits such as after Power-on
-    
+    long l = micros();
+
     if (pOBD->iLEDPin == 0xff || pOBD->iLEDPin == -1) {
+        if (bQuick)
+            iEndTime /= 5; // 1/5th for short waits such as after Power-on
         _delay(iEndTime); // no busy pin, wait fixed amount
         return;
     }
-  while (1) {
-//      if (pOBD->type == EPD29_128x296) {
-//          obdWriteCommand(pOBD, UC8151_FLG);
-//      }
-     if (digitalRead(pOBD->iLEDPin) == pOBD->busy_idle)
-         break;
-     iTimeout += (iEndTime/4);
-     if (iTimeout > iEndTime)
-         break; // DEBUG - timeout
-     _delay(iEndTime/4);
-  }
-    if (iTimeout > iEndTime) {
+    _delay(1);
+    while (1) {
+        if (digitalRead(pOBD->iLEDPin) == pOBD->busy_idle) break;
+    }
+//  while (1) {
+//     if (digitalRead(pOBD->iLEDPin) == pOBD->busy_idle)
+//         break;
+//     iTimeout += (iEndTime/4);
+//     if (iTimeout > iEndTime)
+//         break; // DEBUG - timeout
+//     _delay(iEndTime/4);
+//  }
+    l = micros() - l;
+    Serial.print((int)l, DEC);
+    Serial.println(" us spent in EPDWaitBusy");
+    
+    if ((l/1000) > iEndTime) {
 #if defined( ARDUINO ) && !defined(WIMPY_MCU)
         Serial.println("EPDWaitBusy() timed out");
 #endif
@@ -2615,46 +2844,6 @@ int iEndTime = (int)pOBD->iTimeout;
     }
 #endif // MEMORY_ONLY
 } /* EPDWaitBusy() */
-
-void EPD42_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
-{
-uint8_t ucTemp[8];
-    
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    obdWriteCommand(pOBD, UC8151_PWR); // POWER SETTING
-    ucTemp[0] = 0x03;   // VDS_EN, VDG_EN internal
-    ucTemp[1] = 0x00;   // VCOM_HV, VGHL_LV=16V
-    ucTemp[2] = 0x2b;   // VDH=11V
-    ucTemp[3] = 0x2b;   // VDL=11V
-    ucTemp[4] = 0xff;   // VDHR
-    RawWriteData(pOBD, ucTemp, 5);
-    obdWriteCommand(pOBD, UC8151_BTST); // boost soft start
-    ucTemp[0] = 0x17;   // A
-    ucTemp[1] = 0x17;   // B
-    ucTemp[2] = 0x17;   // C
-    RawWriteData(pOBD, ucTemp, 3);
-    EPD_CMD2(pOBD, UC8151_PSR, 0x3f); // panel setting
-    EPD_CMD2(pOBD, UC8151_PLL, 0x3a); // PLL setting 100HZ   29 150Hz 39 200HZ 31 171HZ
-    obdWriteCommand(pOBD, UC8151_TRES); // resolution setting
-    ucTemp[0] = (uint8_t)(pOBD->native_width >> 8);
-    ucTemp[1] = (uint8_t)(pOBD->native_width);
-    ucTemp[2] = (uint8_t)(pOBD->native_height >> 8);
-    ucTemp[3] = (uint8_t)(pOBD->native_height);
-    RawWriteData(pOBD, ucTemp, 4);
-    EPD_CMD2(pOBD, UC8151_VDCS, 0x12); // vcom_DC setting = -0.1 + 18 * -0.05 = -1.0V from OTP, slightly better
-    EPD_CMD2(pOBD, UC8151_CDI, 0xd7); // VCOM AND DATA INTERVAL SETTING
-  //  ucTemp[0] = 0xd7;  // border floating to avoid flashing
-    obdWriteCommand(pOBD, UC8151_PON);
-    EPDWaitBusy(pOBD, 1); // power on
-    if (bPartial) {
-        EPDSendCMDSequence(pOBD, epd42_init_sequence_partial);
-    } else {
-        EPDSendCMDSequence(pOBD, epd29_init_sequence_full);
-    }
-} /* EPD42_Begin() */
 
 void EPD27_SetLut(OBDISP *pOBD, int bFast)
 {
@@ -2691,86 +2880,21 @@ void EPD27_SetLut(OBDISP *pOBD, int bFast)
     }
 }
 
-void EPD27_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
-{
-uint8_t ucTemp[8];
-    
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    (void)bPartial;
-//    obdWriteCommand(pOBD, UC8151_PON);
-//    EPDWaitBusy(pOBD);
-    obdWriteCommand(pOBD, UC8151_PWR); // POWER SETTING
-    ucTemp[0] = 0x03;   // VDS_EN, VDG_EN internal
-    ucTemp[1] = 0x00;   // VCOM_HV, VGHL_LV=16V
-    ucTemp[2] = 0x2b;   // VDH=11V
-    ucTemp[3] = 0x2b;   // VDL=11V
-    ucTemp[4] = 0x09;   // VDHR
-    RawWriteData(pOBD, ucTemp, 5);
-    obdWriteCommand(pOBD, UC8151_BTST); // boost soft start
-    ucTemp[0] = 0x07;   // A
-    ucTemp[1] = 0x07;   // B
-    ucTemp[2] = 0x17;   // C
-    RawWriteData(pOBD, ucTemp, 3);
-    obdWriteCommand(pOBD, 0xf8); // power optimization
-    ucTemp[0] = 0x60;
-    ucTemp[1] = 0xa5;
-    RawWriteData(pOBD, ucTemp, 2);
-    obdWriteCommand(pOBD, 0xf8); // power optimization (again)
-    ucTemp[0] = 0x89;
-    ucTemp[1] = 0xa5;
-    RawWriteData(pOBD, ucTemp, 2);
-    obdWriteCommand(pOBD, 0xf8); // power optimization
-    ucTemp[0] = 0x90;
-    ucTemp[1] = 0x00;
-    RawWriteData(pOBD, ucTemp, 2);
-    obdWriteCommand(pOBD, 0xf8); // power optimization
-    ucTemp[0] = 0x93;
-    ucTemp[1] = 0x2A;
-    RawWriteData(pOBD, ucTemp, 2);
-    obdWriteCommand(pOBD, 0xf8); // power optimization
-    ucTemp[0] = 0xa0;
-    ucTemp[1] = 0xa5;
-    RawWriteData(pOBD, ucTemp, 2);
-    obdWriteCommand(pOBD, 0xf8); // power optimization
-    ucTemp[0] = 0xa1;
-    ucTemp[1] = 0xa0;
-    RawWriteData(pOBD, ucTemp, 2);
-    obdWriteCommand(pOBD, 0xf8); // power optimization
-    ucTemp[0] = 0x73;
-    ucTemp[1] = 0x41;
-    RawWriteData(pOBD, ucTemp, 2);
-    EPD_CMD2(pOBD, 0x16, 0); // partial refresh off
-    obdWriteCommand(pOBD, UC8151_PON); // power on
-    EPDWaitBusy(pOBD, 1);
-    EPD_CMD2(pOBD, UC8151_PSR, 0xaf); // panel setting
-    EPD_CMD2(pOBD, UC8151_PLL, 0x3a); // PLL setting 100HZ   29 150Hz 39 200HZ 31 171HZ
-    EPD_CMD2(pOBD, UC8151_VDCS, 0x12); // vcom_DC setting = -0.1 + 18 * -0.05 = -1.0V from OTP, slightly better
-    _delay(2);
-    
-//    obdWriteCommand(pOBD, UC8151_TRES); // resolution setting
-//    ucTemp[0] = (uint8_t)(pOBD->native_width >> 8);
-//    ucTemp[1] = (uint8_t)(pOBD->native_width);
-//    ucTemp[2] = (uint8_t)(pOBD->native_height >> 8);
-//    ucTemp[3] = (uint8_t)(pOBD->native_height);
-//    RawWriteData(pOBD, ucTemp, 4);
-//    EPD_CMD2(pOBD, UC8151_CDI, 0x07); // VCOM AND DATA INTERVAL SETTING (white border)
-    EPD27_SetLut(pOBD, 0); // fast mode not ready bPartial);
-} /* EPD27_Begin() */
-
 //
 // Wake up the EPD controller
 //
-static void EPDWakeUp(OBDISP *pOBD)
+static void EPDWakeUp(OBDISP *pOBD, int bResetOnly)
 {
     if (pOBD->iRSTPin != 0xff) {
-        digitalWrite(pOBD->iRSTPin, LOW);
-        _delay(10);
-        digitalWrite(pOBD->iRSTPin, HIGH);
-        _delay(200);
+        for (int i=0; i<1; i++) {
+          digitalWrite(pOBD->iRSTPin, LOW);
+          _delay(10);
+          digitalWrite(pOBD->iRSTPin, HIGH);
+          _delay(10);
+        }
     }
+    if (bResetOnly) return;
+    
     if (pOBD->type == EPD164_BWYR_168x168 || pOBD->type == EPD236_BWYR_168x296) return; // these don't like this cmd at this time
     if (pOBD->chip_type == OBD_CHIP_UC8151) {
         obdWriteCommand(pOBD, UC8151_PON);
@@ -2780,30 +2904,23 @@ static void EPDWakeUp(OBDISP *pOBD)
     EPDWaitBusy(pOBD, 1);
 } /* EPDWakeUp() */
 
-static void EPDSleep(OBDISP *pOBD)
+static void EPDSleep(OBDISP *pOBD, int bDeep)
 {
 
-#ifndef __AVR__
-    if (pOBD->type == EPD75_800x480 || pOBD->type == EPD583_648x480) {
-        // UC8179 has a different sleep command
-        EPD_CMD2(pOBD, UC8151_DSLP, 0xa5);
-        return;
-    }
-#endif // __AVR__
     if (pOBD->chip_type == OBD_CHIP_SSD16xx) {
-        if (pOBD->iRSTPin != 0xff)
+        if (bDeep)
             EPD_CMD2(pOBD, 0x10, 0x02); // deep sleep mode 2 (loses RAM, needs reset)
         else // no reset pin, put it into light sleep
             EPD_CMD2(pOBD, 0x10, 0x00);
         return;
+    } else { // UC81xx
+        EPD_CMD2(pOBD, UC8151_CDI, 0x17); // border floating
+        obdWriteCommand(pOBD, UC8151_POFF); // power off
+        EPDWaitBusy(pOBD, 1);
+        if (bDeep) {
+          EPD_CMD2(pOBD, UC8151_DSLP, 0xa5); // deep sleep
+        }
     }
-  EPD_CMD2(pOBD, UC8151_CDI, 0x17); // border floating
-  obdWriteCommand(pOBD, UC8151_POF); // power off
-  EPDWaitBusy(pOBD, 1);
-  if (pOBD->iRSTPin != 0xff)
-  {
-    EPD_CMD2(pOBD, UC8151_DSLP, 0xa5); // deep sleep
-  }
 } /* EPDSleep() */
 //
 // Set the boundaries of the partial update area
@@ -2842,186 +2959,6 @@ void EPD154_Finish(OBDISP *pOBD, int bPartial)
     obdWriteCommand(pOBD, SSD1608_MASTER_ACTIVATE);
     EPDWaitBusy(pOBD, 0);
 } /* EPD154_Finish() */
-
-void EPD75_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
-{
-    uint8_t ucLine[16];
-    
-    if (bPartial) {
-        EPDSendCMDSequence(pOBD, epd75_init_sequence_partial);
-//        obdWriteCommand(pOBD, UC8151_PON); // power on
-//        EPDWaitBusy(pOBD, 0);
-//        obdWriteCommand(pOBD, UC8151_PTIN); // partial mode
-//        obdWriteCommand(pOBD, UC8151_PTL); // partial window
-//        ucLine[0] = 0; // X start high
-//        ucLine[1] = 0; // X start low
-//        ucLine[2] = (pOBD->native_width-1)/256; // x end
-//        ucLine[3] = (pOBD->native_width-1) & 0xff;
-//        ucLine[4] = 0; // Y start high
-//        ucLine[5] = 0; // Y start low
-//        ucLine[6] = (pOBD->native_height-1)/256; // Y end high
-//        ucLine[7] = (pOBD->native_height-1) & 0xff; // Y end low
-//        ucLine[8] = 0; // ?
-//        RawWriteData(pOBD, ucLine, 9); // boundaries
-    }
-}
-void EPD29_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
-{
-uint8_t ucLine[8];
-    
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    if (bPartial) {
-        EPDSendCMDSequence(pOBD, epd29_init_sequence_partial);
-        obdWriteCommand(pOBD, UC8151_PON); // power on
-        obdWriteCommand(pOBD, UC8151_PTIN); // partial mode
-        obdWriteCommand(pOBD, UC8151_PTL); // partial window
-        ucLine[0] = 0; //y; X START
-        ucLine[1] = pOBD->native_width-1; //(y + h - 1); X END
-        ucLine[2] = 0; //(x >> 8); // Y START
-        ucLine[3] = 0; //x & 0xff;
-        ucLine[4] = (uint8_t)((pOBD->native_height-1) >> 8); //(x + w - 1) >> 8; Y END >> 8
-        ucLine[5] = (uint8_t)((pOBD->native_height-1) & 0xff); //(x + w - 1) & 0xff;
-        ucLine[6] = 0x28; // ?
-        RawWriteData(pOBD, ucLine, 7); // boundaries
-    } else {
-        EPDSendCMDSequence(pOBD, epd29_init_sequence_full);
-        obdWriteCommand(pOBD, UC8151_PTOU); // disable partial mode
-    }
-} /* EPD29_Begin() */
-
-void EPD29_Finish(OBDISP *pOBD, int bPartial)
-{
-    (void)bPartial;
-    obdWriteCommand(pOBD, UC8151_DSP); // stop data
-    obdWriteCommand(pOBD, UC8151_DRF); // start display refresh
-    _delay(10); // needed
-    EPDWaitBusy(pOBD, 0);
-} /* EPD29_Finish() */
-//
-// Special case for some e-ink displays
-//
-static int EPDDumpFast(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, int h)
-{
-    if (pBuffer == NULL)
-      pBuffer = pOBD->ucScreen;
-    if (pBuffer == NULL)
-        return OBD_ERROR_NO_MEMORY;
-    
-    EPDWakeUp(pOBD);
-    
-    if (pOBD->type == EPD37_240x416) {
-        // supports a new type of fast update
-        // with built-in fast LUTs
-        obdWriteCommand2(pOBD, 0xe0, 0x02);
-        obdWriteCommand2(pOBD, 0xe5, 0x5a);
-    } /* EPD37_240x416 */
-#ifndef __AVR__
-    if (pOBD->type == EPD75_800x480 || pOBD->type == EPD583_648x480) {
-        EPD75_Begin(pOBD, 0, 0, pOBD->native_width, pOBD->native_height, true);
-        if (x != 0 || y != 0 || w != pOBD->native_width || h != pOBD->native_height) {
-        EPDSetPosition(pOBD, x, y, w, h);
-     }
-        EPDWriteImage(pOBD, UC8151_DTM2, NULL, x, y, w, h, 0);
-        obdWriteCommand(pOBD, UC8151_DSP); // stop data
-        obdWriteCommand(pOBD, UC8151_DRF);
-        EPDWaitBusy(pOBD, 0);
-        return OBD_SUCCESS;
-    }
-#endif // __AVR__
-    if (pOBD->type == EPD29R_128x296 || pOBD->type == EPD154R_152x152 || pOBD->type == EPD42R_400x300) {
-        if (pOBD->iFlags & OBD_FULLUPDATE) {
-            // Kludge alert - fool it into going into B&W mode to allow partial updates. Need to combine the black+red pixels and send them to the ALTRAM first
-            uint8_t *s = pOBD->ucScreen;
-            int iOffset = ((pOBD->native_width+7)/8) * pOBD->native_height; // full buffer size
-            for (int i=0; i<iOffset; i++) {
-                s[i] |= s[i+iOffset]; // combine red+black pixels
-            }
-            // do a fake full update first
-            EPD213_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-#ifndef WIMPY_MCU
-            EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-            EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
-#endif
-            return OBD_SUCCESS;
-        }
-        EPD213_Begin(pOBD, x, y, w, h, true);
-#ifndef WIMPY_MCU
-        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, x, y, w, h, 0);
-#endif
-        EPD154_Finish(pOBD, true);
-    }
-    if (pOBD->type == EPD29_128x296) {
-        pOBD->iOrientation = (pOBD->iOrientation + 180) % 360; // fix 180 deg offset of this init
-        EPD29_Begin(pOBD, x, y, w, h, true);
-#ifndef WIMPY_MCU
-        EPDWriteImage(pOBD, UC8151_DTM2, NULL, x, y, w, h, 0);
-#endif
-        EPD29_Finish(pOBD, true);
-#ifndef WIMPY_MCU
-        // The new becomes the old pixels for next time through
-        EPD29_Begin(pOBD, x, y, w, h, true);
-        EPDWriteImage(pOBD, UC8151_DTM1, NULL, x, y, w, h, 0);
-        EPDWriteImage(pOBD, UC8151_DTM2, NULL, x, y, w, h, 0);
-#endif
-        pOBD->iOrientation = (pOBD->iOrientation + 180) % 360; // restore original rotation
-    } else if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
-        EPD213_Begin(pOBD, x, y, w, h, true);
-#ifndef WIMPY_MCU
-        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, x, y, w, h, 0);
-#endif
-        EPD154_Finish(pOBD, true);
-    } else if (pOBD->type == EPD154_200x200) {
-        EPD154_Begin(pOBD, x, y, w, h, true);
-#ifndef WIMPY_MCU
-        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, x, y, w, h, 0);
-#endif
-        EPD154_Finish(pOBD, true);
-    } else if (pOBD->type == EPD293_128x296) {
-        EPD293_Begin(pOBD, x, y, w, h, true);
-#ifndef WIMPY_MCU
-        EPDWriteImage(pOBD, 0x24, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-#endif
-        EPD_CMD2(pOBD, 0x22, 0xcf);
-        obdWriteCommand(pOBD, 0x20); // refresh
-        EPDWaitBusy(pOBD, 0);
-     //   delay(5000);
-    } else if (pOBD->type == EPD154_152x152) {
-        EPDSendCMDSequence(pOBD, pOBD->pInitFast);
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-            EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-        }
-#endif
-        obdWriteCommand(pOBD, UC8151_DRF);
-    }
-    if (pOBD->type == EPD42_400x300) {
-        EPD42_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, true);
-#ifndef WIMPY_MCU
-        EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-#endif
-        obdWriteCommand(pOBD, UC8151_DRF);
-    }
-#ifndef __AVR__
-    if (pOBD->type == EPD75_800x480 || pOBD->type == EPD27_176x264) {
-        EPD27_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, true);
-#ifndef WIMPY_MCU
-        EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-#endif
-        obdWriteCommand(pOBD, UC8151_DRF);
-    }
-#endif // __AVR__
-    EPDSleep(pOBD);
-    return OBD_SUCCESS;
-} /* EPDDumpFast() */
-
-void EPD_CMD2(OBDISP *pOBD, uint8_t cmd, uint8_t param)
-{
-	obdWriteCommand(pOBD, cmd);
-	RawWriteData(pOBD, &param, 1);
-} /* EPD_CMD2() */
 
 void EPD213_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 {
@@ -3075,7 +3012,7 @@ uint8_t ucLine[8];
         memset(ucLine, 0, 7);
         ucLine[4] = 0x40;
         RawWriteData(pOBD, ucLine, 7);
-        
+
         EPD_CMD2(pOBD, 0x22, 0xc0);
         obdWriteCommand(pOBD, 0x20);
         EPDWaitBusy(pOBD, 1);
@@ -3086,75 +3023,97 @@ uint8_t ucLine[8];
     }
 } /* EPD213_Begin() */
 
-void EPD154_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
+//
+// Special case for some e-ink displays
+//
+static int EPDDumpPartial(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, int h)
 {
-    obdWriteCommand(pOBD, SSD1608_WRITE_LUT);
-    if (bPartial) {
-        // send partial update lut
-        memcpy_P(u8Cache, lut154_partial_update, sizeof(lut154_partial_update));
-        RawWriteData(pOBD, u8Cache, sizeof(lut154_partial_update));
-        EPD_CMD2(pOBD, 0x3f, 0x2); // ?
-        EPD_CMD2(pOBD, SSD1608_GATE_VOLTAGE, 0x17);
-        u8Cache[0] = 0x41;
-        u8Cache[1] = 0xb0;
-        u8Cache[2] = 0x32;
-        obdWriteCommand(pOBD, SSD1608_SOURCE_VOLTAGE);
-        RawWriteData(pOBD, u8Cache, 3);
-        EPD_CMD2(pOBD, SSD1608_WRITE_VCOM, 0x28); // VCOM
-        
-        obdWriteCommand(pOBD, 0x37); // ?
-        memset(u8Cache, 0, 10);
-        u8Cache[5] = 0x40;
-        RawWriteData(pOBD, u8Cache, 10);
-        
-        EPD_CMD2(pOBD, 0x3c, 0x80); // VCOM?
-        EPD_CMD2(pOBD, 0x22, 0xc0);
-        obdWriteCommand(pOBD, 0x20);
-        EPDWaitBusy(pOBD, 0);
-    } else {
-        // send full update lut
-        memcpy_P(u8Cache, lut154_full_update, sizeof(lut154_full_update));
-        RawWriteData(pOBD, u8Cache, sizeof(lut154_full_update));
-        EPD_CMD2(pOBD, 0x3f, 0x22); // ?
-        EPD_CMD2(pOBD, SSD1608_GATE_VOLTAGE, 0x17);
-        u8Cache[0] = 0x41;
-        u8Cache[1] = 0x00;
-        u8Cache[2] = 0x32;
-        obdWriteCommand(pOBD, SSD1608_SOURCE_VOLTAGE);
-        RawWriteData(pOBD, u8Cache, 3);
-        EPD_CMD2(pOBD, SSD1608_WRITE_VCOM, 0x20); // VCOM
+    long lTime;
+    
+    if (pBuffer == NULL && pOBD->ucScreen == NULL)
+        return OBD_ERROR_NO_MEMORY;
+    
+    EPDWakeUp(pOBD, 1); // tickle the reset line
+    
+    if (pOBD->pInitPart) { // command tables ready to go
+        lTime = millis();
+        EPDSendCMDSequence(pOBD, pOBD->pInitPart);
+        if (pOBD->chip_type == OBD_CHIP_UC8151) {
+            int iSize = pOBD->width * ((pOBD->height+7)>>3);
+            EPDWriteImage(pOBD, 0x10, &pOBD->ucScreen[iSize], 0,0,pOBD->width, pOBD->height, pOBD->iFlags & OBD_FAST_INVERTED); // write old data inverted
+            EPDWriteImage(pOBD, 0x13, NULL, 0, 0, pOBD->width, pOBD->height, pOBD->iFlags & OBD_FAST_INVERTED);
+            memcpy(&pOBD->ucScreen[iSize], pOBD->ucScreen, iSize); // new becomes old
+            lTime = millis() - lTime;
+            pOBD->iDataTime = (int)lTime;
+            lTime = millis();
+            obdWriteCommand(pOBD, UC8151_DRF);
+            _delay(1); // wait before checking busy line (necessary!)
+            EPDWaitBusy(pOBD, 1);
+            obdWriteCommand(pOBD, UC8151_POFF);
+            lTime = millis() - lTime;
+            pOBD->iOpTime = (int)lTime;
+            return 0;
+        } else { // SSD16xx
+            EPDWriteImage(pOBD, 0x24, NULL, 0, 0, pOBD->width, pOBD->height, pOBD->iFlags & OBD_FAST_INVERTED);
+            EPD_CMD2(pOBD, 0x22, 0xff);
+            lTime = millis() - lTime;
+            pOBD->iDataTime = (int)lTime;
+            lTime = millis();
+            obdWriteCommand(pOBD, 0x20); // refresh
+            EPDWaitBusy(pOBD, 0);
+            lTime = millis() - lTime;
+            pOBD->iOpTime = (int)lTime;
+            return 0;
+            //EPD_CMD2(pOBD, 0x10, 0x1); // deep sleep is needed (very strange behavior if it is not issued here)
+        } // SSD16xx
+    } // has a command list for fast updates
+    if (pOBD->type == EPD29R_128x296 || pOBD->type == EPD154R_152x152 || pOBD->type == EPD42R_400x300) {
+        if (pOBD->iFlags & OBD_FULLUPDATE) {
+            // Kludge alert - fool it into going into B&W mode to allow partial updates. Need to combine the black+red pixels and send them to the ALTRAM first
+            uint8_t *s = pOBD->ucScreen;
+            int iOffset = ((pOBD->native_width+7)/8) * pOBD->native_height; // full buffer size
+            for (int i=0; i<iOffset; i++) {
+                s[i] |= s[i+iOffset]; // combine red+black pixels
+            }
+            // do a fake full update first
+            EPD213_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
+#ifndef WIMPY_MCU
+            EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, 0, 0, pOBD->width, pOBD->height, 0);
+            EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
+#endif
+            return OBD_SUCCESS;
+        }
+        EPD213_Begin(pOBD, x, y, w, h, true);
+#ifndef WIMPY_MCU
+        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, x, y, w, h, 0);
+#endif
+        EPD154_Finish(pOBD, true);
     }
-    if (pOBD->iFlags & OBD_FLIPV)
-        EPD_CMD2(pOBD, SSD1608_DATA_MODE, 0x1);
-    else
-        EPD_CMD2(pOBD, SSD1608_DATA_MODE, 0x3);
-    obdWriteCommand(pOBD, SSD1608_SET_RAMXPOS); // set RAM X start/end
-    u8Cache[0] = x/8;
-    u8Cache[1] = (x+w-1)/8;
-    RawWriteData(pOBD, u8Cache, 2);
-    obdWriteCommand(pOBD, SSD1608_SET_RAMYPOS); // set RAM Y start/end
-    if (pOBD->iFlags & OBD_FLIPV) {
-        u8Cache[0] = (uint8_t)(y+h-1);
-        u8Cache[1] = (uint8_t)((y+h-1)>>8);
-        u8Cache[2] = (uint8_t)y;
-        u8Cache[3] = (uint8_t)(y>>8);
-    } else {
-        u8Cache[0] = (uint8_t)y;
-        u8Cache[1] = (uint8_t)(y>>8);
-        u8Cache[2] = (uint8_t)(y+h-1);
-        u8Cache[3] = (uint8_t)((y+h-1)>>8);
+    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
+        EPD213_Begin(pOBD, x, y, w, h, true);
+#ifndef WIMPY_MCU
+        EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, x, y, w, h, 0);
+#endif
+        EPD154_Finish(pOBD, true);
+    } else if (pOBD->type == EPD154_152x152) {
+        EPDSendCMDSequence(pOBD, pOBD->pInitFast);
+#ifndef WIMPY_MCU
+        if (pOBD->ucScreen) {
+            EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 1);
+        }
+#endif
+        obdWriteCommand(pOBD, UC8151_DRF);
+        EPDWaitBusy(pOBD, 1);
     }
-    RawWriteData(pOBD, u8Cache, 4);
-    EPD_CMD2(pOBD, SSD1608_SET_RAMXCOUNT, 0); // set RAM X pointer start
-    obdWriteCommand(pOBD, SSD1608_SET_RAMYCOUNT); // set RAM Y pointer start
-    if (pOBD->iFlags & OBD_FLIPV) {
-        u8Cache[0] = y+h-1;
-    } else {
-        u8Cache[0] = 0x00;
-    }
-    u8Cache[1] = 0x00;
-    RawWriteData(pOBD, u8Cache, 2);
-} /* EPD154_Begin() */
+    EPDSleep(pOBD, 0);
+    return OBD_SUCCESS;
+} /* EPDDumpFast() */
+
+void EPD_CMD2(OBDISP *pOBD, uint8_t cmd, uint8_t param)
+{
+	obdWriteCommand(pOBD, cmd);
+	RawWriteData(pOBD, &param, 1);
+} /* EPD_CMD2() */
 
 void EPD8951_REG(OBDISP *pOBD, uint16_t addr, uint16_t data)
 {
@@ -3221,7 +3180,7 @@ uint8_t ucTemp[4];
     RawWriteData(pOBD, ucTemp, 4);
 } /* EPD8951_WORD() */
 
-static void EPDFill(OBDISP *pOBD, uint8_t ucCMD, uint8_t ucPattern)
+void EPDFill(OBDISP *pOBD, uint8_t ucCMD, uint8_t ucPattern)
 {
 int iSize;
 
@@ -3246,7 +3205,7 @@ int iSize;
 // Write EPD Image data
 //
 #ifndef WIMPY_MCU
-static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, uint8_t *pBits, int x, int y, int w, int h, int bRed)
+static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, uint8_t *pBits, int x, int y, int w, int h, int bInvert)
 {
 int tx, ty;
 uint8_t *s, *d, ucSrcMask, ucDstMask, uc;
@@ -3261,8 +3220,8 @@ int iPitch;
         pBuffer = pBits;
         iPitch = w;
     }
-    if (bRed) {// use second bit plane
-        pBuffer += pOBD->width * ((pOBD->height+7)/8);
+    if (bInvert) {// use second bit plane
+        //pBuffer += pOBD->width * ((pOBD->height+7)/8);
         ucInvert = 0xff; // red logic is inverted
     }
     if (ucCMD) {
@@ -3583,7 +3542,7 @@ const uint8_t epd294_init_sequence_part[] =
 {
    0x0b, 0x37, 0,0,0,0,0,0x40,0,0,0,0,
     0x04, 0x01, 0x27, 0x01, 0x00,
-    0x02, 0x11, 0x03,
+    0x02, 0x11, 0x01,
     0x03, 0x44, 0x00, 0x0f,
     0x05, 0x45, 0x00, 0x00, 0x27, 0x01,
     0x03, 0x21, 0x00, 0x80,
@@ -3596,30 +3555,6 @@ const uint8_t epd294_init_sequence_part[] =
    0x00 // end of sequence
 }; /* epd294_init_sequence_part */
 
-const uint8_t epd293_init_sequence_part[] = 
-{
-//    0x01, SSD1608_SW_RESET,
-//    BUSY_WAIT,
-    0x02, 0x74, 0x54,
-    0x02, 0x7e, 0x3b,
-    0x03, 0x2b, 0x04, 0x63,
-    0x05, 0x0c, 0x8f, 0x8f, 0x8f, 0x3f,
-    0x04, 0x01, 0x27, 0x01, 0x00,
-    0x02, 0x11, 0x03,
-    0x03, 0x44, 0x00, 0x0f,
-    0x05, 0x45, 0x00, 0x00, 0x27, 0x01,
-    0x02, 0x3c, 0x01,
-    0x02, 0x18, 0x80,
-    0x02, 0x22, 0xb1,
-    0x01, 0x20,
-    BUSY_WAIT,
-    0x01, 0x1b,
-    0x02, 0x0d, 0xff,
-    0x02, 0x4e, 0x00,
-    0x03, 0x4f, 0x00, 0x00,
-    0x00 // end of table
-}; /* epd293_init_sequence_part[] */
-
 const uint8_t epd293_lut[] =
 {
     0x22,  0x11, 0x10, 0x00, 0x10, 0x00, 0x00, 0x11, 0x88, 0x80, 0x80, 0x80, 0x00, 0x00, 0x6A, 0x9B,
@@ -3628,31 +3563,6 @@ const uint8_t epd293_lut[] =
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x04, 0x08, 0x3C, 0x07, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
-
-void EPD293_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
-{
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    if (bPartial) {
-        if (pOBD->pInitFull == epd294_init_sequence_full) { // 294
-           // send LUT
-           obdWriteCommand(pOBD, 0x32);
-           memcpy_P(u8Cache, epd294_lut_partial, sizeof(epd294_lut_partial));
-           RawWriteData(pOBD, u8Cache, sizeof(epd294_lut_partial));
-           EPDSendCMDSequence(pOBD, epd294_init_sequence_part);
-        } else {
-           EPDSendCMDSequence(pOBD, epd293_init_sequence_part);
-           // send LUT
-           obdWriteCommand(pOBD, 0x32);
-           memcpy_P(u8Cache, epd293_lut_partial, sizeof(epd293_lut_partial));
-           RawWriteData(pOBD, u8Cache, sizeof(epd293_lut_partial));
-        }
-    } else {
-        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-    }
-} /* EPD293_Begin() */
 
 void EPD47_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
 {
@@ -3684,50 +3594,85 @@ void EPD47_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
         EPD8951_WORD(pOBD, 0); // default settings (endian, format, rotation)
     }
 } /* EPD47_Begin() */
-
-#ifdef FUTURE
-void EPD102_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial)
-{
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-        if (bPartial) {
-            EPDSendCMDSequence(pOBD, epd29_init_sequence_partial);
-            obdWriteCommand(pOBD, UC8151_PON); // power on
-            obdWriteCommand(pOBD, UC8151_PTIN); // partial mode
-            obdWriteCommand(pOBD, UC8151_PTL); // partial window
-            u8Cache[0] = 0; //y; X START
-            u8Cache[1] = 127; //(y + h - 1); X END
-            u8Cache[2] = 0; //(x >> 8); // Y START
-            u8Cache[3] = 0; //x & 0xff;
-            u8Cache[4] = 1; //(x + w - 1) >> 8; Y END >> 8
-            u8Cache[5] = 39; //(x + w - 1) & 0xff;
-            u8Cache[6] = 0x28; // ?
-            RawWriteData(pOBD, u8Cache, 7); // boundaries
-        } else {
-            EPDSendCMDSequence(pOBD, epd102_init_sequence_full);
-            return;
-            // send LUTs
-            obdWriteCommand(pOBD, UC8151_LUT_WB);
-            memcpy_P(u8Cache, epd102_lut_w_full, sizeof(epd102_lut_w_full));
-            RawWriteData(pOBD, u8Cache, sizeof(epd102_lut_w_full));
-            obdWriteCommand(pOBD, UC8151_LUT_BB);
-            memcpy_P(u8Cache, epd102_lut_b_full, sizeof(epd102_lut_b_full));
-            RawWriteData(pOBD, u8Cache, sizeof(epd102_lut_b_full));
-      //      obdWriteCommand(pOBD, UC8151_PTOU); // disable partial mode
-            obdWriteCommand(pOBD, UC8151_PON); // power on
-            EPDWaitBusy(pOBD, 1);
-        }
-} /* EPD102_Begin() */
-#endif // FUTURE
 //
 // Special case for e-ink displays
 //
-static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait)
+static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait, int bFast)
 {
+    long lTime;
+    
+    if (!(pOBD->iFlags & OBD_HAS_FAST_UPDATE))
+        bFast = 0; // no fast update available
+    
     pOBD->iFlags |= OBD_FULLUPDATE; // mark it for later
-    EPDWakeUp(pOBD);
+    // UC81xx need to be told the old and new images for fast updates
+    // Keep a copy of the last full update for this purpose
+    if (pOBD->type >= EPD42_400x300 && pOBD->chip_type == OBD_CHIP_UC8151 && pOBD->ucScreen && !(pOBD->iFlags & OBD_3COLOR)) {
+         int iSize = pOBD->width * ((pOBD->height+7)>>3);
+         memcpy(&pOBD->ucScreen[iSize], pOBD->ucScreen, iSize);
+    }
+    EPDWakeUp(pOBD, 0); // tickle the reset line
+    if (pOBD->pInitFull) { // if we have the command list, use common code
+        int iSize = pOBD->width * ((pOBD->height+7)>>3);
+        int bInvert = 0;
+        uint8_t *pBuf1 = NULL, *pBuf2 = NULL;
+        
+        lTime = millis(); // get data transmission time
+        if (bFast && pOBD->pInitFast) {
+            Serial.println("Sending fast init");
+            EPDSendCMDSequence(pOBD, pOBD->pInitFast);
+        } else {
+            EPDSendCMDSequence(pOBD, pOBD->pInitFull);
+        }
+        if (pOBD->chip_type == OBD_CHIP_UC8151) {
+            if (pOBD->ucScreen) { // we have a back buffer, send it
+                if (pOBD->iFlags & OBD_3COLOR) { // B/W/R
+                    bInvert = 1; // invert the red plane
+                    pBuf1 = pOBD->ucScreen; // B/W plane
+                    pBuf2 = &pOBD->ucScreen[iSize]; // R plane
+                }
+                EPDWriteImage(pOBD, UC8151_DTM1, pBuf1, 0, 0, pOBD->width, pOBD->height, 0); // B/W or 'old' plane
+                EPDWriteImage(pOBD, UC8151_DTM2, pBuf2, 0, 0, pOBD->width, pOBD->height, bInvert); // R or 'new' plane
+            }
+            lTime = millis() - lTime;
+            pOBD->iDataTime = (int)lTime; // record the time to xfer data
+            if (bRefresh) {
+                lTime = millis();
+                obdWriteCommand(pOBD, UC8151_DRF);
+                EPDWaitBusy(pOBD, 0);
+                lTime = millis() - lTime;
+                pOBD->iOpTime = (int)lTime; // record the update time
+            }
+        } else { // SSD16xx controllers
+            if (pOBD->ucScreen) { // we have a back buffer, send it
+                uint8_t ucTemp[4];
+                if (pOBD->iFlags & OBD_3COLOR) { // B/W/R
+                    pBuf1 = pOBD->ucScreen; // B/W plane
+                    pBuf2 = &pOBD->ucScreen[iSize]; // R plane
+                    bInvert = 1; // invert the R plane
+                }
+                EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, pBuf2, 0, 0, pOBD->width, pOBD->height, bInvert);
+                // need to reset the write pointer between planes
+                EPD_CMD2(pOBD, SSD1608_SET_RAMXCOUNT, 0x00);
+                ucTemp[0] = ucTemp[1] = 0;
+                obdWriteCommand(pOBD, SSD1608_SET_RAMYCOUNT);
+                RawWriteData(pOBD, ucTemp, 2);
+                EPDWriteImage(pOBD, SSD1608_WRITE_RAM, pBuf1, 0, 0, pOBD->width, pOBD->height, 0);
+            }
+            lTime = millis() - lTime; // record data xfer time
+            pOBD->iDataTime = (int)lTime;
+            if (bRefresh) {
+                lTime = millis();
+                EPD_CMD2(pOBD, SSD1608_DISP_CTRL2, (bFast || (pOBD->iFlags & OBD_3COLOR)) ? 0xc7 : 0xf7);
+                obdWriteCommand(pOBD, SSD1608_MASTER_ACTIVATE); // refresh
+                EPDWaitBusy(pOBD, 0);
+                lTime = millis() - lTime; // record the update time
+                pOBD->iOpTime = (int)lTime;
+            }
+        } // UC8151 / SSD16xx
+        return 0;
+    } // has init sequence
+    // Special case EPDs below (4-gray, 4-color or 3-color/4-bpp)
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
     // not enough RAM on AVR to use this type of EPD
     if (pOBD->type == EPD42_4GRAY_400x300) {
@@ -3840,146 +3785,14 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait)
         u16Args[6] = 0x0012; // _dev_memaddr_h
         EPD8951_ARGS(pOBD, 0x0037, u16Args, 7); // IT8951_I80_CMD_DPY_BUF_AREA
     }
-    if (pOBD->type == EPD293_128x296) {
-        uint8_t ucTemp[4];
-        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-//        EPD293_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-            EPDWriteImage(pOBD, 0x26, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-            EPD_CMD2(pOBD, 0x4e, 0x00);
-            ucTemp[0] = ucTemp[1] = 0;
-            obdWriteCommand(pOBD, 0x4f);
-            RawWriteData(pOBD, ucTemp, 2);
-            EPDWriteImage(pOBD, 0x24, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-        }
-#endif
-        if (bRefresh) {
-            EPD_CMD2(pOBD, 0x22, 0xc7);
-            obdWriteCommand(pOBD, 0x20); // refresh
-        }
-    }
-#ifdef FUTURE
-    if (pOBD->type == EPD102_80x128) {
-        EPD102_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-            EPDWriteImage(pOBD, 0x10, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-            EPDWriteImage(pOBD, 0x13, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
-        }
-#endif
-        obdWriteCommand(pOBD, 0x12); // refresh
-        _delay(10); // needed
-    }
-#endif // FUTURE
-    if (pOBD->type == EPD154_152x152) {
-        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-            EPDWriteImage(pOBD, UC8151_DTM1, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-            EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
-        }
-#endif
-        if (bRefresh) {
-            obdWriteCommand(pOBD, UC8151_PTOU);
-            obdWriteCommand(pOBD, 0x12); // refresh
-            _delay(10); // needed
-        }
-    }
-  if (pOBD->type == EPD29_128x296) {
-      EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-#ifndef WIMPY_MCU
-      if (pOBD->ucScreen) {
-          EPDWriteImage(pOBD, UC8151_DTM1, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send buffer to 'old' plane
-          EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send buffer to 'new' plane
-      }
-#endif
-      if (bRefresh) {
-          EPD29_Finish(pOBD, false);
-      }
-  }
-    if (pOBD->type == EPD27_176x264) {
-        EPD27_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-        obdWriteCommand(pOBD, UC8151_DTM1);
-        for (int i=0; i<5808; i++) { // all FF
-            uint8_t uc = 0xff;
-            RawWriteData(pOBD, &uc, 1);
-        }
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-            EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-        }
-#endif
-        if (bRefresh) {
-            obdWriteCommand(pOBD, UC8151_DRF);
-        }
-    }
-    if (pOBD->type == EPD42_400x300 || pOBD->type == EPD75_800x480 || pOBD->type == EPD583_648x480) {
-        //EPD42_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-      //  Serial.println("starting 4.2 update");
-        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-           EPDWriteImage(pOBD, UC8151_DTM1, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-            EPDWriteImage(pOBD, UC8151_DTM2, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-        }
-#endif
-        if (bRefresh) {
-            obdWriteCommand(pOBD, UC8151_DRF);
-        }
-    }
-    if (pOBD->type == EPD29R_128x296) { // BLACK/WHITE/RED
-        uint8_t ucTemp[4];
-        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-            EPDWriteImage(pOBD, 0x26, NULL, 0, 0, pOBD->width, pOBD->height, 1); // red plane
-            EPD_CMD2(pOBD, 0x4e, 0x00); // RAM X counter
-            obdWriteCommand(pOBD, 0x4f);
-            ucTemp[0] = (uint8_t)(pOBD->native_height-1);
-            ucTemp[1] = (uint8_t)((pOBD->native_height-1)>>8);
-            RawWriteData(pOBD, ucTemp, 2);
-            EPDWriteImage(pOBD, 0x24, NULL, 0, 0, pOBD->width, pOBD->height, 0); // black/white plane
-        }
-#endif
-        if (bRefresh) {
-            EPD_CMD2(pOBD, 0x22, 0xc7); // update control 2
-            obdWriteCommand(pOBD, 0x20); // master activation
-        }
-    }
-    if (pOBD->type == EPD213_104x212 || pOBD->type == EPD213_122x250) {
-        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-        EPD213_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false);
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-            EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-            EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
-        }
-#endif
-        if (bRefresh) {
-            EPD154_Finish(pOBD, false);
-        }
-    } else if (pOBD->type == EPD154_200x200) {
-        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-        EPD154_Begin(pOBD, 0, 0, pOBD->width, pOBD->height, false); // x, y, w, h
-#ifndef WIMPY_MCU
-        if (pOBD->ucScreen) {
-            EPDWriteImage(pOBD, SSD1608_WRITE_RAM, NULL, 0, 0, pOBD->width, pOBD->height, 0);
-            EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, NULL, 0, 0, pOBD->width, pOBD->height, 0); // send image to current and previous buffers
-        }
-#endif
-        if (bRefresh) {
-            EPD154_Finish(pOBD, false);
-        }
-    }
     if (bWait) {
         EPDWaitBusy(pOBD, 0);
-        EPDSleep(pOBD);
+        EPDSleep(pOBD, 0);
     }
     return OBD_SUCCESS;
 } /* EPDDumpBuffer() */
 //
-// Special case for ST7302
+// Special case for ST7302/ST7305
 //
 #ifndef WIMPY_MCU
 void obdST7302SetPos(OBDISP *pOBD, int x, int y)
@@ -3987,80 +3800,76 @@ void obdST7302SetPos(OBDISP *pOBD, int x, int y)
 uint8_t ucTemp[4];
     
     obdWriteCommand(pOBD, 0x2a); // Column set
-    ucTemp[0] = 0x19 + (y/12); // start x (we treat it as y)
-    ucTemp[1] = 0x27; // end x
+    if (pOBD->type == LCD_ST7302) {
+        ucTemp[0] = 0x19 + (y/12); // start x (we treat it as y)
+        ucTemp[1] = 0x27; // end x
+    } else { // ST7305
+        ucTemp[0] = 0x17 + (y/12);
+        ucTemp[1] = 0x24;
+    }
     RawWriteData(pOBD, ucTemp, 2);
     obdWriteCommand(pOBD, 0x2b); // Row set
-    ucTemp[0] = (x/2); // start y (we treat it as x)
-    ucTemp[1] = 0x80; // end y
+    if (pOBD->type == LCD_ST7302) {
+        ucTemp[0] = (x/2); // start y (we treat it as x)
+        ucTemp[1] = 0x80; // end y
+    } else { // ST7305
+        ucTemp[0] = (x/2);
+        ucTemp[1] = 0xbf;
+    }
     RawWriteData(pOBD, ucTemp, 2);
     obdWriteCommand(pOBD, 0x2c); // memory write
 } /* obdST7302SetPos() */
 //
-// Special case for ST7302
+// Special case for ST7302/ST7305
 //
 static int ST7302DumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
-uint8_t ucPixels[40];
-int x, y, iPitch, count;
+uint8_t ucPixels[64];
+int x, y, h, iPitch, count;
 uint8_t ucMask, uc1, *s, *d;
-    
-    iPitch = pOBD->width;
+// bit expansion table to speed up conversion
+const uint8_t u8Expand[16] = {
+0x00, 0x80, 0x20, 0xa0, 0x08, 0x88, 0xa0, 0xa8,
+0x02, 0x82, 0x22, 0xa2, 0x0a, 0x8a, 0x2a, 0xaa 
+};
+
 // Shift out the image in pairs of lines
-    ucPixels[0] = 0x40;
+    obdST7302SetPos(pOBD, 0, 0);
+    iPitch = pOBD->width;
     switch (pOBD->iOrientation) {
         case 0:
         case 180:
             for (x = 0; x < pOBD->width; x += 2) { // a pair of columns at a time
-                d = ucPixels+1;
-                ucMask = 1;
-                uc1 = 0;
-                count = 0;
+                d = ucPixels;
                 if (pOBD->iOrientation == 180) {
-                    ucMask = 1<<((pOBD->height-1) & 7);
+                    uint8_t u8_0, u8_1;
                     s = &pBuffer[pOBD->width-2-x + ((pOBD->height-1)>>3)*iPitch];
-                    for (y = pOBD->height-1; y >= 0; y--) {
-                        uc1 <<= 2;
-                        if (s[0] & ucMask) uc1 |= 1;
-                        if (s[1] & ucMask) uc1 |= 2;
-                        count++;
-                        if (count == 4) { // finish the byte
-                            *d++ = uc1;
-                            count = 0;
-                            uc1 = 0;
-                        }
-                        ucMask >>= 1;
-                        if (ucMask == 0) {
-                            ucMask = 0x80;
-                            s -= iPitch;
-                        } // next line
-                    } // for y
-                    if (count) {
-                        uc1 <<= (count*2);
+                    for (y = pOBD->height-8; y >= 0; y-=8) {
+                        u8_0 = ucMirror[s[0]]; // source image bits are mirrored
+                        u8_1 = ucMirror[s[1]];
+                        uc1 = u8Expand[u8_0 & 0xf];
+                        uc1 |= (u8Expand[u8_1 & 0xf] >> 1);
                         *d++ = uc1;
-                    }
-                } else {
+                        uc1 = u8Expand[u8_0 >> 4];
+                        uc1 |= (u8Expand[u8_1 >> 4] >> 1);
+                        *d++ = uc1;
+                        s -= iPitch;
+                    } // for y
+                } else { // rotation = 0
                     s = &pBuffer[x];
-                    uc1 = 0;
-                    for (y=0; y < pOBD->height+3; y++) {
-                        uc1 <<= 2;
-                        if (s[0] & ucMask) uc1 |= 2;
-                        if (s[1] & ucMask) uc1 |= 1;
-                        count++;
-                        if (count == 4) { // finish the byte
-                            *d++ = uc1;
-                            count = 0;
-                            uc1 = 0;
-                        }
-                        ucMask <<= 1;
-                        if (ucMask == 0) {
-                            ucMask = 1;
-                            s += iPitch;
-                        } // next line
+                    h = pOBD->height;
+                    if (pOBD->type == LCD_ST7302) h += 3;
+                    for (y=0; y < h; y+=8) {
+                        uc1 = u8Expand[s[0] & 0xf];
+                        uc1 |= (u8Expand[s[1] & 0xf] >> 1);
+                        *d++ = uc1;
+                        uc1 = u8Expand[s[0] >> 4];
+                        uc1 |= (u8Expand[s[1] >> 4] >> 1);
+                        *d++ = uc1;
+                        s += iPitch;
                     } // for y
                 } // flipped
-                obdSetPosition(pOBD, (pOBD->flip) ? 248-x : x, 0, 1);
-                RawWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
+                RawWriteData(pOBD, ucPixels, (int)(d - ucPixels));
             } // for x
             break;
         case 90:
@@ -4068,11 +3877,11 @@ uint8_t ucMask, uc1, *s, *d;
             if (pOBD->iOrientation == 270) {
                 for (y=pOBD->height-2; y >= 0; y-=2) {
                     ucMask = 1<<(y & 7);
-                    s = &pBuffer[(y>>3)*pOBD->width];
+                    s = &pBuffer[(y>>3)*iPitch];
                     count = 0;
-                    d = ucPixels+1;
+                    d = ucPixels;
                     uc1 = 0;
-                    for (x=0; x<pOBD->width; x++) {
+                    for (x=0; x<iPitch; x++) {
                         uc1 <<= 2;
                         if (s[x] & ucMask) uc1 |= 1;
                         if (s[x] & (ucMask << 1)) uc1 |= 2;
@@ -4082,17 +3891,16 @@ uint8_t ucMask, uc1, *s, *d;
                             count = 0;
                         }
                     } // for x
-                    obdSetPosition(pOBD, pOBD->height - 2 - y, 0, 1);
-                    RawWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
+                    RawWriteData(pOBD, ucPixels, (int)(d - ucPixels));
                 } // for y
             } else { // 90
                 for (y=0; y < pOBD->height; y+=2) {
                     ucMask = 1<<(y & 7);
-                    s = &pBuffer[(y>>3)*pOBD->width];
+                    s = &pBuffer[(y>>3)*iPitch];
                     count = 0;
-                    d = ucPixels+1;
+                    d = ucPixels;
                     uc1 = 0;
-                    for (x=pOBD->width-1; x>=0; x--) {
+                    for (x=iPitch-1; x>=0; x--) {
                         uc1 <<= 2;
                         if (s[x] & ucMask) uc1 |= 2;
                         if (s[x] & (ucMask << 1)) uc1 |= 1;
@@ -4102,8 +3910,7 @@ uint8_t ucMask, uc1, *s, *d;
                             count = 0;
                         }
                     } // for x
-                    obdSetPosition(pOBD, y, 0, 1);
-                    RawWrite(pOBD, ucPixels, 3 + (int)(d - ucPixels));
+                    RawWriteData(pOBD, ucPixels, (int)(d - ucPixels));
                 } // for y
             } // flipped
             break;
@@ -4215,82 +4022,10 @@ int iBit;
     return OBD_SUCCESS;
 } /* SharpDumpBuffer() */
 //
-// Dump a portion of the display buffer
-// optional buffer pointer if there is no back buffer defined
-//
-int obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height, uint8_t *pBuffer)
-{
-    uint8_t *s = pBuffer;
-    int iPitch;
-    uint8_t ucCMD1, ucCMD2;
-    
-//    Serial.println("entering partial update");
-    if (pOBD == NULL) return OBD_ERROR_BAD_PARAMETER;
-    if (startx < 0 || starty < 0 || startx+width > pOBD->width || starty+height > pOBD->height)
-        return OBD_ERROR_BAD_PARAMETER;
-    if (s == NULL) {
-        s = pOBD->ucScreen;
-        iPitch = pOBD->width;
-        s += startx + ((starty>>3) * iPitch);
-    } else {
-        iPitch = width;
-    }
-    EPDWakeUp(pOBD);
-    EPDSendCMDSequence(pOBD, pOBD->pInitFull);
-    EPDSetPosition(pOBD, startx, starty, width, height);
-    if (pOBD->chip_type == OBD_CHIP_UC8151) {
-        ucCMD1 = UC8151_DTM1;
-        ucCMD2 = UC8151_DTM2;
-    } else {
-        ucCMD1 = SSD1608_WRITE_RAM;
-        ucCMD2 = SSD1608_WRITE_ALTRAM;
-    }
-#ifndef WIMPY_MCU
-    if (s) {
-        if (s != pOBD->ucScreen) {
-            startx = starty = 0; // start from 0 if passing your own buffer
-        }
-        EPDWriteImage(pOBD, ucCMD2, s, startx, starty, width, height, 0);
-    }
-#endif
-    // tell EPD to do a partial update of the requested area
-    if (pOBD->chip_type == OBD_CHIP_UC8151) {
-      //  Serial.println("About to send refresh cmd");
-        obdWriteCommand(pOBD, UC8151_DSP); // stop data
-        obdWriteCommand(pOBD, UC8151_DRF); // refresh
-        _delay(10); // needed
-        EPDWaitBusy(pOBD, 0);
-        obdWriteCommand(pOBD, UC8151_PTOU); // disable partial mode
-    } else if (pOBD->chip_type == OBD_CHIP_SSD16xx) {
-        EPD_CMD2(pOBD, SSD1608_DISP_CTRL2, 0xf4);
-        obdWriteCommand(pOBD, SSD1608_MASTER_ACTIVATE);
-        EPDWaitBusy(pOBD, false);
-        obdWriteCommand(pOBD, SSD1608_NOP);
-    }
-    return OBD_SUCCESS;
-} /* obdDumpPartial() */
-//
-// Dump a screen faster to an e-ink display
-//
-int obdDumpFast(OBDISP *pOBD, int startx, int starty, int width, int height)
-{
-    if (pOBD->type >= EPD42_400x300) { // it's an e-ink panel
-        if (pOBD->iFlags & OBD_HAS_FAST_UPDATE) {
-            int rc = EPDDumpFast(pOBD, NULL, startx, starty, width, height);
-            pOBD->iFlags &= ~OBD_FULLUPDATE; // mark it for later
-            return rc;
-        } else {
-            return EPDDumpBuffer(pOBD, true, true);
-        }
-    } else { // use the default full screen dump function
-        return obdDumpBuffer(pOBD, NULL);
-    }
-} /* obdDumpFast() */
-//
 // Dump a screen's worth of data directly to the display
 // Try to speed it up by comparing the new bytes with the existing buffer
 //
-int obdDumpBuffer_2(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh, int bWait)
+int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh, int bWait, int bFast)
 {
 int x, y;
 int iLines;
@@ -4307,10 +4042,10 @@ int iLines;
     
   if (pOBD->type >= EPD42_400x300) // all e-ink panels
   {
-     return EPDDumpBuffer(pOBD, bRefresh, bWait);
+     return EPDDumpBuffer(pOBD, bRefresh, bWait, bFast);
   }
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
-  if (pOBD->type == LCD_ST7302) // special case for ST7302
+  if (pOBD->type == LCD_ST7302 || pOBD->type == LCD_ST7305) // special case for ST7302/ST7305
   {
       return ST7302DumpBuffer(pOBD, pBuffer);
   }
@@ -4391,12 +4126,7 @@ int iLines;
       }
   } // 90/270 degrees rotated
     return OBD_SUCCESS;
-} /* obdDumpBuffer_2() */
-
-int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
-{
-    return obdDumpBuffer_2(pOBD, pBuffer, true, true);
-}
+} /* obdDumpBuffer() */
 
 // Send a single byte command to the OLED controller
 void obdWriteCommand(OBDISP *pOBD, unsigned char c)
@@ -4409,7 +4139,6 @@ unsigned char buf[4];
     RawWrite(pOBD, buf, 2);
 #endif // MEMORY_ONLY
 } /* obdWriteCommand() */
-
 //
 // Experimental bufferless E-ink drawing code
 //
@@ -4513,7 +4242,7 @@ int i, tx, ty;
             obdWriteCommand(pOBD, UC8151_PTL); // partial window
             i = 0;
             tx *= 8;
-            if (pOBD->native_width > 256) { // need 2 bytes per x
+            if (pOBD->native_width >= 256) { // need 2 bytes per x
                 uc[i++] = (uint8_t)(tx>>8); // start x
                 uc[i++] = (uint8_t)tx;
                 uc[i++] = (uint8_t)((tx+cx-1)>>8); // end x
@@ -4523,15 +4252,25 @@ int i, tx, ty;
                 uc[i++] = (tx+cx-1) | 7; // end x
             }
             if (pOBD->iFlags & OBD_FLIPV) {
-                uc[i++] = (uint8_t)((ty+cy-1)>>8); // start y
-                uc[i++] = (uint8_t)(ty+cy-1);
-                uc[i++] = (uint8_t)(ty>>8); // end y
-                uc[i++] = (uint8_t)ty;
+                if (pOBD->native_height >= 256) {
+                   uc[i++] = (uint8_t)((ty+cy-1)>>8); // start y
+                   uc[i++] = (uint8_t)(ty+cy-1);
+                   uc[i++] = (uint8_t)(ty>>8); // end y
+                   uc[i++] = (uint8_t)ty;
+                } else {
+                   uc[i++] = (uint8_t)(ty+cy-1);
+                   uc[i++] = (uint8_t)ty;
+                }
             } else {
-                uc[i++] = (uint8_t)(ty>>8); // start y
-                uc[i++] = (uint8_t)ty;
-                uc[i++] = (uint8_t)((ty+cy-1)>>8); // end y
-                uc[i++] = (uint8_t)(ty+cy-1);
+                if (pOBD->native_height >= 256) {
+                   uc[i++] = (uint8_t)(ty>>8); // start y
+                   uc[i++] = (uint8_t)ty;
+                   uc[i++] = (uint8_t)((ty+cy-1)>>8); // end y
+                   uc[i++] = (uint8_t)(ty+cy-1);
+                } else {
+                   uc[i++] = (uint8_t)ty;
+                   uc[i++] = (uint8_t)(ty+cy-1);
+                }
             }
             uc[i++] = 0; // stay inside the partial window3
             RawWriteData(pOBD, uc, i);
@@ -4563,7 +4302,7 @@ int iPitch = pOBD->width;
         return;
     }
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
-    if (pOBD->type == LCD_ST7302) { // special case for ST7302
+    if (pOBD->type == LCD_ST7302 || pOBD->type == LCD_ST7305) { // special case for ST7302/ST7305
         obdST7302SetPos(pOBD, x, y);
     }
 #endif // !WIMPY_MCU

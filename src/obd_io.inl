@@ -407,7 +407,7 @@ void _delay(int iDelay)
 #else // Arduino
 void _delay(int iDelay)
 {
-#ifdef HAL_ESP32_HAL_H_
+#ifdef NOT_HAL_ESP32_HAL_H_
 // light sleep to save power
     esp_sleep_enable_timer_wakeup(iDelay * 1000);
 //    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
