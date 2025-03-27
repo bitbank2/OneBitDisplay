@@ -17,6 +17,10 @@
 // obd.inl
 // display interfacing/control code for OneBitDisplay library
 //
+#ifdef __AVR__
+#define WIMPY_MCU
+#endif
+
 #if defined(_LINUX_) || defined(ARDUINO_ARCH_MCS51)
 #define memcpy_P memcpy
 #endif
@@ -32,7 +36,6 @@ static void EPDWriteImage(OBDISP *pOBD, uint8_t ucCMD, uint8_t *pBits, int x, in
 void EPD213_Begin(OBDISP *pOBD, int x, int y, int w, int h, int bPartial);
 void EPD_CMD2(OBDISP *pOBD, uint8_t cmd, uint8_t param);
 void obdSetDCMode(OBDISP *pOBD, int iMode);
-void InvertBytes(uint8_t *pData, uint8_t bLen);
 void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin);
 static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen);
 void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen);
@@ -2057,6 +2060,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->iFlags |= (OBD_HAS_PARTIAL_UPDATE | OBD_HAS_FAST_UPDATE);
         pOBD->can_flip = 0;
         return; // nothing else to do yet
+#ifndef WIMPY_MCU
     } else if (iType == EPD29_BWYR_128x296) {
       pOBD->native_width = pOBD->width = 128;
       pOBD->native_height = pOBD->height = 296;
@@ -2122,6 +2126,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->iTimeout = 20000; // 4-color need a longer timeout (20 seconds)
       pOBD->pInitFull = epd30_bwyr_init_sequence_full;
       return;
+#endif // !WIMPY_MCU
   } else if (iType == EPD213_122x250 || iType == EPD213_104x212 || iType == EPD29B_128x296)
     {
         if (iType == EPD213_122x250) {
@@ -3040,9 +3045,11 @@ static int EPDDumpPartial(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, i
         EPDSendCMDSequence(pOBD, pOBD->pInitPart);
         if (pOBD->chip_type == OBD_CHIP_UC8151) {
             int iSize = pOBD->width * ((pOBD->height+7)>>3);
+#ifndef WIMPY_MCU
             EPDWriteImage(pOBD, 0x10, &pOBD->ucScreen[iSize], 0,0,pOBD->width, pOBD->height, pOBD->iFlags & OBD_FAST_INVERTED); // write old data inverted
             EPDWriteImage(pOBD, 0x13, NULL, 0, 0, pOBD->width, pOBD->height, pOBD->iFlags & OBD_FAST_INVERTED);
             memcpy(&pOBD->ucScreen[iSize], pOBD->ucScreen, iSize); // new becomes old
+#endif // WIMPY_MCU
             lTime = millis() - lTime;
             pOBD->iDataTime = (int)lTime;
             lTime = millis();
@@ -3054,7 +3061,9 @@ static int EPDDumpPartial(OBDISP *pOBD, uint8_t *pBuffer, int x, int y, int w, i
             pOBD->iOpTime = (int)lTime;
             return 0;
         } else { // SSD16xx
+#ifndef WIMPY_MCU
             EPDWriteImage(pOBD, 0x24, NULL, 0, 0, pOBD->width, pOBD->height, pOBD->iFlags & OBD_FAST_INVERTED);
+#endif
             EPD_CMD2(pOBD, 0x22, 0xff);
             lTime = millis() - lTime;
             pOBD->iDataTime = (int)lTime;
@@ -3631,8 +3640,10 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait, int bFast)
                     pBuf1 = pOBD->ucScreen; // B/W plane
                     pBuf2 = &pOBD->ucScreen[iSize]; // R plane
                 }
+#ifndef WIMPY_MCU
                 EPDWriteImage(pOBD, UC8151_DTM1, pBuf1, 0, 0, pOBD->width, pOBD->height, 0); // B/W or 'old' plane
                 EPDWriteImage(pOBD, UC8151_DTM2, pBuf2, 0, 0, pOBD->width, pOBD->height, bInvert); // R or 'new' plane
+#endif
             }
             lTime = millis() - lTime;
             pOBD->iDataTime = (int)lTime; // record the time to xfer data
@@ -3651,13 +3662,17 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait, int bFast)
                     pBuf2 = &pOBD->ucScreen[iSize]; // R plane
                     bInvert = 1; // invert the R plane
                 }
+#ifndef WIMPY_MCU
                 EPDWriteImage(pOBD, SSD1608_WRITE_ALTRAM, pBuf2, 0, 0, pOBD->width, pOBD->height, bInvert);
+#endif
                 // need to reset the write pointer between planes
                 EPD_CMD2(pOBD, SSD1608_SET_RAMXCOUNT, 0x00);
                 ucTemp[0] = ucTemp[1] = 0;
                 obdWriteCommand(pOBD, SSD1608_SET_RAMYCOUNT);
                 RawWriteData(pOBD, ucTemp, 2);
+#ifndef WIMPY_MCU
                 EPDWriteImage(pOBD, SSD1608_WRITE_RAM, pBuf1, 0, 0, pOBD->width, pOBD->height, 0);
+#endif
             }
             lTime = millis() - lTime; // record data xfer time
             pOBD->iDataTime = (int)lTime;
@@ -3723,7 +3738,9 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait, int bFast)
              obdWriteCommand(pOBD, 0x04);
              EPDWaitBusy(pOBD, 0);
           }
+#ifndef WIMPY_MCU
           EPDWriteImage2bpp(pOBD, 0x10, 0, 0, pOBD->width, pOBD->height);
+#endif
        }
        if (pOBD->type == EPD164_BWYR_168x168 || pOBD->type == EPD236_BWYR_168x296) {
              EPD_CMD2(pOBD, 0x68, 0x00);
@@ -3732,9 +3749,11 @@ static int EPDDumpBuffer(OBDISP *pOBD, int bRefresh, int bWait, int bFast)
     }
     if (pOBD->type == EPD266_BWYR_184x360 || pOBD->type == EPD29_BWYR_168x384 || pOBD->type == EPD29_BWYR_128x296) {
        EPDSendCMDSequence(pOBD, pOBD->pInitFull);
+#ifndef WIMPY_MCU
        if (pOBD->ucScreen) {
           EPDWriteImage2bpp(pOBD, 0x10, 0, 0, pOBD->width, pOBD->height);
        }
+#endif
        EPD_CMD2(pOBD, 0x12, 0x00); // display refresh
     }
     if (pOBD->type == EPD42R2_400x300) {

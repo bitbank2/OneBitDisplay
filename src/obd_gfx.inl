@@ -17,7 +17,7 @@
 // obd_gfx.inl - graphics functions
 //
 // forward declarations
-void InvertBytes(uint8_t *pData, uint8_t bLen);
+void obdInvertBytes(uint8_t *pData, uint8_t bLen);
 
 const uint8_t ucFont[]PROGMEM = {
   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x06,0x5f,0x5f,0x06,0x00,
@@ -985,7 +985,7 @@ void obdDrawTile(OBDISP *pOBD, const uint8_t *pTile, int x, int y, int iRotation
             } // for i
         } // for j
     }
-    if (bInvert) InvertBytes(ucTemp, 32);
+    if (bInvert) obdInvertBytes(ucTemp, 32);
     // Send the data to the display
     obdSetPosition(pOBD, x, y, bRender);
     obdWriteDataBlock(pOBD, ucTemp, 16, bRender); // top half
@@ -1087,7 +1087,7 @@ int iPitch, iSize;
 //
 // Invert font data
 //
-void InvertBytes(uint8_t *pData, uint8_t bLen)
+void obdInvertBytes(uint8_t *pData, uint8_t bLen)
 {
 uint8_t i;
    for (i=0; i<bLen; i++)
@@ -1095,7 +1095,7 @@ uint8_t i;
       *pData = ~(*pData);
       pData++;
    }
-} /* InvertBytes() */
+} /* obdInvertBytes() */
 
 //
 // Load a 1-bpp Windows bitmap
@@ -1400,7 +1400,7 @@ int iFontWidth;
       // we can't directly use the pointer to FLASH memory, so copy to a local buffer
       ucTemp[0] = 0; // first column is blank
       memcpy_P(&ucTemp[1], &s[iFontOff], iFontWidth-1);
-//      if (iColor == OBD_WHITE) InvertBytes(ucTemp, iFontWidth);
+//      if (iColor == OBD_WHITE) obdInvertBytes(ucTemp, iFontWidth);
       col = 0;
       for (tx=0; tx<(int)dx; tx++) {
          row = 0;
@@ -1510,7 +1510,7 @@ int iOldFG; // old fg color to make sure red works
              // we can't directly use the pointer to FLASH memory, so copy to a local buffer
              u8Temp[0] = 0; // first column is blank
              memcpy_P(&u8Temp[1], &ucFont[iFontOff], 7);
-             if (iColor == OBD_WHITE) InvertBytes(u8Temp, 8);
+             if (iColor == OBD_WHITE) obdInvertBytes(u8Temp, 8);
              iLen = 8 - iFontSkip;
              if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
                  iLen = pOBD->width - pOBD->iCursorX;
@@ -1549,19 +1549,19 @@ int iOldFG; // old fg color to make sure red works
               // we can't directly use the pointer to FLASH memory, so copy to a local buffer
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
               memcpy_P(u8Cache, s, 16);
-              if (iColor == OBD_WHITE) InvertBytes(u8Cache, 16);
+              if (iColor == OBD_WHITE) obdInvertBytes(u8Cache, 16);
               obdWriteDataBlock(pOBD, &u8Cache[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+8, bRender);
               memcpy_P(u8Cache, s+16, 16);
-              if (iColor == OBD_WHITE) InvertBytes(u8Cache, 16);
+              if (iColor == OBD_WHITE) obdInvertBytes(u8Cache, 16);
                  obdWriteDataBlock(pOBD, &u8Cache[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+16, bRender);
               memcpy_P(u8Cache, s+32, 16);
-              if (iColor == OBD_WHITE) InvertBytes(u8Cache, 16);
+              if (iColor == OBD_WHITE) obdInvertBytes(u8Cache, 16);
                  obdWriteDataBlock(pOBD, &u8Cache[iFontSkip], iLen, bRender); // write character pattern
               obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY+24, bRender);
               memcpy_P(u8Cache, s+48, 16);
-              if (iColor == OBD_WHITE) InvertBytes(u8Cache, 16);
+              if (iColor == OBD_WHITE) obdInvertBytes(u8Cache, 16);
                  obdWriteDataBlock(pOBD, &u8Cache[iFontSkip], iLen, bRender); // write character pattern
               pOBD->iCursorX += iLen;
               if (pOBD->iCursorX >= pOBD->width-15 && pOBD->wrap) // word wrap enabled?
@@ -1594,7 +1594,7 @@ int iOldFG; // old fg color to make sure red works
               u8Temp[0] = 0; // first column is blank
               memcpy_P(&u8Temp[1], s, 7);
               if (iColor == OBD_WHITE)
-                  InvertBytes(u8Temp, 8);
+                  obdInvertBytes(u8Temp, 8);
               // Stretch the font to double width + double height
               memset(&u8Temp[8], 0, 32); // write 32 new bytes
               for (tx=0; tx<8; tx++)
@@ -1654,7 +1654,7 @@ int iOldFG; // old fg color to make sure red works
               u8Temp[0] = 0; // first column is blank
               memcpy_P(&u8Temp[1], s, 6);
               if (iColor == OBD_WHITE)
-                  InvertBytes(u8Temp, 6);
+                  obdInvertBytes(u8Temp, 6);
               // Stretch the font to double width + double height
               memset(&u8Temp[6], 0, 24); // write 24 new bytes
               for (tx=0; tx<6; tx++)
@@ -1788,7 +1788,7 @@ int iOldFG; // old fg color to make sure red works
                // we can't directly use the pointer to FLASH memory, so copy to a local buffer
                u8Temp[0] = 0; // first column is blank
                memcpy_P(&u8Temp[1], &ucSmallFont[(int)c*5], 5);
-               if (iColor == OBD_WHITE) InvertBytes(u8Temp, 6);
+               if (iColor == OBD_WHITE) obdInvertBytes(u8Temp, 6);
                iLen = 6 - iFontSkip;
                if (pOBD->iCursorX + iLen > pOBD->width) // clip right edge
                    iLen = pOBD->width - pOBD->iCursorX;
