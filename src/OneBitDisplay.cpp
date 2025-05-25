@@ -398,6 +398,35 @@ char ucTemp[4];
 size_t ONE_BIT_DISPLAY::write(uint8_t c) {
 char szTemp[2]; // used to draw 1 character at a time to the C methods
 int w, h;
+static int iUnicodeCount = 0;
+static uint8_t u8Unicode0, u8Unicode1;
+
+    if (iUnicodeCount == 0) {
+        if (c >= 0x80) { // start of a multi-byte character
+            iUnicodeCount++;
+            u8Unicode0 = c;
+            return 1;
+        }
+    } else { // middle/end of a multi-byte character
+        uint16_t u16Code;
+        if (u8Unicode0 < 0xe0) { // 2 byte char, 0-0x7ff
+            u16Code = (u8Unicode0 & 0x3f) << 6;
+            u16Code += (c & 0x3f);
+            c = obdUnicodeTo1252(u16Code);
+            iUnicodeCount = 0;
+        } else { // 3 byte character 0x800 and above
+            if (iUnicodeCount == 1) {
+                iUnicodeCount++; // save for next byte to arrive
+                u8Unicode1 = c;
+                return 1;
+            }
+            u16Code = (u8Unicode0 & 0x3f) << 12;
+            u16Code += (u8Unicode1 & 0x3f) << 6;
+            u16Code += (c & 0x3f);
+            c = obdUnicodeTo1252(u16Code);
+            iUnicodeCount = 0;
+        }
+    }
 
   szTemp[0] = c; szTemp[1] = 0;
    if (_obd.pFreeFont == NULL) { // use built-in fonts
