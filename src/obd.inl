@@ -2425,7 +2425,7 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
   if (iType == LCD_ST7302 || iType == LCD_ST7305)
   {
- //     uint8_t *s = (uint8_t *)st7302_hpm_init;
+//     uint8_t *s = (uint8_t *)st7302_hpm_init;
       const uint8_t *s = (iType == LCD_ST7302) ? (uint8_t *)st7302_wenting : (uint8_t *)st7305_init; //st7302_lpm_init;
     iLen = 1;
 
@@ -3853,19 +3853,20 @@ const uint8_t u8Expand[16] = {
 };
 
 // Shift out the image in pairs of lines
-    obdST7302SetPos(pOBD, 0, 0);
     iPitch = pOBD->width;
     switch (pOBD->iOrientation) {
         case 0:
         case 180:
+            h = pOBD->height;
+            if (pOBD->type == LCD_ST7302) h += 8;
             for (x = 0; x < pOBD->width; x += 2) { // a pair of columns at a time
                 d = ucPixels;
                 if (pOBD->iOrientation == 180) {
                     uint8_t u8_0, u8_1;
-                    s = &pBuffer[pOBD->width-2-x + ((pOBD->height-1)>>3)*iPitch];
-                    for (y = pOBD->height-8; y >= 0; y-=8) {
-                        u8_0 = ucMirror[s[0]]; // source image bits are mirrored
-                        u8_1 = ucMirror[s[1]];
+                    s = &pBuffer[x + ((h-16)>>3)*iPitch];
+                    for (y = 0; y < h; y+=8) {
+                        u8_0 = ucMirror[s[1]]; // source image bits are mirrored
+                        u8_1 = ucMirror[s[0]];
                         uc1 = u8Expand[u8_0 & 0xf];
                         uc1 |= (u8Expand[u8_1 & 0xf] >> 1);
                         *d++ = uc1;
@@ -3876,8 +3877,6 @@ const uint8_t u8Expand[16] = {
                     } // for y
                 } else { // rotation = 0
                     s = &pBuffer[x];
-                    h = pOBD->height;
-                    if (pOBD->type == LCD_ST7302) h += 3;
                     for (y=0; y < h; y+=8) {
                         uc1 = u8Expand[s[0] & 0xf];
                         uc1 |= (u8Expand[s[1] & 0xf] >> 1);
@@ -3888,6 +3887,7 @@ const uint8_t u8Expand[16] = {
                         s += iPitch;
                     } // for y
                 } // flipped
+                obdST7302SetPos(pOBD, (pOBD->flip)? 248-x:x,0);
                 RawWriteData(pOBD, ucPixels, (int)(d - ucPixels));
             } // for x
             break;
@@ -3910,6 +3910,7 @@ const uint8_t u8Expand[16] = {
                             count = 0;
                         }
                     } // for x
+                    obdST7302SetPos(pOBD, pOBD->height - 2 - y, 0);
                     RawWriteData(pOBD, ucPixels, (int)(d - ucPixels));
                 } // for y
             } else { // 90
@@ -3929,6 +3930,7 @@ const uint8_t u8Expand[16] = {
                             count = 0;
                         }
                     } // for x
+                    obdST7302SetPos(pOBD, y, 0);
                     RawWriteData(pOBD, ucPixels, (int)(d - ucPixels));
                 } // for y
             } // flipped
