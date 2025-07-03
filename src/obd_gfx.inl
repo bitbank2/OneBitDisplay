@@ -16,6 +16,11 @@
 //
 // obd_gfx.inl - graphics functions
 //
+// For decompressing compressed fonts and images
+#include "Group5.h"
+#include "g5dec.inl"
+static G5DECIMAGE g5dec;
+
 // forward declarations
 void obdInvertBytes(uint8_t *pData, uint8_t bLen);
 
@@ -701,10 +706,10 @@ int i;
 // Set the current custom font pointers for playing back
 // bytewise commands
 //
-void obdSetCustomFont(OBDISP *pOBD, GFXfont *pFont, uint8_t ucFont)
+void obdSetCustomFont(OBDISP *pOBD, void *pFont, uint8_t ucFont)
 {
     if (pOBD != NULL && pFont != NULL && ucFont >= FONT_CUSTOM0 && ucFont <= FONT_CUSTOM2) {
-        pOBD->pFont[ucFont-FONT_CUSTOM0] = (void *)pFont;
+        pOBD->pFont[ucFont-FONT_CUSTOM0] = pFont;
     }
 } /* obdSetCustomFont() */
 //
@@ -743,7 +748,7 @@ uint8_t ucTemp[64];
               s += iTextLen;
                if (ucFont >= FONT_CUSTOM0) { // up to 3 custom fonts
                    if (pOBD->pFont[ucFont-FONT_CUSTOM0] != NULL) {
-                       obdWriteStringCustom(pOBD, (GFXfont *)pOBD->pFont[ucFont-FONT_CUSTOM0], x1, y1, (char *)ucTemp, ucColor);
+                       obdWriteStringCustom(pOBD, pOBD->pFont[ucFont-FONT_CUSTOM0], x1, y1, (char *)ucTemp, ucColor);
                    }
                } else {
                    obdWriteString(pOBD, 0, x1, y1, (char *)ucTemp, ucFont, ucColor, bRender);
@@ -1009,34 +1014,6 @@ int iPitch, iSize;
     if (i < 0 || i > iSize-1) { // off the screen
         return OBD_ERROR_BAD_PARAMETER;
     }
-    // Special case for 4-color e-ink
-    if (pOBD->iFlags & OBD_4COLOR) {
-        uint8_t ucMask = (1 << (y & 7));
-        ucColor ^= 1; // invert low bit
-        if (ucColor & 1)
-           pOBD->ucScreen[i] |= ucMask;
-        else
-           pOBD->ucScreen[i] &= ~ucMask;
-        if (ucColor & 2)
-            pOBD->ucScreen[iSize + i] |= ucMask;
-        else
-            pOBD->ucScreen[iSize + i] &= ~ucMask;
-        return OBD_SUCCESS;
-    }
-    // special case for 3-color e-ink
-    if (pOBD->iFlags & OBD_3COLOR) {
-        if (ucColor >= OBD_YELLOW) { // yellow/red has priority
-            pOBD->ucScreen[iSize + i] |= (1 << (y & 7));
-        } else {
-            pOBD->ucScreen[iSize + i] &= ~(1 << (y & 7)); // clear red plane bit
-            if (ucColor == OBD_WHITE) {
-                pOBD->ucScreen[i] &= ~(1 << (y & 7));
-            } else { // must be black
-                pOBD->ucScreen[i] |= (1 << (y & 7));
-            }
-        }
-        return OBD_SUCCESS;
-    }
   obdSetPosition(pOBD, x, y, bRender);
 
   if (pOBD->ucScreen)
@@ -1146,15 +1123,8 @@ uint8_t bFlipped = 0;
     iOffBits += ((cy-1) * iPitch); // start from bottom
     iPitch = -iPitch;
   }
-    ucFill = (iBG == OBD_WHITE && pOBD->type < EPD42_400x300) ? iBG : 0xff;
-    if (!pOBD->ucScreen || iFG >= OBD_YELLOW) { // this will override the B/W plane, so invert things
-        ucFill = 0x00;
-        x = iFG;
-        iFG = iBG;
-        iBG = x; // swap colors
-    }
-  for (y=0; y<cy; y++)
-  {
+    ucFill = iBG;
+  for (y=0; y<cy; y++) {
      if (!pOBD->ucScreen)
      {
          dst_mask = (1 << (y & 7));
@@ -1215,134 +1185,6 @@ uint8_t bFlipped = 0;
   } // for y
   return OBD_SUCCESS;
 } /* obdLoadBMP() */
-//
-// Load a 4-bpp Windows bitmap for a 3-color bitmap
-// Pass the pointer to the beginning of the BMP file
-// First pass version assumes a full screen bitmap
-//
-int obdLoadBMP3(OBDISP *pOBD, const uint8_t *pBMP, int dx, int dy)
-{
-int16_t i16, cx, cy, bpp;
-int x, y, iOffBits; // offset to bitmap data
-int iPitch, iDestPitch;
-int iRedOff, iColors, iPalOff;
-uint8_t uc, b, *s, *d;
-uint8_t dst_mask;
-uint8_t bFlipped = 0;
-uint8_t ucColorMap[16];
-    
-    if (!(pOBD->iFlags & OBD_3COLOR) || pOBD->ucScreen == 0)
-        return OBD_ERROR_NOT_SUPPORTED; // if not 3-color EPD or no back buffer, bye-byte
-    iDestPitch = pOBD->width;
-    iRedOff = ((pOBD->height+7)>>3) * iDestPitch;
-    // Need to avoid pgm_read_word because it can cause an
-    // unaligned address exception on the RP2040 for odd addresses
-    i16 = pgm_read_byte(pBMP);
-    i16 += (pgm_read_byte(pBMP+1)<<8);
-    if (i16 != 0x4d42) // must start with 'BM'
-        return OBD_ERROR_BAD_DATA; // not a BMP file
-    cx = pgm_read_byte(&pBMP[18]);
-    cx += (pgm_read_byte(&pBMP[19]) << 8);
-    if (cx + dx > pOBD->width) // must fit on the display
-        return OBD_ERROR_BAD_PARAMETER;
-    cy = pgm_read_byte(&pBMP[22]);
-    cy += (pgm_read_byte(&pBMP[23])<<8);
-    if (cy < 0)
-        cy = -cy;
-    else
-        bFlipped = 1;
-    if (cy + dy > pOBD->height) // must fit on the display
-        return OBD_ERROR_BAD_PARAMETER;
-    if (pgm_read_byte(&pBMP[30]) != 0) // compression must be NONE
-        return OBD_ERROR_BAD_DATA;
-    bpp = pgm_read_byte(&pBMP[28]);
-    if (bpp != 4) // must be 4 bits per pixel
-        return OBD_ERROR_BAD_DATA;
-    iOffBits = pgm_read_byte(&pBMP[10]);
-    iOffBits += (pgm_read_byte(&pBMP[11])<<8);
-    iColors = pgm_read_byte(&pBMP[46]); // colors used BMP field
-    if (iColors == 0 || iColors > (1<<bpp))
-        iColors = (1 << bpp); // full palette
-    iPalOff = iOffBits - (4 * iColors); // start of color palette
-    iPitch = (((cx+1)>>1) + 3) & 0xfffc; // must be DWORD aligned
-    if (bFlipped)
-    {
-        iOffBits += ((cy-1) * iPitch); // start from bottom
-        iPitch = -iPitch;
-    }
-// Map the colors to white/black/red with a simple quantization. Convert colors to G3R3B2 and find the closest value (red in the middle)
-    // white = 0xff, red = 0x1c, black = 0x00
-    for (x=0; x<iColors; x++) {
-        uint8_t r, g, b, uc;
-        b = pgm_read_byte(&pBMP[iPalOff+(x*4)]);
-        g = pgm_read_byte(&pBMP[iPalOff+1+(x*4)]);
-        r = pgm_read_byte(&pBMP[iPalOff+2+(x*4)]);
-        uc = (b >> 6) | ((r >> 5) << 2) | ((g >> 5) << 5);
-        if (uc >= 0x1c) { // check for red/white
-            ucColorMap[x] = ((0xff - uc) < (uc - 0x1c)) ? OBD_WHITE : OBD_RED;
-        } else {
-            ucColorMap[x] = ((0x1c - uc) < uc) ? OBD_RED : OBD_BLACK;
-        }
-     }
-  for (y=0; y<cy; y++)
-  {
-     dst_mask = 1 << ((y+dy) & 7);
-      d = &pOBD->ucScreen[(((y+dy)>>3)*iDestPitch)+dx];
-     s = (uint8_t *)&pBMP[iOffBits+(y*iPitch)];
-     for (x=0; x<cx; x+=2) // work with pixel pairs
-     {
-         b = pgm_read_byte(s++);
-         d[x] &= ~dst_mask; // clear b/w & red planes to start as white
-         d[x+1] &= ~dst_mask;
-         d[x+iRedOff] &= ~dst_mask;
-         d[x+1+iRedOff] &= ~dst_mask;
-         uc = ucColorMap[b >> 4]; // left pixel
-         if (uc == OBD_BLACK)
-             d[x] |= dst_mask;
-         else if (uc == OBD_RED)
-             d[x+iRedOff] |= dst_mask; // we made it white already
-         uc = ucColorMap[b & 0xf]; // right pixel
-         if (uc == OBD_BLACK)
-             d[x+1] |= dst_mask;
-         else if (uc == OBD_RED)
-             d[x+1+iRedOff] |= dst_mask;
-     } // for x
-  } // for y
-  return OBD_SUCCESS;
-} /* obdLoadBMP3() */
-//
-// Draw 1 or 2 planes of raw image into a specific spot
-// in e-paper memory
-//
-int obdDrawEPDGFX(OBDISP *pOBD, int xdest, int ydest, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1)
-{
-    int y, iPitch = ((cx + 7)/8);
-    uint8_t *s;
-    
-    if (xdest < 0 || xdest >= pOBD->native_width || xdest+cx > pOBD->native_width || ydest < 0 || ydest > pOBD->native_height || ydest+cy > pOBD->native_height || pPlane0 == NULL)
-        return OBD_ERROR_BAD_PARAMETER; // invalid
-    // Write plane 0
-    pOBD->iFG = OBD_BLACK; // make sure we write to plane 0
-    EPDSetPosition(pOBD, xdest, ydest, cx, cy);
-    s = pPlane0;
-    for (y=0; y<cy; y++)
-    {
-        RawWriteData(pOBD, s, iPitch);
-        s += iPitch;
-    } // for y
-    if (pPlane1) {
-        pOBD->iFG = OBD_RED; // write to plane 1
-        EPDSetPosition(pOBD, xdest, ydest, cx, cy);
-        s = pPlane1;
-        for (y=0; y<cy; y++)
-        {
-            RawWriteData(pOBD, s, iPitch);
-            s += iPitch;
-        } // for y
-    }
-    return OBD_SUCCESS;
-
-} /* obdDrawEPDGFX() */
 //
 // Set the current cursor position
 // The column represents the pixel column (0-127)
@@ -1479,10 +1321,6 @@ int iOldFG; // old fg color to make sure red works
   }
 
     // e-paper color is inverted compared to OLED/LCD. If we're in bufferless mode, we'll need to
-    // invert the requested color
-    if (pOBD->type >= EPD42_400x300 && !pOBD->ucScreen) {
-        iColor = 1 - iColor; // invert the color
-    }
     if (x == -1 || y == -1) // use the cursor position
     {
         x = pOBD->iCursorX; y = pOBD->iCursorY;
@@ -1494,9 +1332,6 @@ int iOldFG; // old fg color to make sure red works
 
     obdSetPosition(pOBD, pOBD->iCursorX, pOBD->iCursorY, bRender);
     iOldFG = pOBD->iFG; // save old fg color
-    if (iColor >= OBD_YELLOW) {
-       pOBD->iFG = iColor;
-    }
     if (iSize == FONT_8x8) // 8x8 font
     {
        i = 0;
@@ -1941,24 +1776,25 @@ uint16_t u16CP; // 16-bit codepoint encoded by the multi-byte sequence
 //
 // Get the width of text in a custom font
 //
-void obdGetStringBox(GFXfont *pFont, char *szMsg, int *width, int *top, int *bottom)
+void obdGetStringBox(void *pFont, char *szMsg, int *width, int *top, int *bottom)
 {
 int cx = 0;
 unsigned int c, i = 0;
-GFXglyph *pGlyph;
+BB_FONT *pBBF = (BB_FONT*)pFont;
+BB_GLYPH *pGlyph;
 int miny, maxy;
 
    if (width == NULL || top == NULL || bottom == NULL || pFont == NULL || szMsg == NULL) return; // bad pointers
    miny = 100; maxy = 0;
    while (szMsg[i]) {
       c = szMsg[i++];
-      if (c < pFont->first || c > pFont->last) // undefined character
+      if (c < pgm_read_byte(&pBBF->first) || c > pgm_read_byte(&pBBF->last)) // undefined character
          continue; // skip it
-      c -= pFont->first; // first char of font defined
-      pGlyph = &pFont->glyph[c];
-      cx += pGlyph->xAdvance;
-      if (pGlyph->yOffset < miny) miny = pGlyph->yOffset;
-      if (pGlyph->height+pGlyph->yOffset > maxy) maxy = pGlyph->height+pGlyph->yOffset;
+      c -= pgm_read_byte(&pBBF->first); // first char of font defined
+      pGlyph = &pBBF->glyphs[c];
+      cx += pgm_read_word(&pGlyph->xAdvance);
+      if ((int16_t)pgm_read_word(&pGlyph->yOffset) < miny) miny = pgm_read_word(&pGlyph->yOffset);
+      if (pgm_read_word(&pGlyph->height)+(int16_t)pgm_read_word(&pGlyph->yOffset) > maxy) maxy = pgm_read_word(&pGlyph->height)+(int16_t)pgm_read_word(&pGlyph->yOffset);
    }
    *width = cx;
    *top = miny;
@@ -1968,16 +1804,18 @@ int miny, maxy;
 // Draw a string of characters in a custom font
 // A back buffer must be defined
 //
-int obdWriteStringCustom(OBDISP *pOBD, GFXfont *pFont, int x, int y, char *szMsg, uint8_t ucColor)
+int obdWriteStringCustom(OBDISP *pOBD, void *pFont, int x, int y, char *szMsg, uint8_t ucColor)
 {
-int i, end_y, dx, dy, tx, ty, iBitOff;
+int i, end_y, dx, dy, tx, ty, rc;
 unsigned int c;
 uint8_t *s, *d, bits, ucFill=0, ucMask, uc;
-GFXfont font;
-GFXglyph glyph, *pGlyph;
-int iPitch, iRedOffset = 0;
+BB_FONT *pBBF = (BB_FONT *)pFont;
+BB_GLYPH *pGlyph;
+int iPitch, w, h;
+uint8_t *pBits;
 uint8_t szExtMsg[80];
-    
+uint8_t ucTemp[64];
+
     if (pOBD == NULL || pFont == NULL)
         return OBD_ERROR_BAD_PARAMETER;
     if (szMsg[1] == 0 && szMsg[0] >= 0x80) { // single byte means we're coming from the Arduino write() method with pre-converted extended ASCII
@@ -1985,22 +1823,10 @@ uint8_t szExtMsg[80];
     } else {
         obdUnicodeString(szMsg, szExtMsg); // convert to extended ASCII
     }
-    if (pOBD->ucScreen == NULL && pOBD->type >= EPD42_400x300) {
-        // EPD direct draw mode; colors are inverted
-        if (ucColor == OBD_BLACK)
-            ucColor = 1-ucColor;
-        ucFill = 0xff;
-    }
     if (x == -1)
         x = pOBD->iCursorX;
     if (y == -1)
         y = pOBD->iCursorY;
-    if (ucColor >= OBD_YELLOW && pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
-        // use the second half of the image buffer
-        iRedOffset = pOBD->width * ((pOBD->height+7)/8);
-        ucFill = 0x00;
-        ucColor = OBD_BLACK;
-    }
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
       uint8_t *d = pOBD->ucScreen;
       dx = (int)strlen((const char *)szExtMsg);
@@ -2019,46 +1845,50 @@ uint8_t szExtMsg[80];
       return OBD_SUCCESS; // done
   }
    iPitch = pOBD->width;
-   // in case of running on Harvard architecture, get copy of data from FLASH
-   memcpy_P(&font, pFont, sizeof(font));
-   pGlyph = &glyph;
 
    i = 0;
-   while (szExtMsg[i] && x < pOBD->width)
-   {
+    // Point to the start of the compressed data
+    pBits = (uint8_t *)pFont;
+    pBits += sizeof(BB_FONT);
+    pBits += (pgm_read_byte(&pBBF->last) - pgm_read_byte(&pBBF->first) + 1) * sizeof(BB_GLYPH);
+
+   while (szExtMsg[i] && x < pOBD->width) {
       c = szExtMsg[i++];
-      if (c < font.first || c > font.last) // undefined character
+      if (c < pgm_read_byte(&pBBF->first) || c > pgm_read_byte(&pBBF->last)) // undefined character
          continue; // skip it
-      c -= font.first; // first char of font defined
-      memcpy_P(&glyph, &font.glyph[c], sizeof(glyph));
-      dx = x + pGlyph->xOffset; // offset from character UL to start drawing
-      dy = y + pGlyph->yOffset;
-      s = font.bitmap + pGlyph->bitmapOffset; // start of bitmap data
+      c -= pgm_read_byte(&pBBF->first); // first char of font defined
+      pGlyph = &pBBF->glyphs[c];
+      dx = x + (int16_t)pgm_read_word(&pGlyph->xOffset); // offset from character UL to start drawing
+      dy = y + (int16_t)pgm_read_word(&pGlyph->yOffset);
+      s = pBits + pgm_read_word(&pGlyph->bitmapOffset); // start of bitmap data
       // Bitmap drawing loop. Image is MSB first and each pixel is packed next
       // to the next (continuing on to the next character line)
-      iBitOff = 0; // bitmap offset (in bits)
-      bits = uc = 0; // bits left in this font byte
-      end_y = dy + pGlyph->height;
-      if (dy < 0) { // skip these lines
-          iBitOff += (pGlyph->width * (-dy));
-          dy = 0;
-      }
+      w = pgm_read_word(&pGlyph->width);
+      h = pgm_read_word(&pGlyph->height);
+      end_y = dy + h;
+       ty = (pgm_read_word(&pGlyph[1].bitmapOffset) - (intptr_t)(s - pBits)); // compressed size
+        if (ty < 0 || ty > 4096) ty = 4096; // DEBUG
+       rc = g5_decode_init(&g5dec, w, h, s, ty);
+       if (rc != G5_SUCCESS) {
+            return -1; // corrupt data?
+       }
        if (!pOBD->ucScreen) {
            memset(u8Cache, ucFill, sizeof(u8Cache));
        }
       for (ty=dy; ty<end_y && ty < pOBD->height; ty++) {
           ucMask = 1<<(ty & 7); // destination bit number for this line
           if (pOBD->ucScreen) {
-              d = &pOBD->ucScreen[iRedOffset + (ty >> 3) * iPitch + dx]; // internal buffer dest
+              d = &pOBD->ucScreen[(ty >> 3) * iPitch + dx]; // internal buffer dest
           } else {
               d = u8Cache; // no ram; buffer 8 lines at a time
           }
-         for (tx=0; tx<pGlyph->width; tx++) {
+         g5_decode_line(&g5dec, ucTemp);
+         bits = 0; // bits left in this font byte
+         s = ucTemp;
+         for (tx=0; tx<w; tx++) {
             if (bits == 0) { // need to read more font data
-               uc = pgm_read_byte(&s[iBitOff>>3]); // get more font bitmap data
-               bits = 8 - (iBitOff & 7); // we might not be on a byte boundary
-               iBitOff += bits; // because of a clipped line
-               uc <<= (8-bits);
+               uc = *s++; // get more font bitmap data
+               bits = 8;
             } // if we ran out of bits
             if ((dx+tx) < pOBD->width) { // foreground pixel
                 if (uc & 0x80) {
@@ -2082,7 +1912,7 @@ uint8_t szExtMsg[80];
               memset(u8Cache, ucFill, sizeof(u8Cache)); // NB: assume no DMA
           }
       } // for y
-      x += pGlyph->xAdvance; // width of this character
+      x += pgm_read_word(&pGlyph->xAdvance); // width of this character
    } // while drawing characters
     pOBD->iCursorX = x;
     pOBD->iCursorY = y;
@@ -2135,84 +1965,52 @@ uint8_t iCols, iLines;
           int iSize = pOBD->width * ((pOBD->height+7)/8);
           if (ucData == OBD_WHITE) {
               memset(pOBD->ucScreen, ucData, iSize);
-              if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR))
-                  memset(&pOBD->ucScreen[iSize], ucData, iSize);
           } else if (ucData == OBD_BLACK) {
               memset(pOBD->ucScreen, 0xff, iSize);
-              if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR))
-                  memset(&pOBD->ucScreen[iSize], 0, iSize);
-          } else if (ucData == OBD_RED) {
-              memset(pOBD->ucScreen, 0, iSize);
-              if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR))
-                  memset(&pOBD->ucScreen[iSize], 0xff, iSize);
-          } else { // write pattern
-              if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) iSize *= 2;
-              memset(pOBD->ucScreen, ucData, iSize);
           }
+          return;
       }
-#ifndef MEMORY_ONLY
-      else if (pOBD->type >= EPD42_400x300) {
-          uint8_t ucPattern1 = 0xff, ucPattern2 = 0xff; // assume white
-          uint8_t ucRAM1, ucRAM2;
-          int iOldRotation;
-          if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
-              ucPattern2 = 0x00; // red plane is not inverted
-              if (ucData == OBD_BLACK)
-                  ucPattern1 = 0x00;
-              else if (ucData == OBD_RED)
-                  ucPattern2 = 0xff;
-          } else { // black/white
-              if (ucData == OBD_BLACK)
-                  ucPattern1 = ucPattern2 = 0x00;
-          }
-          ucRAM1 = (pOBD->chip_type == OBD_CHIP_UC8151) ? (uint8_t)UC8151_DTM1 : (uint8_t)SSD1608_WRITE_RAM;
-          ucRAM2 = (pOBD->chip_type == OBD_CHIP_UC8151) ? (uint8_t)UC8151_DTM2 : (uint8_t)SSD1608_WRITE_ALTRAM;
-          // Force 0 rotation because bufferless operation
-          // will miss pixel rows not a multiple of 8
-          // when rotated 90 (e.g. 122x250 resolution)
-          iOldRotation = pOBD->iOrientation;
-          pOBD->iOrientation = 0;
-          EPDSetPosition(pOBD, 0,0,pOBD->native_width, pOBD->native_height);
-          if (pOBD->type == EPD579_792x272) {
-              EPDFill(pOBD, ucRAM1, ucPattern1);
-              EPDFill(pOBD, ucRAM2, ~ucPattern1);
-              EPDFill(pOBD, ucRAM1 | 0x80, ucPattern1);
-              EPDFill(pOBD, ucRAM2 | 0x80, ~ucPattern1);
-          } else if (pOBD->type == EPD74R_640x384) {
-              if (ucData == OBD_BLACK)
-                  ucPattern1 = 0;
-              else if (ucData == OBD_WHITE)
-                  ucPattern1 = 0x33;
-              else ucPattern1 = 0x44; // red
-              EPDFill(pOBD, 0x10, ucPattern1);
-          } else {
-              EPDFill(pOBD, ucRAM1, ucPattern1);
-              EPDFill(pOBD, ucRAM2, ucPattern2);
-          }
-          pOBD->iOrientation = iOldRotation;
+      if (pOBD->iOrientation == 0 || pOBD->iOrientation == 180) {
+          iLines = (pOBD->height+7) >> 3;
+          iCols = pOBD->width;
+      } else { // rotated
+          iLines = (pOBD->width+7) >> 3;
+          iCols = pOBD->height;
       }
-#endif // !MEMORY_ONLY
-     return;
+      memset(u8Cache, ucData, iCols);
+      
+      if (bRender) { // write to the physical display if render = true
+          for (y=0; y<iLines; y++)
+          {
+              obdSetPosition(pOBD, 0,y*8, bRender); // set to (0,Y)
+              obdWriteDataBlock(pOBD, u8Cache, iCols, bRender);
+          } // for y
+      }
+      if (pOBD->ucScreen) {
+          memset(pOBD->ucScreen, ucData, (pOBD->width * pOBD->height)/8);
+      }
+      return;
   }
-  if (pOBD->iOrientation == 0 || pOBD->iOrientation == 180) {
-    iLines = (pOBD->height+7) >> 3;
-    iCols = pOBD->width;
-  } else { // rotated
-    iLines = (pOBD->width+7) >> 3;
-    iCols = pOBD->height;
-  }
-  memset(u8Cache, ucData, iCols);
- 
-  if (bRender) { // write to the physical display if render = true
-    for (y=0; y<iLines; y++)
-    {
-      obdSetPosition(pOBD, 0,y*8, bRender); // set to (0,Y)
-      obdWriteDataBlock(pOBD, u8Cache, iCols, bRender);
-    } // for y
-  }
-    if (pOBD->ucScreen) {
-        memset(pOBD->ucScreen, ucData, (pOBD->width * pOBD->height)/8);
+    if (pOBD->iOrientation == 0 || pOBD->iOrientation == 180) {
+      iLines = (pOBD->height+7) >> 3;
+      iCols = pOBD->width;
+    } else { // rotated
+      iLines = (pOBD->width+7) >> 3;
+      iCols = pOBD->height;
     }
+    if (ucData == OBD_BLACK) ucData = 0xff;
+    memset(u8Cache, ucData, iCols);
+
+    if (bRender) { // write to the physical display if render = true
+      for (y=0; y<iLines; y++)
+      {
+        obdSetPosition(pOBD, 0,y*8, bRender); // set to (0,Y)
+        obdWriteDataBlock(pOBD, u8Cache, iCols, bRender);
+      } // for y
+    }
+      if (pOBD->ucScreen) {
+          memset(pOBD->ucScreen, ucData, (pOBD->width * pOBD->height)/8);
+      }
 } /* obdFill() */
 
 //
@@ -2248,7 +2046,6 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
   int xinc, yinc;
   int y, x;
   int iPitch = pOBD->width;
-  int iRedOffset = 0;
 
   if (pOBD == NULL) return;
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
@@ -2262,19 +2059,8 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
 
   if (x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 || x1 >= pOBD->width || x2 >= pOBD->width || y1 >= pOBD->height || y2 >= pOBD->height)
      return;
-  if (ucColor >= OBD_YELLOW && pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
-        // use the second half of the image buffer
-        iRedOffset = pOBD->width * ((pOBD->height+7)/8);
-    }
     if (!pOBD->ucScreen) { // no back buffer, draw in local buffer
         bRender = 1; // make sure it gets transmitted
-        if (pOBD->type >= EPD42_400x300) {
-            // no back buffer on EPD means we may need to invert the color
-            if (ucColor >= OBD_YELLOW)
-                ucColor = OBD_BLACK;
-            else
-                ucColor = 1-ucColor; // swap black/white
-        }
         if (ucColor == OBD_BLACK) // fill with opposite color
             ucFill = 0;
         else
@@ -2303,7 +2089,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
       yinc = -1;
     }
       if (pOBD->ucScreen) {
-          p = pStart = &pOBD->ucScreen[iRedOffset + x1 + ((y >> 3) * iPitch)]; // point to current spot in back buffer
+          p = pStart = &pOBD->ucScreen[x1 + ((y >> 3) * iPitch)]; // point to current spot in back buffer
       } else { // no back buffer, draw directly to the display RAM
           p = pStart = u8Cache;
       }
@@ -2358,7 +2144,7 @@ void obdDrawLine(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor, 
       y2 = temp;
     }
       if (pOBD->ucScreen) {
-          p = &pOBD->ucScreen[iRedOffset + x1 + ((y1 >> 3) * iPitch)]; // point to current spot in back buffer
+          p = &pOBD->ucScreen[x1 + ((y1 >> 3) * iPitch)]; // point to current spot in back buffer
           bOld = bNew = p[0]; // current pixels
       } else {
           p = u8Cache;
@@ -2437,19 +2223,14 @@ static void DrawScaledPixel(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_
 {
     uint8_t *d, ucMask;
     int iPitch;
-    int iRedOffset = 0;
 
     iPitch = pOBD->width;
-    if (ucColor >= OBD_YELLOW && pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
-          // use the second half of the image buffer
-          iRedOffset = pOBD->width * ((pOBD->height+7)/8);
-      }
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
     x += iCX; y += iCY;
     if (x < 0 || x >= pOBD->width || y < 0 || y >= pOBD->height)
         return; // off the screen
-    d = &pOBD->ucScreen[iRedOffset + ((y >> 3)*iPitch) + x];
+    d = &pOBD->ucScreen[((y >> 3)*iPitch) + x];
     ucMask = 1 << (y & 7);
     if (ucColor)
         *d |= ucMask;
@@ -2464,12 +2245,7 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
     int iLen, x2;
     uint8_t *d, ucMask;
     int iPitch;
-    int iRedOffset = 0;
 
-    if (ucColor >= OBD_YELLOW && pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
-          // use the second half of the image buffer
-          iRedOffset = pOBD->width * ((pOBD->height+7)/8);
-      }
     iPitch = pOBD->width;
     if (iXFrac != 0x10000) x = ((x * iXFrac) >> 16);
     if (iYFrac != 0x10000) y = ((y * iYFrac) >> 16);
@@ -2481,7 +2257,7 @@ static void DrawScaledLine(OBDISP *pOBD, int iCX, int iCY, int x, int y, int32_t
     if (x < 0) x = 0;
     if (x2 >= pOBD->width) x2 = pOBD->width-1;
     iLen = x2 - x + 1; // new length
-    d = &pOBD->ucScreen[iRedOffset + ((y >> 3)*iPitch) + x];
+    d = &pOBD->ucScreen[((y >> 3)*iPitch) + x];
     ucMask = 1 << (y & 7);
     if (ucColor) // white
     {
@@ -2579,16 +2355,6 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
     uint8_t *d, ucMask, ucMask2;
     int tmp, iOff;
     int iPitch;
-    int iRedOffset = 0;
-
-    if (ucColor >= OBD_YELLOW) {
-        if (pOBD->iFlags & (OBD_3COLOR | OBD_4COLOR)) {
-          // use the second half of the image buffer
-          iRedOffset = pOBD->width * ((pOBD->height+7)/8);
-        } else { // force red to black if not present
-            ucColor = OBD_BLACK;
-        }
-    }
 
     if (pOBD == NULL || pOBD->ucScreen == NULL)
         return; // only works with a back buffer
@@ -2625,7 +2391,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
         ucMask = 0xff << (y1 & 7);
         if (iMiddle == 0) // top and bottom lines are in the same row
             ucMask &= (0xff >> (7-(y2 & 7)));
-        d = &pOBD->ucScreen[iRedOffset + (y1 >> 3)*iPitch + x1];
+        d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
         // Draw top
         for (x = x1; x <= x2; x++)
         {
@@ -2640,7 +2406,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
             ucMask = (ucColor) ? 0xff : 0x00;
             for (y=1; y<iMiddle; y++)
             {
-                d = &pOBD->ucScreen[iRedOffset + (y1 >> 3)*iPitch + x1 + (y*iPitch)];
+                d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1 + (y*iPitch)];
                 for (x = x1; x <= x2; x++)
                     *d++ = ucMask;
             }
@@ -2648,7 +2414,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
         if (iMiddle >= 1) // need to draw bottom part
         {
             ucMask = 0xff >> (7-(y2 & 7));
-            d = &pOBD->ucScreen[iRedOffset + (y2 >> 3)*iPitch + x1];
+            d = &pOBD->ucScreen[(y2 >> 3)*iPitch + x1];
             for (x = x1; x <= x2; x++)
             {
                 if (ucColor)
@@ -2661,7 +2427,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
     else // outline
     {
       // see if top and bottom lines are within the same byte rows
-        d = &pOBD->ucScreen[iRedOffset + (y1 >> 3)*iPitch + x1];
+        d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
         if ((y1 >> 3) == (y2 >> 3))
         {
             ucMask2 = 0xff << (y1 & 7);  // L/R end masks
@@ -2712,7 +2478,7 @@ void obdRectangle(OBDISP *pOBD, int x1, int y1, int x2, int y2, uint8_t ucColor,
             ucMask = 1 << (y1 & 7);
             ucMask2 = 1 << (y2 & 7);
             x1++;
-            d = &pOBD->ucScreen[iRedOffset + (y1 >> 3)*iPitch + x1];
+            d = &pOBD->ucScreen[(y1 >> 3)*iPitch + x1];
             iOff = (y2 >> 3) - (y1 >> 3);
             iOff *= iPitch;
             for (; x1 < x2; x1++)

@@ -20,7 +20,7 @@
 #if defined (__AVR_ATtiny85__) || defined (ARDUINO_ARCH_MCS51)
 #define WIMPY_MCU
 #endif
-
+#include "Group5.h"
 #ifdef _LINUX_
 #include <stdint.h>
 #include <stdlib.h>
@@ -65,11 +65,6 @@ BBI2C * ONE_BIT_DISPLAY::getBB()
 {
     return &_obd.bbi2c;
 } /* getBB() */
-
-uint32_t ONE_BIT_DISPLAY::getRefreshTime(void)
-{
-    return _obd.iTimeout;
-}
 
 void ONE_BIT_DISPLAY::setBB(BBI2C *pBB)
 {
@@ -141,8 +136,6 @@ void ONE_BIT_DISPLAY::setBuffer(uint8_t *pBuffer)
 int ONE_BIT_DISPLAY::allocBuffer(void)
 {
     int iSize = _obd.width * ((_obd.height+7)>>3);
-    if (_obd.iFlags & (OBD_3COLOR | OBD_4COLOR) || _obd.chip_type == OBD_CHIP_UC8151)
-        iSize *= 2; // 2 bit planes
     _obd.ucScreen = (uint8_t *)malloc(iSize);
     if (_obd.ucScreen != NULL) {
         _obd.render = false; // draw into RAM only
@@ -202,12 +195,6 @@ void ONE_BIT_DISPLAY::setTextWrap(bool bWrap)
 
 void ONE_BIT_DISPLAY::setTextColor(int iFG, int iBG)
 {
-    if (iFG > OBD_RED) iFG = OBD_BLACK;
-    if (iBG > OBD_RED) iBG = OBD_BLACK;
-    if ((_obd.iFlags & (OBD_3COLOR | OBD_4COLOR)) == 0) {
-        if (iFG == OBD_RED) iFG = OBD_BLACK; // can't set red color
-        if (iBG == OBD_RED) iBG = OBD_BLACK;
-    }
     _obd.iFG = iFG;
     _obd.iBG = (iBG == -1) ? iFG : iBG;
 } /* setTextColor() */
@@ -224,11 +211,6 @@ int ONE_BIT_DISPLAY::loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG
 {
     return obdLoadBMP(&_obd, pBMP, x, y, iFG, iBG);
 } /* loadBMP() */
-
-int ONE_BIT_DISPLAY::drawEPDGFX(int x, int y, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1)
-{
-    return obdDrawEPDGFX(&_obd, x, y, cx, cy, pPlane0, pPlane1);
-} /* drawEPDGFX() */
 
 int ONE_BIT_DISPLAY::loadBMP3(const uint8_t *pBMP, int x, int y)
 {
@@ -259,27 +241,15 @@ int ONE_BIT_DISPLAY::scrollBuffer(int iStartCol, int iEndCol, int iStartRow, int
     return obdScrollBuffer(&_obd, iStartCol, iEndCol, iStartRow, iEndRow, bUp);
 } /* scrollBuffer() */
 
-void ONE_BIT_DISPLAY::setFreeFont(const GFXfont *pFont)
+void ONE_BIT_DISPLAY::setFreeFont(const void *pFont)
 {
-    _obd.pFreeFont = (GFXfont *)pFont;
+    _obd.pFreeFont = (void *)pFont;
 } /* setFreeFont() */
 
 void ONE_BIT_DISPLAY::drawLine(int x1, int y1, int x2, int y2, int iColor)
 {
     obdDrawLine(&_obd, x1, y1, x2, y2, iColor, 1);
 } /* drawLine() */
-
-inline GFXglyph *pgm_read_glyph_ptr(const GFXfont *gfxFont, uint8_t c) {
-#ifdef __AVR__
-  return &(((GFXglyph *)pgm_read_ptr(&gfxFont->glyph))[c]);
-#else
-  // expression in __AVR__ section may generate "dereferencing type-punned
-  // pointer will break strict-aliasing rules" warning In fact, on other
-  // platforms (such as STM32) there is no need to do this pointer magic as
-  // program memory may be read in a usual way So expression may be simplified
-  return gfxFont->glyph + c;
-#endif //__AVR__
-}
 
 void obdScroll1Line(OBDISP *pOBD, int iAmount)
 {
@@ -473,19 +443,19 @@ static uint8_t u8Unicode0, u8Unicode1;
         }
     }
   } else { // Custom font
+    BB_FONT *pBBF = (BB_FONT *)_obd.pFreeFont;
     if (c == '\n') {
       _obd.iCursorX = 0;
-      _obd.iCursorY += (uint8_t)pgm_read_byte(&_obd.pFreeFont->yAdvance);
+      _obd.iCursorY += pgm_read_word(&pBBF->height);
     } else if (c != '\r') {
-      uint8_t first = pgm_read_word((const uint8_t*)&_obd.pFreeFont->first);
-      if ((c >= first) && (c <= (uint8_t)pgm_read_word((const uint8_t*)&_obd.pFreeFont->last))) {
-        GFXglyph *glyph = pgm_read_glyph_ptr(_obd.pFreeFont, c - first);
-        w = pgm_read_byte(&glyph->width);
-        h = pgm_read_byte(&glyph->height);
+      if (c >= pgm_read_byte(&pBBF->first) && c <= pgm_read_byte(&pBBF->last)) {
+        BB_GLYPH *glyph = &pBBF->glyphs[c - pgm_read_byte(&pBBF->first)];
+        w = pgm_read_word(&glyph->width);
+        h = pgm_read_word(&glyph->height);
         if ((w > 0) && (h > 0)) { // Is there an associated bitmap?
           int16_t xo = (int8_t)pgm_read_word((const uint8_t*)&glyph->xOffset);
           w += xo; // xadvance
-          h = (uint8_t)pgm_read_byte(&_obd.pFreeFont->yAdvance);
+          h = pgm_read_word(&pBBF->height);
           if (_obd.wrap && ((_obd.iCursorX + w) > _obd.width)) {
             _obd.iCursorX = 0;
             _obd.iCursorY += h;
@@ -514,18 +484,6 @@ int16_t ONE_BIT_DISPLAY::getCursorY(void)
 uint8_t ONE_BIT_DISPLAY::getRotation(void)
 {
   return _obd.iOrientation;
-}
-void ONE_BIT_DISPLAY::wake(void)
-{
-    if (_obd.type >= EPD42_400x300) {
-        EPDWakeUp(&_obd, 1);
-    }
-}
-void ONE_BIT_DISPLAY::sleep(int bDeep)
-{
-    if (_obd.type >= EPD42_400x300) {
-        EPDSleep(&_obd, bDeep);
-    }
 }
 
 void ONE_BIT_DISPLAY::getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
@@ -590,10 +548,7 @@ void ONE_BIT_DISPLAY::fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, 
 }
 void ONE_BIT_DISPLAY::setPosition(int x, int y, int w, int h)
 {
-    if (_obd.type >= EPD42_400x300)
-        EPDSetPosition(&_obd, x, y, w, h);
-    else
-        obdSetPosition(&_obd, x, y, 1);
+    obdSetPosition(&_obd, x, y, 1);
 } /* setPosition() */
 void ONE_BIT_DISPLAY::writeRaw(uint8_t *pData, int iLen)
 {
@@ -625,25 +580,6 @@ int ONE_BIT_DISPLAY::display(bool bRefresh, bool bWait, bool bFast)
     return obdDumpBuffer(&_obd, NULL, bRefresh, bWait, bFast);
 }
 
-void ONE_BIT_DISPLAY::wait(bool bQuick)
-{
-    EPDWaitBusy(&_obd, bQuick);
-}
-int ONE_BIT_DISPLAY::displayPartial()
-{
-    if (_obd.type >= EPD42_400x300 && (_obd.iFlags & OBD_HAS_PARTIAL_UPDATE)) {
-        return EPDDumpPartial(&_obd, NULL, 0, 0, _obd.width, _obd.height);
-    }
-    return OBD_ERROR_NOT_SUPPORTED;
-}
-int ONE_BIT_DISPLAY::displayPartial(int x, int y, int w, int h, uint8_t *pBuffer)
-{
-    if (_obd.type >= EPD42_400x300 && (_obd.iFlags & OBD_HAS_PARTIAL_UPDATE)) {
-        return obdDumpPartial(&_obd, x, y, w, h, pBuffer);
-    } else {
-        return OBD_ERROR_NOT_SUPPORTED;
-    }
-}
 void ONE_BIT_DISPLAY::drawString(const char *pText, int x, int y)
 {
     setCursor(x,y);

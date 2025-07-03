@@ -47,8 +47,6 @@ enum {
     OBD_CHIP_NA = 0,
     OBD_CHIP_SSD13xx, // OLED
     OBD_CHIP_SH11xx, // OLED
-    OBD_CHIP_SSD16xx, // EPD
-    OBD_CHIP_UC8151, // EPD
     OBD_CHIP_SHARP, // all Sharp LCDs
     OBD_CHIP_COUNT
 };
@@ -101,54 +99,6 @@ enum {
   LCD_ST7302,
   LCD_ST7305,
 #endif
-  EPD42_400x300, // WFT0420CZ15
-  EPD42_4GRAY_400x300, // WFT0420CZ15
-  EPD42B_400x300, // DEPG0420BN / GDEY042T81
-  EPD42Y_400x300, // DEPG0420YN
-  EPD102_80x128, // GDEW0102T4
-  EPD29_128x296,
-  EPD29B_128x296,
-  EPD29R_128x296,
-  EPD29Y_128x296, // DEPG0290YN
-  EPD293_128x296,
-  EPD294_128x296, // Waveshare newer 2.9" 1-bit 128x296
-  EPD295_128x296, // harvested from Solum 2.9" BW ESLs
-  EPD42R_400x300,
-  EPD42R2_400x300, // GDEQ042Z21
-  EPD213B_104x212,
-  EPD213R_104x212,
-  EPD213R2_122x250, // DEPG0213RW
-  EPD213R_104x212_d,
-  EPD213_104x212,
-  EPD213_122x250, // waveshare
-  EPD213B_122x250, // GDEY0213B74
-  EPD154_152x152, // GDEW0154M10
-  EPD154R_152x152,
-  EPD154Y_152x152, // DEPG0154YN
-  EPD154_200x200, // waveshare
-  EPD154B_200x200, // DEPG01540BN
-  EPD27_176x264, // waveshare
-  EPD27B_176x264, // GDEY027T91
-  EPD266_152x296, // GDEY0266T90
-  EPD266B_152x296, // DEPG0266BN
-  EPD266Y_152x296, // DEPG0266YN
-  EPD31R_168x296, // DEPG0310RW
-  EPD37Y_240x416, // DEPG0370YN
-  EPD37_240x416, // GDEY037T03
-  EPD579_792x272, // GDEY0579T93
-  EPD583R_600x448,
-  EPD75_800x480, // GDEY075T7
-  EPD74R_640x384,
-  EPD583_648x480, // DEPG0583BN
-  EPD122_192x176, // GEDM0122T61
-  EPD29_BWYR_128x296, // GDEY029F51
-  EPD29_BWYR_168x384, // GDEY029F51H
-  EPD266_BWYR_184x360, // GDEY0266F51
-  EPD30_BWYR_168x400, // Waveshare 3" B/W/Y/R
-  EPD164_BWYR_168x168, // Waveshare 1.64" B/W/Y/R
-  EPD236_BWYR_168x296, // Waveshare 2.36" B/W/Y/R
-  EPD47_540x960, // not working yet
-  EPD35R_184x384, // Hanshow Nebular 3.5" BWR
   LCD_COUNT
 };
 
@@ -158,25 +108,9 @@ enum {
 #define OBD_FLIPV    0x0004
 #define OBD_FLIPH    0x0008
 #define OBD_BITBANG  0x0010
-#define OBD_3COLOR   0x0020
-#define OBD_4COLOR   0x0040
-#define OBD_4GRAY    0x0080
-#define OBD_FULLUPDATE 0x0100 
-#define OBD_CS_EVERY_BYTE 0x0200
-#define OBD_HAS_FAST_UPDATE 0x0400
-#define OBD_HAS_PARTIAL_UPDATE 0x0800
-#define OBD_FAST_INVERTED 0x1000
 
 #define OBD_WHITE 0
 #define OBD_BLACK 1
-#define OBD_YELLOW 2
-#define OBD_RED 3
-
-// 4 gray levels
-#define OBD_GRAY0 0
-#define OBD_GRAY1 1
-#define OBD_GRAY2 2
-#define OBD_GRAY3 3
 
 #define OBD_ANY_ADDRESS -1
 // Rotation and flip angles to draw tiles
@@ -188,131 +122,6 @@ enum {
   ANGLE_FLIPX,
   ANGLE_FLIPY
 };
-
-// EPD29_296x128 commands
-// (UC8151)
-enum reg {
-    UC8151_PSR      = 0x00,
-    UC8151_PWR      = 0x01,
-    UC8151_POFF     = 0x02,
-    UC8151_PFS      = 0x03,
-    UC8151_PON      = 0x04,
-    UC8151_PMES     = 0x05,
-    UC8151_BTST     = 0x06,
-    UC8151_DSLP     = 0x07,
-    UC8151_DTM1     = 0x10,
-    UC8151_DSP      = 0x11,
-    UC8151_DRF      = 0x12,
-    UC8151_DTM2     = 0x13,
-    UC8151_LUT_VCOM = 0x20,
-    UC8151_LUT_WW   = 0x21,
-    UC8151_LUT_BW   = 0x22,
-    UC8151_LUT_WB   = 0x23,
-    UC8151_LUT_BB   = 0x24,
-    UC8151_LUT_VCOM2 = 0x25,
-    UC8151_PLL      = 0x30,
-    UC8151_TSC      = 0x40,
-    UC8151_TSE      = 0x41,
-    UC8151_TSR      = 0x43,
-    UC8151_TSW      = 0x42,
-    UC8151_CDI      = 0x50,
-    UC8151_LPD      = 0x51,
-    UC8151_TCON     = 0x60,
-    UC8151_TRES     = 0x61,
-    UC8151_REV      = 0x70,
-    UC8151_FLG      = 0x71,
-    UC8151_AMV      = 0x80,
-    UC8151_VV       = 0x81,
-    UC8151_VDCS     = 0x82,
-    UC8151_PTL      = 0x90,
-    UC8151_PTIN     = 0x91,
-    UC8151_PTOU     = 0x92,
-    UC8151_PGM      = 0xa0,
-    UC8151_APG      = 0xa1,
-    UC8151_ROTP     = 0xa2,
-    UC8151_CCSET    = 0xe0,
-    UC8151_PWS      = 0xe3,
-    UC8151_TSSET    = 0xe5
-  };
-
-// EPD213_122x250 (SSD1608) commands
-enum reg2 {
-    SSD1608_DRIVER_CONTROL = 0x01,
-    SSD1608_GATE_VOLTAGE = 0x03,
-    SSD1608_SOURCE_VOLTAGE = 0x04,
-    SSD1608_DISPLAY_CONTROL = 0x07,
-    SSD1608_NON_OVERLAP = 0x0B,
-    SSD1608_BOOSTER_SOFT_START = 0x0C,
-    SSD1608_GATE_SCAN_START = 0x0F,
-    SSD1608_DEEP_SLEEP = 0x10,
-    SSD1608_DATA_MODE = 0x11,
-    SSD1608_SW_RESET = 0x12,
-    SSD1608_TEMP_WRITE = 0x1A,
-    SSD1608_TEMP_READ = 0x1B,
-    SSD1608_TEMP_CONTROL = 0x1C,
-    SSD1608_TEMP_LOAD = 0x1D,
-    SSD1608_MASTER_ACTIVATE = 0x20,
-    SSD1608_DISP_CTRL1 = 0x21,
-    SSD1608_DISP_CTRL2 = 0x22,
-    SSD1608_WRITE_RAM = 0x24,
-    SSD1608_WRITE_ALTRAM = 0x26,
-    SSD1608_READ_RAM = 0x25,
-    SSD1608_VCOM_SENSE = 0x28,
-    SSD1608_VCOM_DURATION = 0x29,
-    SSD1608_WRITE_VCOM = 0x2C,
-    SSD1608_READ_OTP = 0x2D,
-    SSD1608_WRITE_LUT = 0x32,
-    SSD1608_WRITE_DUMMY = 0x3A,
-    SSD1608_WRITE_GATELINE = 0x3B,
-    SSD1608_WRITE_BORDER = 0x3C,
-    SSD1608_SET_RAMXPOS = 0x44,
-    SSD1608_SET_RAMYPOS = 0x45,
-    SSD1608_SET_RAMXCOUNT = 0x4E,
-    SSD1608_SET_RAMYCOUNT = 0x4F,
-    SSD1608_NOP = 0xFF,
-};
-
-#define BUSY_WAIT 0xff
-
-// Proportional font data taken from Adafruit_GFX library
-/// Font data stored PER GLYPH
-#if !defined( _ADAFRUIT_GFX_H ) && !defined( _GFXFONT_H_ )
-#define _GFXFONT_H_
-typedef struct {
-  uint16_t bitmapOffset; ///< Pointer into GFXfont->bitmap
-  uint8_t width;         ///< Bitmap dimensions in pixels
-  uint8_t height;        ///< Bitmap dimensions in pixels
-  uint8_t xAdvance;      ///< Distance to advance cursor (x axis)
-  int8_t xOffset;        ///< X dist from cursor pos to UL corner
-  int8_t yOffset;        ///< Y dist from cursor pos to UL corner
-} GFXglyph;
-
-/// Data stored for FONT AS A WHOLE
-typedef struct {
-  uint8_t *bitmap;  ///< Glyph bitmaps, concatenated
-  GFXglyph *glyph;  ///< Glyph array
-  uint16_t first;    ///< ASCII extents (first char)
-  uint16_t last;     ///< ASCII extents (last char)
-  uint8_t yAdvance; ///< Newline distance (y axis)
-} GFXfont;
-#endif // _ADAFRUIT_GFX_H
-//
-// Structure containing everything needed to
-// perform every type of e-paper update event
-// This can be executed on the main CPU or
-// passed to an ULP (ultra low power) coprocessor
-//
-typedef struct epd_event
-{
-    uint32_t u32Size; // size of each plane in bytes
-    uint8_t *pInit; // initialization command table
-    uint8_t *pUpdate; // update command table
-    uint8_t *pPlane[2]; // pointer to 1 or 2 memory planes
-    uint8_t u8PlaneCMD[2]; // commands to write to plane 0/1
-    uint8_t u8InvertFlags; // invert flag for plane 0/1
-    uint8_t u8BusyIdle; // high or low to signal not busy
-    uint8_t u8CLK, u8MOSI, u8DC, u8BUSY, u8CS; // GPIOs for bit-banging SPI (if needed)
-} EPDEvent;
 
 typedef struct obdstruct
 {
@@ -332,7 +141,7 @@ int iDataTime, iOpTime; // time in milliseconds for data transmission and operat
 uint32_t u32FontScaleX, u32FontScaleY;
 uint32_t iSpeed;
 uint32_t iTimeout; // for e-ink panels
-GFXfont *pFreeFont;
+void *pFreeFont;
 void *pFont[3]; // up to 3 custom font pointers
 uint8_t com_mode; // communication mode (I2C / SPI)
 uint8_t mode; // data/command mode for 9-bit SPI
@@ -341,10 +150,6 @@ uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
 uint8_t x_offset, y_offset; // memory offsets
 int iLEDPin; // backlight
 uint8_t bBitBang;
-// e-paper variables
-const uint8_t *pInitFull; // full update init sequence
-const uint8_t *pInitFast; // fast update init sequence
-const uint8_t *pInitPart; // partial update init sequence
 } OBDISP;
 
 #ifdef __cplusplus
@@ -374,9 +179,6 @@ class ONE_BIT_DISPLAY
     void setContrast(uint8_t ucContrast);
     int display(bool bRefresh = true, bool bWait = true, bool bFast = false);
     void displayLines(int iStartLine, int iLineCount);
-    int displayPartial();
-    int displayPartial(int x, int y, int w, int h, uint8_t *pBuffer = NULL);
-    void wait(bool bQuick = false);
     int dataTime();
     int opTime();
     void setBitBang(bool bBitBang);
@@ -402,7 +204,6 @@ class ONE_BIT_DISPLAY
     void setTextColor(int iFG, int iBG = -1);
     void setCursor(int x, int y);
     void setPower(bool bOn);
-    int drawEPDGFX(int x, int y, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1);
     int loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG);
     int loadBMP3(const uint8_t *pBMP, int x, int y);
     int16_t getCursorX(void);
@@ -413,7 +214,7 @@ class ONE_BIT_DISPLAY
     void getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
     void setTextWrap(bool bWrap);
     void setFont(int iFont);
-    void setFreeFont(const GFXfont *pFont);
+    void setFreeFont(const void *pFont);
     int16_t height(void);
     int16_t width(void);
     void setPosition(int x, int y, int w, int h);
@@ -526,8 +327,6 @@ enum {
   LCD_OK,
   LCD_ERROR
 };
-void EPDFill(OBDISP *pOBD, uint8_t ucCMD, uint8_t ucPattern);
-void EPDSetPosition(OBDISP *pOBD, int x, int y, int cx, int cy);
 
 //
 // Create a virtual display of any size
@@ -654,11 +453,11 @@ int obdScaledString(OBDISP *pOBD, int x, int y, char *szMsg, int iSize, int iCol
 // Draw a string in a proportional font you supply
 // Requires a back buffer
 //
-int obdWriteStringCustom(OBDISP *pOBD, GFXfont *pFont, int x, int y, char *szMsg, uint8_t ucColor);
+int obdWriteStringCustom(OBDISP *pOBD, void *pFont, int x, int y, char *szMsg, uint8_t ucColor);
 //
 // Get the width of text in a custom font
 //
-void obdGetStringBox(GFXfont *pFont, char *szMsg, int *width, int *top, int *bottom);
+void obdGetStringBox(void *pFont, char *szMsg, int *width, int *top, int *bottom);
 //
 // Fill the frame buffer with a byte pattern
 // e.g. all off (0x00) or all on (0xff)
@@ -694,7 +493,7 @@ int obdDrawGFX(OBDISP *pOBD, uint8_t *pSrc, int iSrcCol, int iSrcRow, int iDestC
 // Set the current custom font pointers for playing back
 // bytewise commands
 //
-void obdSetCustomFont(OBDISP *pOBD, GFXfont *pFont, uint8_t ucFont);
+void obdSetCustomFont(OBDISP *pOBD, void *pFont, uint8_t ucFont);
 //
 // Execute a set of bytewise command bytes
 // and execute the drawing instructions on the current display/buffer
@@ -739,12 +538,6 @@ int obdScrollBuffer(OBDISP *pOBD, int iStartCol, int iEndCol, int iStartRow, int
 // the destination where bits are set.
 //
 void obdDrawSprite(OBDISP *pOBD, uint8_t *pSprite, int cx, int cy, int iPitch, int x, int y, uint8_t iPriority);
-
-//
-// Draw 1 or 2 planes of raw image into a specific spot
-// in e-paper memory
-//
-int obdDrawEPDGFX(OBDISP *pOBD, int x, int y, int cx, int cy, uint8_t *pPlane0, uint8_t *pPlane1);
 
 //
 // Draw a 16x16 tile in any of 4 rotated positions

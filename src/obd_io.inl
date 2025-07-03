@@ -365,17 +365,9 @@ void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
 //        mySPI->transferBytes(pData, ucTemp, iLen);
 //   }
 //#else
-    if (pOBD->iFlags & OBD_CS_EVERY_BYTE) {
-        for (int i=0; i<iLen; i++) {
-            digitalWrite(pOBD->iCSPin, LOW);
-            mySPI->transfer(pData[i]);
-            digitalWrite(pOBD->iCSPin, HIGH);
-        }
-      } else { // no need for CS on every byte
-          for (int i=0; i<iLen; i++) {
-              mySPI->transfer(pData[i]);
-          }
-      }
+    for (int i=0; i<iLen; i++) {
+        mySPI->transfer(pData[i]);
+    }
 //#endif
     if (pOBD->iCSPin != 0xff && pOBD->chip_type != OBD_CHIP_SHARP)
       digitalWrite(pOBD->iCSPin, HIGH);
