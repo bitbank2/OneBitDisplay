@@ -143,11 +143,13 @@ typedef struct g5_enc_image_tag
 // 16-bit marker at the start of a BB_FONT file
 // (BitBank FontFile)
 #define BB_FONT_MARKER 0xBBFF
+#define BB_FONT_MARKER_SMALL 0xBBF2
+
 // 16-bit marker at the start of a BB_BITMAP file
 // (BitBank BitmapFile)
 #define BB_BITMAP_MARKER 0xBBBF
 
-// Font info per character (glyph)
+// Font info per large character (glyph)
 typedef struct {
   uint16_t bitmapOffset; // Offset to compressed bitmap data for this glyph (starting from the end of the BB_GLYPH[] array)
   uint16_t width;         // bitmap width in pixels
@@ -156,6 +158,17 @@ typedef struct {
   int16_t xOffset;        // left padding to upper left corner
   int16_t yOffset;        // padding from baseline to upper left corner (usually negative)
 } BB_GLYPH;
+
+// Font info per small character (glyph)
+typedef struct bbg_small {
+  uint16_t bitmapOffset; // Offset to compressed bitmap data for this glyph (starting from the end of the BB_GLYPH[] array)
+  uint8_t width;         // bitmap width in pixels
+  uint8_t xAdvance;      // total width in pixels (bitmap + padding)
+  uint8_t height;        // bitmap height in pixels
+  int8_t xOffset;        // left padding to upper left corner
+  int8_t yOffset;        // padding from baseline to upper left corner (usually negative)
+  int8_t struct_padding; // pad the structure to 8 bytes to prevent alignment problems on different target compilers/settings
+} BB_GLYPH_SMALL;
 
 // This structure is stored at the beginning of a BB_FONT file
 typedef struct {
@@ -166,6 +179,16 @@ typedef struct {
   uint32_t rotation; // store this as 32-bits to not have a struct packing problem
   BB_GLYPH glyphs[];  // Array of glyphs (one for each char)
 } BB_FONT;
+
+// This structure is stored at the beginning of a BB_FONT_SMALL file
+typedef struct {
+  uint16_t u16Marker; // 16-bit Marker defining a BB_FONT_SMALL file
+  uint16_t first;      // first char (ASCII value)
+  uint16_t last;       // last char (ASCII value)
+  uint16_t height;    // total height of font
+  uint32_t rotation; // store this as 32-bits to not have a struct packing problem
+  BB_GLYPH_SMALL glyphs[];  // Array of glyphs (one for each char)
+} BB_FONT_SMALL;
 
 // This structure defines the start of a compressed bitmap file
 typedef struct {

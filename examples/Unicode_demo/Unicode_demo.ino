@@ -20,7 +20,7 @@
 // languages.
 //
 #include <OneBitDisplay.h>
-#include "DejaVuSansMono_Bold14pt8b.h"
+#include "../Fonts/Limelight_10.h"
 ONE_BIT_DISPLAY obd;
 
 void setup()
@@ -28,7 +28,7 @@ void setup()
   obd.I2Cbegin(OLED_128x64);
   obd.allocBuffer(); // we need a back buffer for precise vertical placement on this OLED
   obd.fillScreen(OBD_WHITE);
-  obd.setFreeFont(&DejaVuSansMono_Bold14pt8b);
+  obd.setFont(Limelight_10);
   obd.setCursor(0, 22); // the character baseline is the Y position for TrueType fonts
   obd.println("Está a"); // Use UTF-8 strings directly in your code
   obd.println("começar!"); // and the characters will map internally to codepage 1252

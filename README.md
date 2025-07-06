@@ -1,7 +1,7 @@
 OneBitDisplay (1-bpp OLED/LCD library)<br>
 -----------------------------------
 Project started 3/23/2020<br>
-Copyright (c) 2020 BitBank Software, Inc.<br>
+Copyright (c) 2020-2025 BitBank Software, Inc.<br>
 Written by Larry Bank<br>
 bitbank@pobox.com<br>
 <br>
@@ -13,28 +13,23 @@ On AVR microcontrollers, there is an optimized option to speed up access to the 
 <br>
 Includes the unique feature that the I2C init function can optionally detect the display address (0x3C or 0x3D) and the controller type (SSD1306, SH1106 or SH1107).<br>
 <br>
-I try to support as many OLEDs as I can. I was able to justify buying a bunch
-of different sized SSD1306 displays because they're around $2 each. A generous patron
-donated money so that I could purchase Pimoroni's 128x128 OLED and add support for it.
-It uses the SH1107 controller and behaves very similarly to the SH1106.
-<br>
 
 Features:<br>
 ---------<br>
-- C API and C++ wrapper class which mimics the Adafruit_GFX API
+- C API and C++ wrapper class for maximum flexibility
 - Supports any number of simultaneous displays of any type (mix and match)<br>
 - Optionally detect the display address and type (I2C only)<br>
 - Supports 72x40, 96x16, 64x32, 128x32, 128x64, 64x128 (SH1107), 128x128 (SH1107) and 132x64 (SH1106) OLED display sizes<br>
 - Supports 96x68 HX1230, 84x48 Nokia 5110 and 128x64 ST7567/UC1701 mono LCDs<br>
-- Supports 144x168 and 400x240 Sharp Memory LCDs<br>
-- Supports the ST7302 low power LCD (250x122, 2.13")
-- *NEW* supports a few popular epd (e-ink) panels
+- Supports 128x128, 160x68, 144x168 and 400x240 Sharp Memory LCDs<br>
+- Supports the ST7302 and ST7306 low power LCDs (eink work-alikes)
 - Virtual displays of any size which can be drawn across multiple physical displays
 - Flexible copy function can convert the internal pixel format to any output format and orientation
 - Drive displays from I2C, SPI or any GPIO pins (virtual I2C/SPI)<br>
 - Includes 5 sizes of fixed fonts (6x8, 8x8, 12x16, 16x16, 16x32)<br>
 - Text drawing at any fractional scale (e.g. 1.25x), and any of 4 directions/rotations<br>
-- Can use Adafruit_GFX format bitmap fonts (proportional and fixed)<br>
+- Includes a compressed font scheme which allows large, nice looking TrueType fonts to be used on humble MCUs<br>
+- Supports a subset of Unicode characters (Latin alphabet accented + symbols) from UTF-8 strings (aka Code Page 1252).
 - Deferred rendering allows preparing a back buffer, then displaying it (usually faster)<br>
 - Text scrolling features (vertical and horizontal)<br>
 - Text cursor position with optional line wrap<br>

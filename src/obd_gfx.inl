@@ -16,6 +16,10 @@
 //
 // obd_gfx.inl - graphics functions
 //
+#if defined( __AVR__ ) || defined( ARDUINO_ARCH_AVR )
+#define WIMPY_MCU
+#endif
+
 // For decompressing compressed fonts and images
 #include "Group5.h"
 #include "g5dec.inl"
@@ -703,16 +707,6 @@ int i;
     return pData;
 } /* obdReadCmdInt() */
 //
-// Set the current custom font pointers for playing back
-// bytewise commands
-//
-void obdSetCustomFont(OBDISP *pOBD, void *pFont, uint8_t ucFont)
-{
-    if (pOBD != NULL && pFont != NULL && ucFont >= FONT_CUSTOM0 && ucFont <= FONT_CUSTOM2) {
-        pOBD->pFont[ucFont-FONT_CUSTOM0] = pFont;
-    }
-} /* obdSetCustomFont() */
-//
 // Execute a set of bytewise command bytes
 // and execute the drawing instructions on the current display/buffer
 // Optionally render on backbuffer or physical display
@@ -746,13 +740,7 @@ uint8_t ucTemp[64];
               memcpy(ucTemp, s, iTextLen);
               ucTemp[iTextLen] = 0; // terminate the string
               s += iTextLen;
-               if (ucFont >= FONT_CUSTOM0) { // up to 3 custom fonts
-                   if (pOBD->pFont[ucFont-FONT_CUSTOM0] != NULL) {
-                       obdWriteStringCustom(pOBD, pOBD->pFont[ucFont-FONT_CUSTOM0], x1, y1, (char *)ucTemp, ucColor);
-                   }
-               } else {
-                   obdWriteString(pOBD, 0, x1, y1, (char *)ucTemp, ucFont, ucColor, bRender);
-               }
+              obdWriteString(pOBD, 0, x1, y1, (char *)ucTemp, ucFont, ucColor, bRender);
            } else {
               return; // something went wrong!
            }
@@ -1776,29 +1764,73 @@ uint16_t u16CP; // 16-bit codepoint encoded by the multi-byte sequence
 //
 // Get the width of text in a custom font
 //
-void obdGetStringBox(void *pFont, char *szMsg, int *width, int *top, int *bottom)
+void obdGetStringBox(OBDISP *pOBD, const char *szMsg, BB_RECT *pRect)
 {
 int cx = 0;
 unsigned int c, i = 0;
-BB_FONT *pBBF = (BB_FONT*)pFont;
+BB_FONT *pBBF;
+BB_FONT_SMALL *pBBFS;
 BB_GLYPH *pGlyph;
+BB_GLYPH_SMALL *pSmallGlyph;
 int miny, maxy;
+uint8_t szExtMsg[80];
 
-   if (width == NULL || top == NULL || bottom == NULL || pFont == NULL || szMsg == NULL) return; // bad pointers
-   miny = 100; maxy = 0;
-   while (szMsg[i]) {
-      c = szMsg[i++];
-      if (c < pgm_read_byte(&pBBF->first) || c > pgm_read_byte(&pBBF->last)) // undefined character
-         continue; // skip it
-      c -= pgm_read_byte(&pBBF->first); // first char of font defined
-      pGlyph = &pBBF->glyphs[c];
-      cx += pgm_read_word(&pGlyph->xAdvance);
-      if ((int16_t)pgm_read_word(&pGlyph->yOffset) < miny) miny = pgm_read_word(&pGlyph->yOffset);
-      if (pgm_read_word(&pGlyph->height)+(int16_t)pgm_read_word(&pGlyph->yOffset) > maxy) maxy = pgm_read_word(&pGlyph->height)+(int16_t)pgm_read_word(&pGlyph->yOffset);
-   }
-   *width = cx;
-   *top = miny;
-   *bottom = maxy;
+   if (pOBD == NULL || pRect == NULL || szMsg == NULL) return; // bad pointers
+
+   if (pOBD->pFont == NULL) { // built-in font
+        miny = 0;
+        switch (pOBD->iFont) {
+            case FONT_6x8:
+                cx = 6;
+                maxy = 8;
+                break;
+            case FONT_8x8:
+                cx = 8;
+                maxy = 8;
+                break;
+            case FONT_12x16:
+                cx = 12;
+                maxy = 16;
+                break;
+            case FONT_16x16:
+                cx = 16;
+                maxy = 16;
+                break;
+        }
+        cx *= strlen(szMsg);
+   } else { // proportional fonts
+       obdUnicodeString(szMsg, szExtMsg); // convert to extended ASCII
+       if (pgm_read_word(pOBD->pFont) == BB_FONT_MARKER) {
+           pBBF = (BB_FONT *)pOBD->pFont; pBBFS = NULL;
+       } else { // small font
+           pBBFS = (BB_FONT_SMALL *)pOBD->pFont; pBBF = NULL;
+       }
+       miny = 4000; maxy = 0;
+       while (szExtMsg[i]) {
+           c = szExtMsg[i++];
+           if (pBBF) { // big font
+               if (c < pgm_read_byte(&pBBF->first) || c > pgm_read_byte(&pBBF->last)) // undefined character
+                   continue; // skip it
+               c -= pgm_read_byte(&pBBF->first); // first char of font defined
+               pGlyph = &pBBF->glyphs[c];
+               cx += pgm_read_word(&pGlyph->xAdvance);
+               if ((int16_t)pgm_read_word(&pGlyph->yOffset) < miny) miny = pgm_read_word(&pGlyph->yOffset);
+               if (pgm_read_word(&pGlyph->height)+(int16_t)pgm_read_word(&pGlyph->yOffset) > maxy) maxy = pgm_read_word(&pGlyph->height)+(int16_t)pgm_read_word(&pGlyph->yOffset);
+           } else {  // small font
+               if (c < pgm_read_byte(&pBBFS->first) || c > pgm_read_byte(&pBBFS->last)) // undefined character
+                   continue; // skip it
+               c -= pgm_read_byte(&pBBFS->first); // first char of font defined
+               pSmallGlyph = &pBBFS->glyphs[c];
+               cx += pgm_read_byte(&pSmallGlyph->xAdvance);
+               if ((int8_t)pgm_read_byte(&pSmallGlyph->yOffset) < miny) miny = (int8_t)pgm_read_byte(&pSmallGlyph->yOffset);
+               if (pgm_read_byte(&pSmallGlyph->height)+(int8_t)pgm_read_byte(&pSmallGlyph->yOffset) > maxy) maxy = pgm_read_byte(&pSmallGlyph->height)+(int8_t)pgm_read_byte(&pSmallGlyph->yOffset);
+           } // small
+       }
+   } // prop fonts
+   pRect->w = cx;
+   pRect->x = pOBD->iCursorX;
+   pRect->y = pOBD->iCursorY + miny;
+   pRect->h = maxy - miny + 1;
 } /* obdGetStringBox() */
 //
 // Draw a string of characters in a custom font
@@ -1809,8 +1841,11 @@ int obdWriteStringCustom(OBDISP *pOBD, void *pFont, int x, int y, char *szMsg, u
 int i, end_y, dx, dy, tx, ty, rc;
 unsigned int c;
 uint8_t *s, *d, bits, ucFill=0, ucMask, uc;
-BB_FONT *pBBF = (BB_FONT *)pFont;
+uint16_t u16FontType;
+BB_FONT *pBBF;
+BB_FONT_SMALL *pBBFS;
 BB_GLYPH *pGlyph;
+BB_GLYPH_SMALL *pSmallGlyph;
 int iPitch, w, h;
 uint8_t *pBits;
 uint8_t szExtMsg[80];
@@ -1818,6 +1853,15 @@ uint8_t ucTemp[64];
 
     if (pOBD == NULL || pFont == NULL)
         return OBD_ERROR_BAD_PARAMETER;
+// Determine if we're using a small or large font
+    u16FontType = pgm_read_word(pFont);
+    if (u16FontType == BB_FONT_MARKER) {
+        pBBF = (BB_FONT *)pFont;
+        pBBFS = NULL;
+    } else {
+        pBBFS = (BB_FONT_SMALL *)pFont;
+        pBBF = NULL;
+    }
     if (szMsg[1] == 0 && szMsg[0] >= 0x80) { // single byte means we're coming from the Arduino write() method with pre-converted extended ASCII
         szExtMsg[0] = szMsg[0]; szExtMsg[1] = 0;
     } else {
@@ -1830,44 +1874,53 @@ uint8_t ucTemp[64];
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
       uint8_t *d = pOBD->ucScreen;
       dx = (int)strlen((const char *)szExtMsg);
-     // The font pointer is really the integer font index
-      i = (int)pFont;
-      if (i >= FONT_CUSTOM0) { // must be a valid index
-          obdWriteCmdByte(pOBD, OBD_DRAWTEXT | ((ucColor & 1) << 7) | ((i & 7) << 4));
-          obdWriteCmdByte(pOBD, (uint8_t) dx);
-          obdWriteCmdInt(pOBD, x);
-          obdWriteCmdInt(pOBD, y);
-          i = pOBD->iScreenOffset;
-          memcpy(&d[i], szExtMsg, dx);
-          i += dx;
-          pOBD->iScreenOffset = i; // store new length
-      }
       return OBD_SUCCESS; // done
   }
    iPitch = pOBD->width;
 
    i = 0;
     // Point to the start of the compressed data
-    pBits = (uint8_t *)pFont;
-    pBits += sizeof(BB_FONT);
-    pBits += (pgm_read_byte(&pBBF->last) - pgm_read_byte(&pBBF->first) + 1) * sizeof(BB_GLYPH);
-
+    if (pBBF) { // large font
+        pBits = (uint8_t *)pFont;
+        pBits += sizeof(BB_FONT);
+        pBits += (pgm_read_byte(&pBBF->last) - pgm_read_byte(&pBBF->first) + 1) * sizeof(BB_GLYPH);
+    } else {  // small font
+        pBits = (uint8_t *)pFont;
+        pBits += sizeof(BB_FONT_SMALL);
+        pBits += (pgm_read_byte(&pBBFS->last) - pgm_read_byte(&pBBFS->first) + 1) * sizeof(BB_GLYPH_SMALL);
+    }
    while (szExtMsg[i] && x < pOBD->width) {
       c = szExtMsg[i++];
-      if (c < pgm_read_byte(&pBBF->first) || c > pgm_read_byte(&pBBF->last)) // undefined character
-         continue; // skip it
-      c -= pgm_read_byte(&pBBF->first); // first char of font defined
-      pGlyph = &pBBF->glyphs[c];
-      dx = x + (int16_t)pgm_read_word(&pGlyph->xOffset); // offset from character UL to start drawing
-      dy = y + (int16_t)pgm_read_word(&pGlyph->yOffset);
-      s = pBits + pgm_read_word(&pGlyph->bitmapOffset); // start of bitmap data
+      if (pBBF) {
+          if (c < pgm_read_byte(&pBBF->first) || c > pgm_read_byte(&pBBF->last)) // undefined character
+              continue; // skip it
+          c -= pgm_read_byte(&pBBF->first); // first char of font defined
+          pGlyph = &pBBF->glyphs[c];
+          dx = x + (int16_t)pgm_read_word(&pGlyph->xOffset); // offset from character UL to start drawing
+          dy = y + (int16_t)pgm_read_word(&pGlyph->yOffset);
+          s = pBits + pgm_read_word(&pGlyph->bitmapOffset); // start of bitmap data
       // Bitmap drawing loop. Image is MSB first and each pixel is packed next
       // to the next (continuing on to the next character line)
-      w = pgm_read_word(&pGlyph->width);
-      h = pgm_read_word(&pGlyph->height);
-      end_y = dy + h;
-       ty = (pgm_read_word(&pGlyph[1].bitmapOffset) - (intptr_t)(s - pBits)); // compressed size
-        if (ty < 0 || ty > 4096) ty = 4096; // DEBUG
+          w = pgm_read_word(&pGlyph->width);
+          h = pgm_read_word(&pGlyph->height);
+          end_y = dy + h;
+          ty = (pgm_read_word(&pGlyph[1].bitmapOffset) - (intptr_t)(s - pBits)); // compressed size
+      } else { // small font
+          if (c < pgm_read_byte(&pBBFS->first) || c > pgm_read_byte(&pBBFS->last)) // undefined character
+              continue; // skip it
+          c -= pgm_read_byte(&pBBFS->first); // first char of font defined
+          pSmallGlyph = &pBBFS->glyphs[c];
+          dx = x + (int8_t)pgm_read_byte(&pSmallGlyph->xOffset); // offset from character UL to start drawing
+          dy = y + (int8_t)pgm_read_byte(&pSmallGlyph->yOffset);
+          s = pBits + pgm_read_word(&pSmallGlyph->bitmapOffset); // start of bitmap data
+      // Bitmap drawing loop. Image is MSB first and each pixel is packed next
+      // to the next (continuing on to the next character line)
+          w = pgm_read_byte(&pSmallGlyph->width);
+          h = pgm_read_byte(&pSmallGlyph->height);
+          end_y = dy + h;
+          ty = (pgm_read_word(&pSmallGlyph[1].bitmapOffset) - (intptr_t)(s - pBits)); // compressed size
+      } // small
+       if (ty < 0 || ty > 4096) ty = 4096; // DEBUG
        rc = g5_decode_init(&g5dec, w, h, s, ty);
        if (rc != G5_SUCCESS) {
             return -1; // corrupt data?
@@ -1883,6 +1936,7 @@ uint8_t ucTemp[64];
               d = u8Cache; // no ram; buffer 8 lines at a time
           }
          g5_decode_line(&g5dec, ucTemp);
+         if (ty < 0) continue; // not a visible line
          bits = 0; // bits left in this font byte
          s = ucTemp;
          for (tx=0; tx<w; tx++) {
@@ -1908,11 +1962,15 @@ uint8_t ucTemp[64];
          } // for x
           if (!pOBD->ucScreen && (ucMask == 0x80 || ty == end_y-1)) { // dump this line
               obdSetPosition(pOBD, dx, (ty & 0xfff8), 1);
-              obdWriteDataBlock(pOBD, u8Cache, pGlyph->width, 1);
+              obdWriteDataBlock(pOBD, u8Cache, w, 1);
               memset(u8Cache, ucFill, sizeof(u8Cache)); // NB: assume no DMA
           }
       } // for y
-      x += pgm_read_word(&pGlyph->xAdvance); // width of this character
+      if (pBBF) {
+          x += pgm_read_word(&pGlyph->xAdvance); // width of this character
+      } else { // small font
+          x += pgm_read_byte(&pSmallGlyph->xAdvance); // width of this character
+      }
    } // while drawing characters
     pOBD->iCursorX = x;
     pOBD->iCursorY = y;

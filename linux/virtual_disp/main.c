@@ -15,7 +15,7 @@
 
 #include "../../src/OneBitDisplay.h"
 #include "../../src/obd.inl"
-#include "../../examples/prop_font_demo/FreeSerif12pt7b.h"
+#include "../../Fonts/Lora_10.h"
 #include "notes.h"
 
 void WriteBMP(const char *name, uint8_t *pData, int width, int height, int bpp)
@@ -97,7 +97,7 @@ OBDISP obd;
     obdWriteString(&obd,0,0,4,"This is the 8x8 fixed font", FONT_8x8, 1, 1);
     obdWriteString(&obd,0,0,5,"This is the smallest (6x8) font", FONT_6x8, 1, 1);
     obdWriteString(&obd,0,0,6,"This is the largest built-in font", FONT_16x32, 1, 1);
-    obdWriteStringCustom(&obd, (GFXfont *)&FreeSerif12pt7b, 0, 100, (char *)"Custom (Adafruit_GFX format) fonts are supported too",0);
+    obdWriteStringCustom(&obd, Lora_10, 0, 100, (char *)"Custom (Adafruit_GFX format) fonts are supported too",0);
     for (int i=0; i<640; i+=8) {
        obdDrawLine(&obd, i, 128, 640-i, 479, 0, 0);
     }

@@ -17,7 +17,7 @@
 // obd.inl
 // display interfacing/control code for OneBitDisplay library
 //
-#ifdef __AVR__
+#if defined( __AVR__ ) || defined( ARDUINO_ARCH_AVR )
 #define WIMPY_MCU
 #endif
 

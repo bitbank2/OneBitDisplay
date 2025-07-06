@@ -1,9 +1,6 @@
 //
 // Simple demo sketch to show how to use the new
 // C++ class which wraps the OneBitDisplay C API
-// This class was modeled after the Adafruit GFX API
-// to make it easier to port code, yet still retains
-// the unique features of OBD
 //
 // Written by Larry Bank
 // project started April 24, 2022

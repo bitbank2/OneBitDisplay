@@ -91,12 +91,15 @@ int RotateBitmap(int iAngle, uint8_t *pSrc, int iWidth, int iHeight, int iSrcPit
 //
 // Create the comments and const array boilerplate for the hex data bytes
 //
-void StartHexFile(FILE *f, int iLen, const char *fname)
+void StartHexFile(FILE *f, int iLen, const char *fname, int size, int first, int last)
 {
     int i, j;
     char szTemp[256];
     fprintf(f, "//\n// Created with fontconvert, written by Larry Bank\n");
+    fprintf(f, "// Point size: %d, first: %d, last: %d\n", size, first, last);
     fprintf(f, "// compressed font data size = %d bytes\n//\n", iLen);
+    fprintf(f, "// for non-Arduino builds...\n#ifndef PROGMEM\n#define PROGMEM\n#endif\n");
+
     strcpy(szTemp, fname);
     i = strlen(szTemp);
     if (szTemp[i-2] == '.') szTemp[i-2] = 0; // get the leaf name for the data
@@ -106,7 +109,7 @@ void StartHexFile(FILE *f, int iLen, const char *fname)
         j--;
     }
     if (szTemp[j] == '/') j++;
-    fprintf(f, "const uint8_t %s[] = {\n", &szTemp[j]);
+    fprintf(f, "const uint8_t %s[] PROGMEM = {\n", &szTemp[j]);
 } /* StartHexFile() */
 //
 // Add N bytes of hex data to the output
@@ -162,8 +165,12 @@ int main(int argc, char *argv[])
     FT_Bitmap *bitmap;
     FT_BitmapGlyphRec *g;
     // BitBank Font structures
+    int bSmallFont = 0; // indicates if we're creating a normal or small font file
     BB_GLYPH *pGlyphs;
+    BB_GLYPH_SMALL *pSmallGlyphs;
     BB_FONT bbff;
+    BB_FONT_SMALL bbf2;
+
     int bHFile; // flag indicating if the output will be a .H file of hex data
     
     if (argc < 4) {
@@ -171,6 +178,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     size = atoi(argv[3]);
+    bSmallFont = (size < 60); // Glyph info can fit in signed 8-bit values
     pTemp = (uint8_t *)argv[2] + strlen(argv[2]) - 1;
     bHFile = (pTemp[0] == 'H' || pTemp[0] == 'h'); // output an H file?
 
@@ -191,10 +199,18 @@ int main(int argc, char *argv[])
         printf("Something went wrong - the starting character comes after the ending character. Try again...\n");
         return 1;
     }
-    pGlyphs = (BB_GLYPH *)malloc((last - first + 1) * sizeof(BB_GLYPH));
-    if (!pGlyphs) {
-        printf("Error allocating memory for glyph data\n");
-        return 1;
+    if (bSmallFont) {
+        pSmallGlyphs = (BB_GLYPH_SMALL *)malloc((last - first + 1) * sizeof(BB_GLYPH_SMALL));
+        if (!pSmallGlyphs) {
+            printf("Error allocating memory for glyph data\n");
+            return 1;
+        }
+    } else {
+        pGlyphs = (BB_GLYPH *)malloc((last - first + 1) * sizeof(BB_GLYPH));
+        if (!pGlyphs) {
+            printf("Error allocating memory for glyph data\n");
+            return 1;
+        }
     }
     pBitmap = (uint8_t *)malloc(OUTBUF_SIZE); // Enough to hold the output
     pTemp = (uint8_t *)malloc(OUTBUF_SIZE); // for rotated bitmaps
@@ -259,12 +275,21 @@ int main(int argc, char *argv[])
         bitmap = &face->glyph->bitmap;
         g = (FT_BitmapGlyphRec *)glyph;
         
-        pGlyphs[index].bitmapOffset = iOffset;
-        pGlyphs[index].width = bitmap->width;
-        pGlyphs[index].height = bitmap->rows;
-        pGlyphs[index].xAdvance = face->glyph->advance.x >> 6;
-        pGlyphs[index].xOffset = g->left;
-        pGlyphs[index].yOffset = 1 - g->top;
+        if (bSmallFont) {
+            pSmallGlyphs[index].bitmapOffset = iOffset;
+            pSmallGlyphs[index].width = bitmap->width;
+            pSmallGlyphs[index].height = bitmap->rows;
+            pSmallGlyphs[index].xAdvance = face->glyph->advance.x >> 6;
+            pSmallGlyphs[index].xOffset = g->left;
+            pSmallGlyphs[index].yOffset = 1 - g->top;
+        } else {
+            pGlyphs[index].bitmapOffset = iOffset;
+            pGlyphs[index].width = bitmap->width;
+            pGlyphs[index].height = bitmap->rows;
+            pGlyphs[index].xAdvance = face->glyph->advance.x >> 6;
+            pGlyphs[index].xOffset = g->left;
+            pGlyphs[index].yOffset = 1 - g->top;
+        }
         s = bitmap->buffer;
         iPitch = bitmap->pitch;
         if (iRotation != 0) {
@@ -293,29 +318,55 @@ int main(int argc, char *argv[])
         return 1;
     }
     // Write the file header
-    bbff.u16Marker = BB_FONT_MARKER;
-    bbff.first = first;
-    bbff.last = last;
-    bbff.rotation = iRotation; // save rotation angle
-    if (face->size->metrics.height == 0) {
-        // No face height info, assume fixed width and get from a glyph.
-        bbff.height = pGlyphs[0].height;
+    if (bSmallFont) {
+        bbf2.u16Marker = BB_FONT_MARKER_SMALL;
+        bbf2.first = first;
+        bbf2.last = last;
+        bbf2.rotation = iRotation; // save rotation angle
+        if (face->size->metrics.height == 0) {
+            // No face height info, assume fixed width and get from a glyph.
+            bbf2.height = pGlyphs[0].height;
+        } else {
+            bbf2.height = (face->size->metrics.height >> 6);
+        }
+        iLen = sizeof(bbf2) + (last-first+1)*sizeof(BB_GLYPH_SMALL) + iOffset;
+        if (bHFile) { // create an H file of hex values
+            StartHexFile(fOut, iLen, argv[2], size, first, last);
+            AddHexBytes(fOut, &bbf2, sizeof(bbf2), 0);
+            AddHexBytes(fOut, pSmallGlyphs, (last-first+1) * sizeof(BB_GLYPH_SMALL), 0);
+            AddHexBytes(fOut, pBitmap, iOffset, 1);
+        } else {
+            fwrite(&bbf2, 1, sizeof(bbf2), fOut);
+            // Write the glyph table
+            fwrite(pSmallGlyphs, (last-first+1), sizeof(BB_GLYPH_SMALL), fOut);
+            // Write the compressed bitmap data
+            fwrite(pBitmap, 1, iOffset, fOut);
+        }
     } else {
-        bbff.height = (face->size->metrics.height >> 6);
-    }
-    iLen = sizeof(bbff) + (last-first+1)*sizeof(BB_GLYPH) + iOffset;
-    if (bHFile) { // create an H file of hex values
-        StartHexFile(fOut, iLen, argv[2]);
-        AddHexBytes(fOut, &bbff, sizeof(bbff), 0);
-        AddHexBytes(fOut, pGlyphs, (last-first+1) * sizeof(BB_GLYPH), 0);
-        AddHexBytes(fOut, pBitmap, iOffset, 1);
-    } else {
-        fwrite(&bbff, 1, sizeof(bbff), fOut);
-        // Write the glyph table
-        fwrite(pGlyphs, (last-first+1), sizeof(BB_GLYPH), fOut);
-        // Write the compressed bitmap data
-        fwrite(pBitmap, 1, iOffset, fOut);
-    }
+        bbff.u16Marker = BB_FONT_MARKER;
+        bbff.first = first;
+        bbff.last = last;
+        bbff.rotation = iRotation; // save rotation angle
+        if (face->size->metrics.height == 0) {
+            // No face height info, assume fixed width and get from a glyph.
+            bbff.height = pGlyphs[0].height;
+        } else {
+            bbff.height = (face->size->metrics.height >> 6);
+        }
+        iLen = sizeof(bbff) + (last-first+1)*sizeof(BB_GLYPH) + iOffset;
+        if (bHFile) { // create an H file of hex values
+            StartHexFile(fOut, iLen, argv[2], size, first, last);
+            AddHexBytes(fOut, &bbff, sizeof(bbff), 0);
+            AddHexBytes(fOut, pGlyphs, (last-first+1) * sizeof(BB_GLYPH), 0);
+            AddHexBytes(fOut, pBitmap, iOffset, 1);
+        } else {
+            fwrite(&bbff, 1, sizeof(bbff), fOut);
+            // Write the glyph table
+            fwrite(pGlyphs, (last-first+1), sizeof(BB_GLYPH), fOut);
+            // Write the compressed bitmap data
+            fwrite(pBitmap, 1, iOffset, fOut);
+        }
+    } // large fonts
     fflush(fOut);
     fclose(fOut); // done!
     FT_Done_FreeType(library);

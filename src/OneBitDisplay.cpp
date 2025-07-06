@@ -220,31 +220,31 @@ int ONE_BIT_DISPLAY::loadBMP3(const uint8_t *pBMP, int x, int y)
 void ONE_BIT_DISPLAY::setFont(int iFont)
 {
     _obd.iFont = iFont;
-    _obd.pFreeFont = NULL;
+    _obd.pFont = NULL;
 } /* setFont() */
 
 void ONE_BIT_DISPLAY::setTextSize(uint8_t s)
 {
     _obd.u32FontScaleX = _obd.u32FontScaleY = 256 * s;
     _obd.iFont = -1;
-    _obd.pFreeFont = NULL;
+    _obd.pFont = NULL;
 }
 void ONE_BIT_DISPLAY::setTextSize(uint8_t sx, uint8_t sy)
 {
     _obd.u32FontScaleX = 256 * sx;
     _obd.u32FontScaleY = 256 * sy;
     _obd.iFont = -1;
-    _obd.pFreeFont = NULL;
+    _obd.pFont = NULL;
 }
 int ONE_BIT_DISPLAY::scrollBuffer(int iStartCol, int iEndCol, int iStartRow, int iEndRow, int bUp)
 {
     return obdScrollBuffer(&_obd, iStartCol, iEndCol, iStartRow, iEndRow, bUp);
 } /* scrollBuffer() */
 
-void ONE_BIT_DISPLAY::setFreeFont(const void *pFont)
+void ONE_BIT_DISPLAY::setFont(const void *pFont)
 {
-    _obd.pFreeFont = (void *)pFont;
-} /* setFreeFont() */
+    _obd.pFont = (void *)pFont;
+} /* setFont() */
 
 void ONE_BIT_DISPLAY::drawLine(int x1, int y1, int x2, int y2, int iColor)
 {
@@ -399,7 +399,7 @@ static uint8_t u8Unicode0, u8Unicode1;
     }
 
   szTemp[0] = c; szTemp[1] = 0;
-   if (_obd.pFreeFont == NULL) { // use built-in fonts
+   if (_obd.pFont == NULL) { // use built-in fonts
        if (_obd.iFont == -1) { // scaled 5x7 font
            h = (int)(_obd.u32FontScaleY >> 8) * 8;
            w = (int)(_obd.u32FontScaleX >> 8) * 6;
@@ -443,24 +443,43 @@ static uint8_t u8Unicode0, u8Unicode1;
         }
     }
   } else { // Custom font
-    BB_FONT *pBBF = (BB_FONT *)_obd.pFreeFont;
+    BB_FONT *pBBF;
+    BB_FONT_SMALL *pBBFS;
+    BB_GLYPH *pGlyph;
+    BB_GLYPH_SMALL *pSmallGlyph;
+    int first, last;
+    if (pgm_read_word(_obd.pFont) == BB_FONT_MARKER) {
+        pBBF = (BB_FONT *)_obd.pFont; pBBFS = NULL;
+        first = pgm_read_byte(&pBBF->first);
+        last = pgm_read_byte(&pBBF->last);
+        pGlyph = &pBBF->glyphs[c - first];
+    } else {
+        pBBFS = (BB_FONT_SMALL *)_obd.pFont; pBBF = NULL;
+        first = pgm_read_byte(&pBBFS->first);
+        last = pgm_read_byte(&pBBFS->last);
+        pSmallGlyph = &pBBFS->glyphs[c - first];
+    }
     if (c == '\n') {
       _obd.iCursorX = 0;
-      _obd.iCursorY += pgm_read_word(&pBBF->height);
+      _obd.iCursorY += (pBBF) ? pgm_read_word(&pBBF->height) : pgm_read_byte(&pBBFS->height);
     } else if (c != '\r') {
-      if (c >= pgm_read_byte(&pBBF->first) && c <= pgm_read_byte(&pBBF->last)) {
-        BB_GLYPH *glyph = &pBBF->glyphs[c - pgm_read_byte(&pBBF->first)];
-        w = pgm_read_word(&glyph->width);
-        h = pgm_read_word(&glyph->height);
+      if (c >= first && c <= last) {
+        w = (pBBF) ? pgm_read_word(&pGlyph->width) : pgm_read_byte(&pSmallGlyph->width);
+        h = (pBBF) ? pgm_read_word(&pGlyph->height) : pgm_read_byte(&pSmallGlyph->height);
         if ((w > 0) && (h > 0)) { // Is there an associated bitmap?
-          int16_t xo = (int8_t)pgm_read_word((const uint8_t*)&glyph->xOffset);
+          int16_t xo;
+          if (pBBF) {
+              xo = (int16_t)pgm_read_word(&pGlyph->xOffset);
+          } else {
+              xo = (int8_t)pgm_read_byte(&pSmallGlyph->xOffset);
+          }
           w += xo; // xadvance
-          h = pgm_read_word(&pBBF->height);
+          h = (pBBF) ? pgm_read_word(&pBBF->height) : pgm_read_byte(&pBBFS->height);
           if (_obd.wrap && ((_obd.iCursorX + w) > _obd.width)) {
             _obd.iCursorX = 0;
             _obd.iCursorY += h;
           }
-            obdWriteStringCustom(&_obd, _obd.pFreeFont, -1, -1, szTemp, _obd.iFG);
+            obdWriteStringCustom(&_obd, _obd.pFont, -1, -1, szTemp, _obd.iFG);
         }
       }
     }
@@ -486,20 +505,13 @@ uint8_t ONE_BIT_DISPLAY::getRotation(void)
   return _obd.iOrientation;
 }
 
-void ONE_BIT_DISPLAY::getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
+void ONE_BIT_DISPLAY::getStringBox(const char *string, BB_RECT *pRect)
 {
-    if (_obd.pFreeFont) {
-        int width, top, bottom;
-        obdGetStringBox(_obd.pFreeFont, (char *)string, &width, &top, &bottom);
-        *x1 = x;
-        *w = width;
-        *y1 = y + top;
-        *h = (bottom - top + 1);
-    }
+    obdGetStringBox(&_obd, (char *)string, pRect);
 }
-void ONE_BIT_DISPLAY::getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
+void ONE_BIT_DISPLAY::getStringBox(const String &str, BB_RECT *pRect)
 {
-    getTextBounds(str.c_str(), x, y, x1, y1, w, h);
+    obdGetStringBox(&_obd, str.c_str(), pRect);
 }
 int ONE_BIT_DISPLAY::dataTime(void)
 {
@@ -583,8 +595,8 @@ int ONE_BIT_DISPLAY::display(bool bRefresh, bool bWait, bool bFast)
 void ONE_BIT_DISPLAY::drawString(const char *pText, int x, int y)
 {
     setCursor(x,y);
-    if (_obd.pFreeFont != NULL)
-        obdWriteStringCustom(&_obd, _obd.pFreeFont, x, y, (char *)pText, _obd.iFG);
+    if (_obd.pFont != NULL)
+        obdWriteStringCustom(&_obd, _obd.pFont, x, y, (char *)pText, _obd.iFG);
     else
         obdWriteString(&_obd, 0, x, y, (char *)pText, _obd.iFont, _obd.iFG, 1);
 } /* drawString() */

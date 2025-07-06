@@ -58,9 +58,6 @@ enum {
    FONT_12x16,
    FONT_16x16,
    FONT_16x32,
-   FONT_CUSTOM0,
-   FONT_CUSTOM1,
-   FONT_CUSTOM2,
    FONT_COUNT
 };
 
@@ -123,6 +120,13 @@ enum {
   ANGLE_FLIPY
 };
 
+typedef struct {
+    int x; 
+    int y;
+    int w;
+    int h;
+} BB_RECT; 
+
 typedef struct obdstruct
 {
 #ifndef MEMORY_ONLY
@@ -141,8 +145,7 @@ int iDataTime, iOpTime; // time in milliseconds for data transmission and operat
 uint32_t u32FontScaleX, u32FontScaleY;
 uint32_t iSpeed;
 uint32_t iTimeout; // for e-ink panels
-void *pFreeFont;
-void *pFont[3]; // up to 3 custom font pointers
+void *pFont;
 uint8_t com_mode; // communication mode (I2C / SPI)
 uint8_t mode; // data/command mode for 9-bit SPI
 uint8_t iSDAPin, iSCLPin;
@@ -187,7 +190,6 @@ class ONE_BIT_DISPLAY
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
     void setRotation(int iAngle);
     uint8_t getRotation(void);
-    uint32_t getRefreshTime(void);
     void fillScreen(int iColor);
     void setBuffer(uint8_t *pBuffer);
     void backlight(int bOn);
@@ -210,11 +212,11 @@ class ONE_BIT_DISPLAY
     int16_t getCursorY(void);
     void wake(void);
     void sleep(int bDeep);
-    void getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
-    void getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h);
+    void getStringBox(const char *string, BB_RECT *pRect);
+    void getStringBox(const String &str, BB_RECT *pRect);
     void setTextWrap(bool bWrap);
     void setFont(int iFont);
-    void setFreeFont(const void *pFont);
+    void setFont(const void *pFont);
     int16_t height(void);
     int16_t width(void);
     void setPosition(int x, int y, int w, int h);
