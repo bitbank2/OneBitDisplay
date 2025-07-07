@@ -207,15 +207,14 @@ void ONE_BIT_DISPLAY::setCursor(int x, int y)
     _obd.iCursorY = y;
 } /* setCursor() */
 
+int ONE_BIT_DISPLAY::loadG5Image(const uint8_t *pG5, int x, int y, int iFG, int iBG, float fScale)
+{
+    return obdLoadG5(&_obd, pG5, x, y, iFG, iBG, fScale);
+}
 int ONE_BIT_DISPLAY::loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG)
 {
     return obdLoadBMP(&_obd, pBMP, x, y, iFG, iBG);
 } /* loadBMP() */
-
-int ONE_BIT_DISPLAY::loadBMP3(const uint8_t *pBMP, int x, int y)
-{
-    return obdLoadBMP3(&_obd, pBMP, x, y);
-} /* loadBMP3() */
 
 void ONE_BIT_DISPLAY::setFont(int iFont)
 {

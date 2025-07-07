@@ -207,7 +207,7 @@ class ONE_BIT_DISPLAY
     void setCursor(int x, int y);
     void setPower(bool bOn);
     int loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG);
-    int loadBMP3(const uint8_t *pBMP, int x, int y);
+    int loadG5Image(const uint8_t *pG5, int x, int y, int iFG = OBD_BLACK, int iBG = OBD_WHITE, float fScale = 1.0f);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
     void wake(void);

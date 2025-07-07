@@ -1061,6 +1061,92 @@ uint8_t i;
       pData++;
    }
 } /* obdInvertBytes() */
+//
+// Load a 1-bpp Group5 compressed bitmap
+// Pass the pointer to the beginning of the G5 file
+// If the FG == BG color, and there is a back buffer, it will
+// draw the 1's bits as the FG color and leave
+// the background (0 pixels) unchanged - aka transparent. 
+//
+int obdLoadG5(OBDISP *pOBD, const uint8_t *pG5, int x, int y, int iFG, int iBG, float fScale)
+{
+    uint16_t rc, tx, ty, cx, cy, dx, dy, size;
+    uint8_t *d, *s, u8, ucFill, src_mask, dst_mask;
+    int width, height;
+    BB_BITMAP *pbbb;
+    uint32_t u32Frac, u32XAcc, u32YAcc; // integer fraction vars
+    uint8_t u8Temp[64]; // limit source image size to 512 pixels
+
+    if (pOBD == NULL || pG5 == NULL || fScale < 0.01) return OBD_ERROR_BAD_PARAMETER;
+    pbbb = (BB_BITMAP *)pG5;
+    ucFill = (iBG == OBD_WHITE) ? 0xff : 0;
+    if (pgm_read_word(&pbbb->u16Marker) != BB_BITMAP_MARKER) return OBD_ERROR_BAD_DATA;
+    u32Frac = (uint32_t)(65536.0f / fScale); // calculate the fraction to advance the destination x/y
+    cx = pgm_read_word(&pbbb->width);
+    cy = pgm_read_word(&pbbb->height);
+    width = pOBD->width;
+    height = pOBD->height;
+    // Calculate scaled destination size
+    dx = (int)(fScale * (float)cx);
+    dy = (int)(fScale * (float)cy);
+    size = pgm_read_word(&pbbb->size);
+    rc = g5_decode_init(&g5dec, cx, cy, (uint8_t *)&pbbb[1], size);
+    if (rc != G5_SUCCESS) return OBD_ERROR_BAD_DATA; // corrupt data?
+    memset(u8Cache, ucFill, dx);
+    u32YAcc = 65536; // force first line to get decoded
+    for (ty=y; ty<y+dy && ty < height; ty++) {
+        while (u32YAcc >= 65536) { // advance to next source line
+            g5_decode_line(&g5dec, u8Temp);
+            u32YAcc -= 65536;
+        }
+	if (!pOBD->ucScreen) {
+            d = u8Cache;
+        } else {
+            d = &pOBD->ucScreen[x + ((ty/8) * pOBD->width)];
+        }
+        dst_mask = 1 << (ty & 7); // LSB on top
+        src_mask = 0x80; // MSB on the left
+        u32XAcc = 0;
+        s = u8Temp;
+        u8 = *s++; // grab first source byte (8 pixels)
+        for (tx=0; tx<dx && tx < width; tx++) {
+            if (u8 & src_mask) { // foreground pixel
+                if (iFG == OBD_BLACK)
+                    d[tx] |= dst_mask;
+                else if (iFG != iBG) // only if opaque
+                    d[tx] &= ~dst_mask;
+            } else { // background pixel
+                if (iFG != iBG) { // opaque background pixel
+                    if (iBG == OBD_WHITE)
+                        d[tx] &= ~dst_mask;
+                    else
+                        d[tx] |= dst_mask;
+                } else if (iBG == OBD_WHITE) // inverted+transparent
+                    d[tx] |= dst_mask;
+            }
+            u32XAcc += u32Frac;
+            while (u32XAcc >= 65536) {
+                u32XAcc -= 65536; // whole source pixel horizontal movement
+                src_mask >>= 1;
+                if (src_mask == 0) { // need to load the next byte
+                    u8 = *s++;
+                    src_mask = 0x80;
+                }
+            }
+        } // for tx
+        u32YAcc += u32Frac;
+        if (dst_mask == 0x80 && !pOBD->ucScreen) { // write the line to the display
+              obdSetPosition(pOBD, x, (ty & 0xfff8), 1);
+              obdWriteDataBlock(pOBD, u8Cache, dx, 1);
+              memset(u8Cache, ucFill, dx); // NB: assume no DMA
+        }
+    } // for ty
+    if (!pOBD->ucScreen && dst_mask != 0x80) { // write final rows
+          obdSetPosition(pOBD, x, (ty & 0xfff8), 1);
+          obdWriteDataBlock(pOBD, u8Cache, dx, 1);
+    }
+    return OBD_SUCCESS;
+} /* obdLoadG5() */
 
 //
 // Load a 1-bpp Windows bitmap
