@@ -13,5 +13,6 @@
 #define HIGH 1
 #define LOW 0
 #include "../src/OneBitDisplay.h"
+#include "../src/obd_io.inl"
 #include "../src/obd.inl"
 
