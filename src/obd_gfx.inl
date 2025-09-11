@@ -1071,7 +1071,7 @@ uint8_t i;
 int obdLoadG5(OBDISP *pOBD, const uint8_t *pG5, int x, int y, int iFG, int iBG, float fScale)
 {
     uint16_t rc, tx, ty, cx, cy, dx, dy, size;
-    uint8_t *d, *s, u8, ucFill, src_mask, dst_mask;
+    uint8_t *d, *s, u8, ucFill, src_mask, dst_mask=0;
     int width, height;
     BB_BITMAP *pbbb;
     uint32_t u32Frac, u32XAcc, u32YAcc; // integer fraction vars
@@ -1848,7 +1848,7 @@ uint16_t u16CP; // 16-bit codepoint encoded by the multi-byte sequence
     szExtMsg[j++] = 0; // zero terminate it
 } /* obdUnicodeString() */
 //
-// Get the width of text in a custom font
+// Get the size of text in a custom font area
 //
 void obdGetStringBox(OBDISP *pOBD, const char *szMsg, BB_RECT *pRect)
 {
@@ -1858,7 +1858,7 @@ BB_FONT *pBBF;
 BB_FONT_SMALL *pBBFS;
 BB_GLYPH *pGlyph;
 BB_GLYPH_SMALL *pSmallGlyph;
-int miny, maxy;
+int miny=0, maxy=0;
 uint8_t szExtMsg[80];
 
    if (pOBD == NULL || pRect == NULL || szMsg == NULL) return; // bad pointers
@@ -1930,8 +1930,8 @@ uint8_t *s, *d, bits, ucFill=0, ucMask, uc;
 uint16_t u16FontType;
 BB_FONT *pBBF;
 BB_FONT_SMALL *pBBFS;
-BB_GLYPH *pGlyph;
-BB_GLYPH_SMALL *pSmallGlyph;
+BB_GLYPH *pGlyph = NULL;
+BB_GLYPH_SMALL *pSmallGlyph = NULL;
 int iPitch, w, h;
 uint8_t *pBits;
 uint8_t szExtMsg[80];
@@ -1958,8 +1958,8 @@ uint8_t ucTemp[64];
     if (y == -1)
         y = pOBD->iCursorY;
   if (pOBD->type == DISPLAY_COMMANDS) { // encode this as a command sequence
-      uint8_t *d = pOBD->ucScreen;
-      dx = (int)strlen((const char *)szExtMsg);
+//      uint8_t *d = pOBD->ucScreen;
+//      dx = (int)strlen((const char *)szExtMsg);
       return OBD_SUCCESS; // done
   }
    iPitch = pOBD->width;

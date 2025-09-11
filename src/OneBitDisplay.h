@@ -15,12 +15,28 @@
 // limitations under the License.
 #ifndef __ONEBITDISPLAY__
 #define __ONEBITDISPLAY__
-
-#ifndef MEMORY_ONLY
+#include <stdint.h>
+#include <string.h>
+#if defined( ARDUINO ) && !defined( MEMORY_ONLY )
 #include <BitBang_I2C.h>
+#else
+typedef struct _tagbbi2c
+{
+  int file_i2c;
+  uint8_t iSDA, iSCL;
+  uint8_t bWire;
+} BBI2C;
+#define PROGMEM 
+#define LOW 0
+#define HIGH 1
+#define pgm_read_byte(a) (*(uint8_t *)a)
+#define pgm_read_word(a) (*(uint16_t *)a)
+#define memcpy_P memcpy
+static void delayMicroseconds(uint32_t iTime);
+static void _delay(int ms);
 #endif
 
-#ifdef _LINUX_
+#if defined ( IDF_PLATFORM ) || defined( _LINUX_ )
 // for Print support
 #define DEC 10
 #define HEX 16
@@ -120,12 +136,14 @@ enum {
   ANGLE_FLIPY
 };
 
+#ifndef __BB_EPAPER__
 typedef struct {
     int x; 
     int y;
     int w;
     int h;
 } BB_RECT; 
+#endif
 
 typedef struct obdstruct
 {
@@ -161,7 +179,7 @@ uint8_t bBitBang;
 using namespace std;
 class ONE_BIT_DISPLAY
 #else // Arduino
-#ifndef __AVR__
+#if !defined( __AVR__ ) && defined( ARDUINO )
 class ONE_BIT_DISPLAY : public Print
 #else
 class ONE_BIT_DISPLAY
@@ -182,8 +200,6 @@ class ONE_BIT_DISPLAY
     void setContrast(uint8_t ucContrast);
     int display(bool bRefresh = true, bool bWait = true, bool bFast = false);
     void displayLines(int iStartLine, int iLineCount);
-    int dataTime();
-    int opTime();
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     void createVirtualDisplay(int width, int height, uint8_t *buffer);
@@ -206,15 +222,15 @@ class ONE_BIT_DISPLAY
     void setTextColor(int iFG, int iBG = -1);
     void setCursor(int x, int y);
     void setPower(bool bOn);
-    int loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG);
-    int loadG5Image(const uint8_t *pG5, int x, int y, int iFG = OBD_BLACK, int iBG = OBD_WHITE, float fScale = 1.0f);
+    int drawBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG);
+    int drawG5Image(const uint8_t *pG5, int x, int y, int iFG = OBD_BLACK, int iBG = OBD_WHITE, float fScale = 1.0f);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
-    void wake(void);
-    void sleep(int bDeep);
     void getStringBox(const char *string, BB_RECT *pRect);
+#ifdef ARDUINO
     void getStringBox(const String &str, BB_RECT *pRect);
-    void setTextWrap(bool bWrap);
+#endif
+    void setWordWrap(bool bWrap);
     void setFont(int iFont);
     void setFont(const void *pFont);
     int16_t height(void);
@@ -226,7 +242,9 @@ class ONE_BIT_DISPLAY
     void writeRaw(uint8_t *pData, int iLen);
     void pushImage(int x, int y, int w, int h, uint16_t *pixels);
     void drawString(const char *pText, int x, int y);
+#ifdef ARDUINO
     void drawString(String text, int x, int y);
+#endif
     void drawLine(int x1, int y1, int x2, int y2, int iColor);
     void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void drawCircle(int32_t x, int32_t y, int32_t r, uint32_t color);
@@ -244,7 +262,7 @@ class ONE_BIT_DISPLAY
     size_t write(uint8_t ucChar);
     void delayMicroseconds(int iTime);
 #else
-#ifndef __AVR__
+#if !defined( __AVR__ ) && defined( ARDUINO )
     using Print::write;
     virtual size_t write(uint8_t);
 #endif // !__AVR__

@@ -321,8 +321,8 @@ void obdBacklight(OBDISP *pOBD, int bOn)
 static void LCDPowerUp(OBDISP *pOBD)
 {
 #ifndef MEMORY_ONLY
-    int iLen;
-    uint8_t *s;
+    int iLen=0;
+    uint8_t *s=NULL;
     u8Cache[0] = 0x00; // send everything in command mode
     if (pOBD->type == LCD_UC1701 || pOBD->type == LCD_UC1609)
     {
