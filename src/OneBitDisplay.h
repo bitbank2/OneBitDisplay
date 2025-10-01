@@ -16,11 +16,22 @@
 #ifndef __ONEBITDISPLAY__
 #define __ONEBITDISPLAY__
 
-#ifndef MEMORY_ONLY
+#if !defined( MEMORY_ONLY ) && defined(ARDUINO)
 #include <BitBang_I2C.h>
 #endif
 
-#ifdef _LINUX_
+// For Linux and esp-idf we add a file/device handle member
+// to the BBI2C structure
+#ifndef ARDUINO
+typedef struct _tagbbi2c
+{
+  int file_i2c;
+  uint8_t iSDA, iSCL;
+  uint8_t bWire;
+} BBI2C;
+#endif
+
+#ifdef __LINUX__
 // for Print support
 #define DEC 10
 #define HEX 16
@@ -30,7 +41,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#endif // _LINUX_
+#endif // __LINUX__
 
 // error messages
 enum {
@@ -156,7 +167,7 @@ uint8_t bBitBang;
 } OBDISP;
 
 #ifdef __cplusplus
-#ifdef _LINUX_
+#ifdef __LINUX__
 #include <string>
 using namespace std;
 class ONE_BIT_DISPLAY
@@ -166,7 +177,7 @@ class ONE_BIT_DISPLAY : public Print
 #else
 class ONE_BIT_DISPLAY
 #endif // !__AVR__
-#endif // _LINUX_
+#endif // __LINUX__
 {
   public:
     ONE_BIT_DISPLAY() { memset(&_obd, 0, sizeof(_obd)); _obd.iFG = OBD_BLACK; _obd.render = 1; _obd.type = OLED_128x64; _obd.iSpeed = 400000;}
@@ -213,7 +224,9 @@ class ONE_BIT_DISPLAY
     void wake(void);
     void sleep(int bDeep);
     void getStringBox(const char *string, BB_RECT *pRect);
+    #ifdef ARDUINO
     void getStringBox(const String &str, BB_RECT *pRect);
+    #endif
     void setTextWrap(bool bWrap);
     void setFont(int iFont);
     void setFont(const void *pFont);
@@ -226,7 +239,9 @@ class ONE_BIT_DISPLAY
     void writeRaw(uint8_t *pData, int iLen);
     void pushImage(int x, int y, int w, int h, uint16_t *pixels);
     void drawString(const char *pText, int x, int y);
+#ifdef ARDUINO
     void drawString(String text, int x, int y);
+#endif
     void drawLine(int x1, int y1, int x2, int y2, int iColor);
     void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
     void drawCircle(int32_t x, int32_t y, int32_t r, uint32_t color);
@@ -234,7 +249,7 @@ class ONE_BIT_DISPLAY
     void drawEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
     void fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
     int drawGFX(uint8_t *pSrc, int iSrcCol, int iSrcRow, int iDestCol, int iDestRow, int iWidth, int iHeight, int iSrcPitch);
-#ifdef _LINUX_
+#ifdef __LINUX__
     void print(const char *pString);
     void println(const char *pString);
     void print(int, int);
@@ -248,7 +263,7 @@ class ONE_BIT_DISPLAY
     using Print::write;
     virtual size_t write(uint8_t);
 #endif // !__AVR__
-#endif // _LINUX_
+#endif // __LINUX__
 
   private:
     OBDISP _obd;
@@ -277,7 +292,7 @@ typedef struct smenu {
 } SIMPLEMENU;
 
 // Make the Linux library interface C instead of C++
-#if defined(_LINUX_) && defined(__cplusplus)
+#if defined(__LINUX__) && defined(__cplusplus)
 extern "C" {
 #endif
 
@@ -598,9 +613,9 @@ int obdMenuDelta(SIMPLEMENU *sm, int iDelta);
 //
 int obdMenuRun(SIMPLEMENU *sm);
 
-#if defined(_LINUX_) && defined(__cplusplus)
+#if defined(__LINUX__) && defined(__cplusplus)
 }
-#endif // _LINUX_
+#endif // __LINUX__
 
 #endif // __ONEBITDISPLAY__
 
