@@ -106,6 +106,9 @@ void ONE_BIT_DISPLAY::setI2CPins(int iSDA, int iSCL, int iReset)
     _obd.iSDAPin = iSDA;
     _obd.iSCLPin = iSCL;
     _obd.iRSTPin = iReset;
+#ifdef __LINUX__
+    _obd.bbi2c.file_i2c = -1;
+#endif
 }
 void ONE_BIT_DISPLAY::setBitBang(bool bBitBang)
 {

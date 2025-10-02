@@ -13,27 +13,22 @@
 static uint8_t u8Temp[40]; // for stretched character drawing
 static volatile uint8_t u8End = 0;
 static uint8_t u8Cache[MAX_CACHE];
-struct gpiod_chip *chip = NULL;
-struct gpiod_line *lines[128];
+static struct gpiod_chip *chip = NULL;
+static struct gpiod_line *lines[128];
 //
 // I/O wrapper functions for Linux
 //
-int digitalRead(int iPin)
-{
-  return gpiod_line_get_value(lines[iPin]);
-} /* digitalRead() */
-
-void digitalWrite(int iPin, int iState)
+static void digitalWrite(int iPin, int iState)
 {
    gpiod_line_set_value(lines[iPin], iState);
 } /* digitalWrite() */
 
-void _delay(int l)
+static void _delay(int l)
 {
     usleep(l * 1000);
 }
 
-void pinMode(int iPin, int iMode)
+static void pinMode(int iPin, int iMode)
 {
    if (chip == NULL) {
        chip = gpiod_chip_open_by_name("gpiochip0");
@@ -48,12 +43,7 @@ void pinMode(int iPin, int iMode)
    }
 } /* pinMode() */
 
-void delay(uint32_t u32)
-{
-        usleep(u32*1000);
-} /* delay() */
-
-void initSPI(OBDISP *pOBD, int iSpeed, int iMOSI, int iCLK, int iCS)
+static void initSPI(OBDISP *pOBD, int iSpeed, int iMOSI, int iCLK, int iCS)
 {
 char szName[32];
 
@@ -74,23 +64,26 @@ char szName[32];
 } /* initSPI() */
 
 // Initialize the I2C bus on Linux
-void I2CInit(BBI2C *pI2C, uint32_t iClock)
+static void I2CInit(BBI2C *pI2C, uint32_t iClock)
 {
 char filename[32];
 int iChannel = pI2C->iSDA;
 
+// Only try to initialize it if it hasn't already been initialized
+    if (pI2C->file_i2c == -1) {
         sprintf(filename, "/dev/i2c-%d", iChannel);
         if ((pI2C->file_i2c = open(filename, O_RDWR)) < 0)
         {
                 fprintf(stderr, "Failed to open the i2c bus\n");
                 return;
         }
+    }
 } /* I2CInit() */
 //
 // Test if an I2C address responds
 // returns 1 for success, 0 for failure
 //
-uint8_t I2CTest(BBI2C *pI2C, uint8_t addr)
+static uint8_t I2CTest(BBI2C *pI2C, uint8_t addr)
 {
 uint8_t response = 0;
     if (ioctl(pI2C->file_i2c, I2C_SLAVE, addr) >= 0) {
@@ -104,7 +97,7 @@ uint8_t response = 0;
 //
 // Read n bytes from the given I2C address
 //
-int I2CRead(BBI2C *pI2C, uint8_t iAddr, uint8_t *pData, int iLen)
+static int I2CRead(BBI2C *pI2C, uint8_t iAddr, uint8_t *pData, int iLen)
 {
 int rc;
         ioctl(pI2C->file_i2c, I2C_SLAVE, iAddr);
@@ -114,7 +107,7 @@ int rc;
 //
 // Read n bytes from the given address, after setting the register number
 //
-int I2CReadRegister(BBI2C *pI2C, uint8_t iAddr, uint8_t u8Register, uint8_t *pData, int iLen)
+static int I2CReadRegister(BBI2C *pI2C, uint8_t iAddr, uint8_t u8Register, uint8_t *pData, int iLen)
 {
 int rc;
         // Reading from an I2C device involves first writing the 8-bit register
@@ -131,7 +124,7 @@ int rc;
 //
 // Write n bytes to the given address
 //
-int I2CWrite(BBI2C *pI2C, uint8_t iAddr, uint8_t *pData, int iLen)
+static int I2CWrite(BBI2C *pI2C, uint8_t iAddr, uint8_t *pData, int iLen)
 {
 int rc;
         ioctl(pI2C->file_i2c, I2C_SLAVE, iAddr);
@@ -139,7 +132,7 @@ int rc;
         return rc;
 } /* I2CWrite() */
 
-void SPIWrite(OBDISP *pOBD, uint8_t *pData, int iLen)
+static void SPIWrite(OBDISP *pOBD, uint8_t *pData, int iLen)
 {
 struct spi_ioc_transfer spi;
 
@@ -170,7 +163,7 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
   }
 } /* RawWrite() */
 
-void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
+static void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
 {
 uint8_t u8Temp[256];
   if (pOBD->com_mode == COM_I2C) {// I2C device
