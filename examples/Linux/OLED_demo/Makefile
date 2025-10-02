@@ -1,12 +1,12 @@
-CFLAGS=-c -Wall -O3 -D_LINUX_ -DSPI_BUS_NUMBER=0
-LFLAGS= -larmbianio -pthread
+CFLAGS=-c -g -Wall -O2 -D__LINUX__ -DSPI_BUS_NUMBER=0
+LFLAGS= -g -lOneBitDisplay -lgpiod -pthread
 all: oled_demo
 
 oled_demo: main.o
-	$(CC) -lpthread main.o $(LFLAGS) -o oled_demo 
+	$(CC) main.o $(LFLAGS) -o oled_demo 
 
-main.o: main.c ../../src/obd.inl ../../src/OneBitDisplay.cpp ../../src/OneBitDisplay.h
-	$(CC) $(CFLAGS) main.c
+main.o: main.cpp ../../../src/obd.inl ../../../src/OneBitDisplay.cpp ../../../src/OneBitDisplay.h
+	$(CXX) $(CFLAGS) main.cpp
 
 clean:
 	rm -rf *.o oled_demo

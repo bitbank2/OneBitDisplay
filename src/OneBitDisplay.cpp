@@ -273,6 +273,7 @@ int y, iLines;
     memset(&pOBD->ucScreen[(iLines-iAmount) * pOBD->width], (char)pOBD->iBG, pOBD->width*iAmount);
 } /* obdScroll1Line() */
 #ifdef __LINUX__
+#ifdef FUTURE
 void ONE_BIT_DISPLAY::print(const string &str)
 {
    print(str.c_str());
@@ -288,7 +289,7 @@ char ucTemp[4];
    ucTemp[2] = 0;
    print((const char *)ucTemp);
 } /* print() */
-
+#endif // FUTURE
 void ONE_BIT_DISPLAY::print(const char *pString)
 {
 uint8_t *s = (uint8_t *)pString;

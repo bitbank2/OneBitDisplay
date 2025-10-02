@@ -8,6 +8,7 @@
 #include <gpiod.h>
 #define pgm_read_byte(p)  *(uint8_t *)(p)
 #define pgm_read_word(p)  *(uint16_t *)(p)
+#define memcpy_P memcpy
 #define MAX_CACHE 1024
 static uint8_t u8Temp[40]; // for stretched character drawing
 static volatile uint8_t u8End = 0;
@@ -26,6 +27,12 @@ void digitalWrite(int iPin, int iState)
 {
    gpiod_line_set_value(lines[iPin], iState);
 } /* digitalWrite() */
+
+void _delay(int l)
+{
+    usleep(l * 1000);
+}
+
 void pinMode(int iPin, int iMode)
 {
    if (chip == NULL) {
@@ -46,6 +53,10 @@ void delay(uint32_t u32)
         usleep(u32*1000);
 } /* delay() */
 
+void initSPI(OBDISP *pOBD, int iSpeed, int iMOSI, int iCLK, int iCS)
+{
+} /* initSPI() */
+
 // Initialize the I2C bus on Linux
 void I2CInit(BBI2C *pI2C, uint32_t iClock)
 {
@@ -56,6 +67,7 @@ int iChannel = pI2C->iSDA;
         if ((pI2C->file_i2c = open(filename, O_RDWR)) < 0)
         {
                 fprintf(stderr, "Failed to open the i2c bus\n");
+                return;
         }
 } /* I2CInit() */
 //
@@ -110,4 +122,48 @@ int rc;
         rc = write(pI2C->file_i2c, pData, iLen);
         return rc;
 } /* I2CWrite() */
+
+// Write raw (unfiltered) bytes directly to I2C or SPI
+static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
+{
+  if (pOBD->com_mode == COM_I2C) {// I2C device
+      I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, pData, iLen);
+  } else { // must be SPI
+      digitalWrite(pOBD->iDCPin, (pData[0] != 0));
+      if (pOBD->iCSPin != 0xff && pOBD->chip_type != OBD_CHIP_SHARP)
+         digitalWrite(pOBD->iCSPin, LOW);
+         // DEBUG - todo
+      //WriteSPI(pOBD->bbi2c.file_i2c, &pData[1], iLen-1);
+      if (pOBD->iCSPin != 0xff && pOBD->chip_type != OBD_CHIP_SHARP)
+         digitalWrite(pOBD->iCSPin, HIGH);
+      //obdSetDCMode(pOBD, MODE_DATA);
+  }
+} /* RawWrite() */
+
+void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
+{
+uint8_t u8Temp[256];
+  if (pOBD->com_mode == COM_I2C) {// I2C device
+      u8Temp[0] = 0x40; // data introducer
+      memcpy(&u8Temp[1], pData, iLen);
+      I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, u8Temp, iLen+1);
+  } else { // must be SPI
+      digitalWrite(pOBD->iDCPin, 1);
+//    if (pOBD->iFlags & OBD_CS_EVERY_BYTE) {
+//       for (int i=0; i<iLen; i++) {
+//          digitalWrite(pOBD->iCSPin, LOW);
+          // DEBUG - todo
+        //WriteSPI(pOBD->bbi2c.file_i2c, &pData[i], 1);
+//          digitalWrite(pOBD->iCSPin, HIGH);
+//       }
+//    } else {
+      if (pOBD->iCSPin != 0xff && pOBD->chip_type != OBD_CHIP_SHARP)
+         digitalWrite(pOBD->iCSPin, LOW);
+      //WriteSPI(pOBD->bbi2c.file_i2c, pData, iLen);
+      if (pOBD->iCSPin != 0xff &&pOBD->chip_type != OBD_CHIP_SHARP)
+         digitalWrite(pOBD->iCSPin, HIGH);
+//    }
+     //obdSetDCMode(pOBD, MODE_DATA);
+  }
+} /* RawWriteData() */
 
