@@ -15,28 +15,24 @@
 // limitations under the License.
 #ifndef __ONEBITDISPLAY__
 #define __ONEBITDISPLAY__
-#include <stdint.h>
-#include <string.h>
-#if defined( ARDUINO ) && !defined( MEMORY_ONLY )
+
+#if !defined( MEMORY_ONLY ) && defined(ARDUINO)
 #include <BitBang_I2C.h>
-#else
+#endif
+
+// For Linux and esp-idf we add a file/device handle member
+// to the BBI2C structure
+#if !defined( ARDUINO ) && !defined(__BB_I2C__)
+#define __BB_I2C__
 typedef struct _tagbbi2c
 {
   int file_i2c;
   uint8_t iSDA, iSCL;
   uint8_t bWire;
 } BBI2C;
-#define PROGMEM 
-#define LOW 0
-#define HIGH 1
-#define pgm_read_byte(a) (*(uint8_t *)a)
-#define pgm_read_word(a) (*(uint16_t *)a)
-#define memcpy_P memcpy
-static void delayMicroseconds(uint32_t iTime);
-static void _delay(int ms);
 #endif
 
-#if defined ( IDF_PLATFORM ) || defined( _LINUX_ )
+#ifdef __LINUX__
 // for Print support
 #define DEC 10
 #define HEX 16
@@ -46,7 +42,7 @@ static void _delay(int ms);
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#endif // _LINUX_
+#endif // __LINUX__
 
 // error messages
 enum {
@@ -136,14 +132,12 @@ enum {
   ANGLE_FLIPY
 };
 
-#ifndef __BB_EPAPER__
 typedef struct {
     int x; 
     int y;
     int w;
     int h;
 } BB_RECT; 
-#endif
 
 typedef struct obdstruct
 {
@@ -174,20 +168,20 @@ uint8_t bBitBang;
 } OBDISP;
 
 #ifdef __cplusplus
-#ifdef _LINUX_
+#ifdef __LINUX__
 #include <string>
 using namespace std;
 class ONE_BIT_DISPLAY
 #else // Arduino
-#if !defined( __AVR__ ) && defined( ARDUINO )
+#ifndef __AVR__
 class ONE_BIT_DISPLAY : public Print
 #else
 class ONE_BIT_DISPLAY
 #endif // !__AVR__
-#endif // _LINUX_
+#endif // __LINUX__
 {
   public:
-    ONE_BIT_DISPLAY() { memset(&_obd, 0, sizeof(_obd)); _obd.iFG = OBD_BLACK; _obd.render = 1; _obd.type = OLED_128x64; _obd.iSpeed = 400000;}
+    ONE_BIT_DISPLAY() { _obd.iFG = OBD_BLACK; _obd.render = 1; _obd.type = OLED_128x64; _obd.iSpeed = 400000;}
     void SPIbegin(int iType = OLED_128x64, int32_t iSpeed = 2000000);
     void setSPIPins(int iCS, int iMOSI, int iSCLK, int iDC, int iReset=-1, int iLED=-1);
     void setI2CPins(int iSDA, int iSCL, int iReset=-1);
@@ -200,6 +194,8 @@ class ONE_BIT_DISPLAY
     void setContrast(uint8_t ucContrast);
     int display(bool bRefresh = true, bool bWait = true, bool bFast = false);
     void displayLines(int iStartLine, int iLineCount);
+    int dataTime();
+    int opTime();
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     void createVirtualDisplay(int width, int height, uint8_t *buffer);
@@ -222,15 +218,17 @@ class ONE_BIT_DISPLAY
     void setTextColor(int iFG, int iBG = -1);
     void setCursor(int x, int y);
     void setPower(bool bOn);
-    int drawBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG);
-    int drawG5Image(const uint8_t *pG5, int x, int y, int iFG = OBD_BLACK, int iBG = OBD_WHITE, float fScale = 1.0f);
+    int loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG);
+    int loadG5Image(const uint8_t *pG5, int x, int y, int iFG = OBD_BLACK, int iBG = OBD_WHITE, float fScale = 1.0f);
     int16_t getCursorX(void);
     int16_t getCursorY(void);
+    void wake(void);
+    void sleep(int bDeep);
     void getStringBox(const char *string, BB_RECT *pRect);
-#ifdef ARDUINO
+    #ifdef ARDUINO
     void getStringBox(const String &str, BB_RECT *pRect);
-#endif
-    void setWordWrap(bool bWrap);
+    #endif
+    void setTextWrap(bool bWrap);
     void setFont(int iFont);
     void setFont(const void *pFont);
     int16_t height(void);
@@ -252,7 +250,7 @@ class ONE_BIT_DISPLAY
     void drawEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
     void fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint16_t color);
     int drawGFX(uint8_t *pSrc, int iSrcCol, int iSrcRow, int iDestCol, int iDestRow, int iWidth, int iHeight, int iSrcPitch);
-#ifdef _LINUX_
+#ifdef __LINUX__
     void print(const char *pString);
     void println(const char *pString);
     void print(int, int);
@@ -262,11 +260,11 @@ class ONE_BIT_DISPLAY
     size_t write(uint8_t ucChar);
     void delayMicroseconds(int iTime);
 #else
-#if !defined( __AVR__ ) && defined( ARDUINO )
+#ifndef __AVR__
     using Print::write;
     virtual size_t write(uint8_t);
 #endif // !__AVR__
-#endif // _LINUX_
+#endif // __LINUX__
 
   private:
     OBDISP _obd;
@@ -295,7 +293,7 @@ typedef struct smenu {
 } SIMPLEMENU;
 
 // Make the Linux library interface C instead of C++
-#if defined(_LINUX_) && defined(__cplusplus)
+#if defined(__LINUX__) && defined(__cplusplus)
 extern "C" {
 #endif
 
@@ -540,7 +538,7 @@ uint8_t * obdPlayAnimFrame(OBDISP *pOBD, uint8_t *pAnimation, uint8_t *pCurrent,
 void obdWriteCommand(OBDISP *pOBD, unsigned char c);
 void obdSetPosition(OBDISP *pOBD, int x, int y, int bRender);
 void obdWriteDataBlock(OBDISP *pOBD, unsigned char *ucBuf, int iLen, int bRender);
-void RawWriteData(OBDISP *pOBD, unsigned char *ucBuf, int iLen);
+//void RawWriteData(OBDISP *pOBD, unsigned char *ucBuf, int iLen);
 //
 // Scroll the internal buffer by 1 scanline (up/down)
 // width is in pixels, lines is group of 8 rows
@@ -616,9 +614,9 @@ int obdMenuDelta(SIMPLEMENU *sm, int iDelta);
 //
 int obdMenuRun(SIMPLEMENU *sm);
 
-#if defined(_LINUX_) && defined(__cplusplus)
+#if defined(__LINUX__) && defined(__cplusplus)
 }
-#endif // _LINUX_
+#endif // __LINUX__
 
 #endif // __ONEBITDISPLAY__
 

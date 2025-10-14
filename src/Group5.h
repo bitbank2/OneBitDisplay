@@ -148,6 +148,7 @@ typedef struct g5_enc_image_tag
 // 16-bit marker at the start of a BB_BITMAP file
 // (BitBank BitmapFile)
 #define BB_BITMAP_MARKER 0xBBBF
+#define BB_BITMAP2_MARKER 0xBBB2
 
 // Font info per large character (glyph)
 typedef struct {

@@ -84,7 +84,7 @@ static void G5ENCFlushBits(G5_BUFFERED_BITS *bb)
 // Initialize the compressor
 // This must be called before adding data to the output
 //
-int g5_encode_init(G5ENCIMAGE *pImage, int iWidth, int iHeight, uint8_t *pOut, int iOutSize)
+static int g5_encode_init(G5ENCIMAGE *pImage, int iWidth, int iHeight, uint8_t *pOut, int iOutSize)
 {
     int iError = G5_SUCCESS;
     
@@ -197,7 +197,7 @@ doblack:
 // Returns G5ENC_SUCCESS for each line if all is well and G5ENC_IMAGE_COMPLETE
 // for the last line
 //
-int g5_encode_encodeLine(G5ENCIMAGE *pImage, uint8_t *pPixels)
+static int g5_encode_encodeLine(G5ENCIMAGE *pImage, uint8_t *pPixels)
 {
 int16_t a0, a0_c, b2, a1;
 int dx, run1, run2;
@@ -302,7 +302,7 @@ G5_BUFFERED_BITS bb;
 //
 // Returns the number of bytes of G5 created by the encoder
 //
-int g5_encode_getOutSize(G5ENCIMAGE *pImage)
+static int g5_encode_getOutSize(G5ENCIMAGE *pImage)
 {
     int iSize = 0;
     if (pImage != NULL)

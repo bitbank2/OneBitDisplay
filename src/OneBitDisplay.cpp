@@ -17,13 +17,11 @@
 // This define (WIMPY_MCU) precludes the use of hardware interfaces
 // such as I2C & SPI
 //
-#include "OneBitDisplay.h"
-
 #if defined (__AVR_ATtiny85__) || defined (ARDUINO_ARCH_MCS51)
 #define WIMPY_MCU
 #endif
 #include "Group5.h"
-#ifdef _LINUX_
+#ifdef __LINUX__
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -34,19 +32,23 @@
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 #include <math.h>
-#include <armbianio.h>
 #endif // MEMORY_ONLY
 // convert wire library constants into ArmbianIO values
+#ifdef GPIO_OUT
 #define OUTPUT GPIO_OUT
 #define INPUT GPIO_IN
 #define INPUT_PULLUP GPIO_IN_PULLUP
+#else
+#define OUTPUT 0
+#define INPUT  1
+#define INPUT_PULLUP 2
+#endif
 #define HIGH 1
 #define LOW 0
 void delay(int);
-#else // Arduino/IDF
-#ifdef ARDUINO
+#else // Arduino
+
 #include <Arduino.h>
-#include "obd_io.inl" // I/O (non-portable) code is in here
 #ifdef __AVR__
 #include <avr/pgmspace.h>
 #endif
@@ -54,11 +56,15 @@ void delay(int);
 #ifndef WIMPY_MCU
 #include <SPI.h>
 #endif
-#else // !ARDUINO
-#include "esp_generic.inl"
-#endif
 
-#endif // !_LINUX_
+#endif // __LINUX__
+#include "OneBitDisplay.h"
+#ifdef __LINUX__
+#include "linux_io.inl"
+#endif // __LINUX__
+#ifdef ARDUINO
+#include "obd_io.inl" // I/O (non-portable) code is in here
+#endif
 #include "obd.inl" // All of the display interface code is in here
 #include "obd_gfx.inl" // drawing code
 #ifdef __cplusplus
@@ -100,6 +106,9 @@ void ONE_BIT_DISPLAY::setI2CPins(int iSDA, int iSCL, int iReset)
     _obd.iSDAPin = iSDA;
     _obd.iSCLPin = iSCL;
     _obd.iRSTPin = iReset;
+#ifdef __LINUX__
+    _obd.bbi2c.file_i2c = -1;
+#endif
 }
 void ONE_BIT_DISPLAY::setBitBang(bool bBitBang)
 {
@@ -192,7 +201,7 @@ void ONE_BIT_DISPLAY::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint1
     obdRectangle(&_obd, x, y, x+w-1, y+h-1, color, 1);
 } /* fillRect() */
 
-void ONE_BIT_DISPLAY::setWordWrap(bool bWrap)
+void ONE_BIT_DISPLAY::setTextWrap(bool bWrap)
 {
   _obd.wrap = (int)bWrap;
 }
@@ -211,11 +220,11 @@ void ONE_BIT_DISPLAY::setCursor(int x, int y)
     _obd.iCursorY = y;
 } /* setCursor() */
 
-int ONE_BIT_DISPLAY::drawG5Image(const uint8_t *pG5, int x, int y, int iFG, int iBG, float fScale)
+int ONE_BIT_DISPLAY::loadG5Image(const uint8_t *pG5, int x, int y, int iFG, int iBG, float fScale)
 {
     return obdLoadG5(&_obd, pG5, x, y, iFG, iBG, fScale);
 }
-int ONE_BIT_DISPLAY::drawBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG)
+int ONE_BIT_DISPLAY::loadBMP(const uint8_t *pBMP, int x, int y, int iFG, int iBG)
 {
     return obdLoadBMP(&_obd, pBMP, x, y, iFG, iBG);
 } /* loadBMP() */
@@ -266,7 +275,8 @@ int y, iLines;
     }
     memset(&pOBD->ucScreen[(iLines-iAmount) * pOBD->width], (char)pOBD->iBG, pOBD->width*iAmount);
 } /* obdScroll1Line() */
-#ifdef _LINUX_
+#ifdef __LINUX__
+#ifdef FUTURE
 void ONE_BIT_DISPLAY::print(const string &str)
 {
    print(str.c_str());
@@ -282,7 +292,7 @@ char ucTemp[4];
    ucTemp[2] = 0;
    print((const char *)ucTemp);
 } /* print() */
-
+#endif // FUTURE
 void ONE_BIT_DISPLAY::print(const char *pString)
 {
 uint8_t *s = (uint8_t *)pString;
@@ -363,11 +373,11 @@ char ucTemp[4];
 	print((const char *)ucTemp);
 } /* println() */
 
-#endif // _LINUX_
+#endif // __LINUX__
 //
 // write (Arduino Print friend class)
 //
-#if !defined( __AVR__ ) && defined( ARDUINO )
+#ifndef __AVR__
 size_t ONE_BIT_DISPLAY::write(uint8_t c) {
 char szTemp[2]; // used to draw 1 character at a time to the C methods
 int w, h;
@@ -448,8 +458,8 @@ static uint8_t u8Unicode0, u8Unicode1;
   } else { // Custom font
     BB_FONT *pBBF;
     BB_FONT_SMALL *pBBFS;
-    BB_GLYPH *pGlyph;
-    BB_GLYPH_SMALL *pSmallGlyph;
+    BB_GLYPH *pGlyph=NULL;
+    BB_GLYPH_SMALL *pSmallGlyph=NULL;
     int first, last;
     if (pgm_read_word(_obd.pFont) == BB_FONT_MARKER) {
         pBBF = (BB_FONT *)_obd.pFont; pBBFS = NULL;
@@ -518,6 +528,14 @@ void ONE_BIT_DISPLAY::getStringBox(const String &str, BB_RECT *pRect)
     obdGetStringBox(&_obd, str.c_str(), pRect);
 }
 #endif
+int ONE_BIT_DISPLAY::dataTime(void)
+{
+    return _obd.iDataTime;
+}
+int ONE_BIT_DISPLAY::opTime(void)
+{
+    return _obd.iOpTime;
+}
 int16_t ONE_BIT_DISPLAY::width(void)
 {
    return _obd.width;
@@ -602,7 +620,7 @@ void ONE_BIT_DISPLAY::drawString(String text, int x, int y)
 {
     drawString(text.c_str(), x, y);
 } /* drawString() */
-#endif // ARDUINO
+#endif
 void ONE_BIT_DISPLAY::backlight(int bOn)
 {
     obdBacklight(&_obd, bOn);

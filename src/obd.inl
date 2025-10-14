@@ -28,7 +28,7 @@ void initSPI(OBDISP *pOBD, int iSpeed, int iMOSI, int iCLK, int iCS);
 void _delay(int iDelay);
 void obdSetDCMode(OBDISP *pOBD, int iMode);
 void SPI_BitBang(OBDISP *pOBD, uint8_t *pData, int iLen, uint8_t iMOSIPin, uint8_t iSCKPin);
-static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen);
+void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen);
 void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen);
 
 #ifndef WIMPY_MCU
@@ -754,7 +754,6 @@ uint8_t u8Len, *s;
   pOBD->bbi2c.bWire = bWire;
   pOBD->com_mode = COM_I2C; // communication mode
 #ifdef _LINUX_
-  pOBD->bbi2c.iBus = sda;
   pOBD->ucScreen = NULL;
 #endif
   I2CInit(&pOBD->bbi2c, iSpeed); // on Linux, SDA = bus number, SCL = device address
