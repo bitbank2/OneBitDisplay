@@ -14,13 +14,22 @@ static uint8_t u8Temp[40]; // for stretched character drawing
 static volatile uint8_t u8End = 0;
 static uint8_t u8Cache[MAX_CACHE];
 static struct gpiod_chip *chip = NULL;
+#ifdef GPIOD_API
 static struct gpiod_line *lines[128];
+#else
+static struct gpiod_line_request *lines[128];
+#endif
 //
 // I/O wrapper functions for Linux
 //
 static void digitalWrite(int iPin, int iState)
 {
-   gpiod_line_set_value(lines[iPin], iState);
+    if (lines[iPin] == 0) return;
+#ifdef GPIOD_API // old 1.6 API
+    gpiod_line_set_value(lines[iPin], iState);
+#else // new 2.x API
+    gpiod_line_request_set_value(lines[iPin], iPin, (iState) ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
+#endif
 } /* digitalWrite() */
 
 static void _delay(int l)
@@ -30,6 +39,7 @@ static void _delay(int l)
 
 static void pinMode(int iPin, int iMode)
 {
+#ifdef GPIOD_API // old 1.6 API
    if (chip == NULL) {
        chip = gpiod_chip_open_by_name("gpiochip0");
    }
@@ -41,6 +51,32 @@ static void pinMode(int iPin, int iMode)
    } else { // plain input
        gpiod_line_request_input(lines[iPin], CONSUMER);
    }
+#else // new 2.x API
+   struct gpiod_line_settings *settings;
+   struct gpiod_line_config *line_cfg;
+   struct gpiod_request_config *req_cfg;
+   chip = gpiod_chip_open("/dev/gpiochip0");
+   if (!chip) {
+        printf("chip open failed\n");
+           return;
+   }
+   settings = gpiod_line_settings_new();
+   if (!settings) {
+        printf("line_settings_new failed\n");
+           return;
+   }
+   gpiod_line_settings_set_direction(settings, (iMode == OUTPUT) ? GPIOD_LINE_DIRECTION_OUTPUT : GPIOD_LINE_DIRECTION_INPUT);
+   line_cfg = gpiod_line_config_new();
+   if (!line_cfg) return;
+   gpiod_line_config_add_line_settings(line_cfg, (const unsigned int *)&iPin, 1, settings);
+   req_cfg = gpiod_request_config_new();
+   gpiod_request_config_set_consumer(req_cfg, CONSUMER);
+   lines[iPin] = gpiod_chip_request_lines(chip, req_cfg, line_cfg);
+   gpiod_request_config_free(req_cfg);
+   gpiod_line_config_free(line_cfg);
+   gpiod_line_settings_free(settings);
+   gpiod_chip_close(chip);
+#endif
 } /* pinMode() */
 
 static void initSPI(OBDISP *pOBD, int iSpeed, int iMOSI, int iCLK, int iCS)
