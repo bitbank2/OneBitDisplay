@@ -20,6 +20,10 @@
 #include <BitBang_I2C.h>
 #endif
 
+#ifdef __LINUX__
+#include <stdint.h>
+#endif
+
 // For Linux and esp-idf we add a file/device handle member
 // to the BBI2C structure
 #if !defined( ARDUINO ) && !defined(__BB_I2C__)

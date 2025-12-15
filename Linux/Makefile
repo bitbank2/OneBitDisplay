@@ -1,4 +1,4 @@
-CFLAGS=-c -g -Wall -O2 -I../src -D__LINUX__ -DSPI_BUS_NUMBER=0
+CFLAGS=-c -g -Wall -O2 -I../src -D__LINUX__
 LIBS = -g -lm -lpthread
 
 all: libOneBitDisplay.a

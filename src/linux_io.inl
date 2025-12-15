@@ -94,9 +94,8 @@ char szName[32];
     pOBD->iSpeed = iSpeed;
     pinMode(pOBD->iCSPin, OUTPUT);
     digitalWrite(pOBD->iCSPin, HIGH); // we have to manually control the CS pin
-    sprintf(szName, "/dev/spidev%d.0", pOBD->iMOSIPin); // SPI channel #
+    sprintf(szName, "/dev/spidev%d.%d", iMOSI, iCLK); // SPI channel #
     pOBD->bbi2c.file_i2c = open(szName, O_RDWR);
-
 } /* initSPI() */
 
 // Initialize the I2C bus on Linux
