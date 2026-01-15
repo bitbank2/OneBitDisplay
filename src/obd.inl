@@ -497,6 +497,11 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       pOBD->native_width = pOBD->width = 96;
       pOBD->native_height = pOBD->height = 16;
   }
+  else if (iType == OLED_88x48)
+  {
+      pOBD->native_width = pOBD->width = 88;
+      pOBD->native_height = pOBD->height = 48;
+  }
   else if (iType == OLED_64x128)
   {
       // NOTE: 64x128 SH1107 doesn't seem to properly support
@@ -876,6 +881,11 @@ uint8_t u8Len, *s;
   {
       pOBD->native_width = pOBD->width = 96;
       pOBD->native_height = pOBD->height = 16;
+  }
+  else if (iType == OLED_88x48)
+  {
+      pOBD->native_width = pOBD->width = 88;
+      pOBD->native_height = pOBD->height = 48;
   }
   else if (iType == OLED_80x128)
   {
@@ -1340,47 +1350,36 @@ int iPitch = pOBD->width;
       obdWriteCommand(pOBD, 0x80 | x);
       return;
   }
-  if (pOBD->type == OLED_80x128) // visible portion starts at column 24, row 0
-  {
+  if (pOBD->type == OLED_80x128) { // visible portion starts at column 24, row 0
     x += 24;
-  }
-  else if (pOBD->type == LCD_32x64)
-  {
+  } else if (pOBD->type == LCD_32x64) {
       x += 50;
-  }
-  else if (pOBD->type == OLED_64x32) // visible display starts at column 32, row 4
-  {
+  } else if (pOBD->type == OLED_64x32) { // visible display starts at column 32, row 4
     x += 32; // display is centered in VRAM, so this is always true
     if (pOBD->flip == 0) // non-flipped display starts from line 4
        y += 4;
-  }
-  else  if (pOBD->type == OLED_64x48) {
+  } else  if (pOBD->type == OLED_64x48) {
       x += 32;
       if (!pOBD->flip)
           y += 2; // 128x64 internal RAM
-  }
-  else if (pOBD->type == LCD_UC1701 && pOBD->flip)
-  {
+  } else if (pOBD->type == LCD_UC1701 && pOBD->flip) {
     x += 4;
-  }
-  else if (pOBD->type == OLED_132x64) // SH1106 has 128 pixels centered in 132
-  {
+  } else if (pOBD->type == OLED_132x64) { // SH1106 has 128 pixels centered in 132
     x += 2;
-  }
-  else if (pOBD->type == OLED_96x16) // visible display starts at line 2
-  { // mapping is a bit strange on the 96x16 OLED
+  } else if (pOBD->type == OLED_96x16) { // visible display starts at line 2
+   // mapping is a bit strange on the 96x16 OLED
     if (pOBD->flip)
       x += 32;
     else
       y += 2;
-  }
-  else if (pOBD->type == OLED_72x40) // starts at x=28,y=3
-  {
+  } else if (pOBD->type == OLED_72x40) { // starts at x=28,y=3
     x += 28;
-    if (!pOBD->flip)
-    {
+    if (!pOBD->flip) {
       y += 3;
     }
+  } else if (pOBD->type == OLED_88x48) { // starts at x=40, y=1
+      x += 40;
+      y += 1;
   }
     if (pOBD->com_mode == COM_I2C) { // I2C device
       buf[0] = 0x00; // command introducer
