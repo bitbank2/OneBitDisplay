@@ -431,7 +431,7 @@ static uint8_t u8Unicode0, u8Unicode1;
         if (_obd.iCursorY >= _obd.height && _obd.ucScreen && _obd.bScroll) {
             obdScroll1Line(&_obd, h/8);
             if (_obd.render) {
-                obdDumpBuffer(&_obd, NULL, false, false, false);
+                obdDumpBuffer(&_obd, NULL);
             }
             _obd.iCursorY -= h;
         }
@@ -443,7 +443,7 @@ static uint8_t u8Unicode0, u8Unicode1;
           if (_obd.iCursorY >= _obd.height && _obd.ucScreen && _obd.bScroll) {
               obdScroll1Line(&_obd, h/8);
               if (_obd.render) {
-                  obdDumpBuffer(&_obd, NULL, false, false, false);
+                  obdDumpBuffer(&_obd, NULL);
               }
               _obd.iCursorY -= h;
           }
@@ -602,9 +602,9 @@ void ONE_BIT_DISPLAY::displayLines(int iStartLine, int iLineCount)
     obdWriteLCDLines(&_obd, iStartLine, iLineCount);
 } /* displayLines() */
 
-int ONE_BIT_DISPLAY::display(bool bRefresh, bool bWait, bool bFast)
+int ONE_BIT_DISPLAY::display(void)
 {
-    return obdDumpBuffer(&_obd, NULL, bRefresh, bWait, bFast);
+    return obdDumpBuffer(&_obd, NULL);
 }
 
 void ONE_BIT_DISPLAY::drawString(const char *pText, int x, int y)

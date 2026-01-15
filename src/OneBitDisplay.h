@@ -197,7 +197,7 @@ class ONE_BIT_DISPLAY
     int getFlags();
     uint32_t capabilities();
     void setContrast(uint8_t ucContrast);
-    int display(bool bRefresh = true, bool bWait = true, bool bFast = false);
+    int display(void);
     void displayLines(int iStartLine, int iLineCount);
     int dataTime();
     int opTime();
@@ -504,7 +504,7 @@ int obdDumpPartial(OBDISP *pOBD, int startx, int starty, int width, int height, 
 // Dump an entire custom buffer to the display
 // useful for custom animation effects
 //
-int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh, int bWait, int bFast);
+int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer);
 //
 // Render a window of pixels from a provided buffer or the library's internal buffer
 // to the display. The row values refer to byte rows, not pixel rows due to the memory

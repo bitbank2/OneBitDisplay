@@ -1212,7 +1212,7 @@ int iBit;
 // Dump a screen's worth of data directly to the display
 // Try to speed it up by comparing the new bytes with the existing buffer
 //
-int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer, int bRefresh, int bWait, int bFast)
+int obdDumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
 int x, y;
 int iLines;
