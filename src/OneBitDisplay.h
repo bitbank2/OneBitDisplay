@@ -18,6 +18,7 @@
 
 #if !defined( MEMORY_ONLY ) && defined(ARDUINO)
 #include <BitBang_I2C.h>
+#include <Wire.h>
 #endif
 
 #ifdef __LINUX__
@@ -170,6 +171,9 @@ uint8_t iDCPin, iMOSIPin, iCLKPin, iCSPin, iRSTPin;
 uint8_t x_offset, y_offset; // memory offsets
 int iLEDPin; // backlight
 uint8_t bBitBang;
+#ifdef ARDUINO
+TwoWire *wire;
+#endif // ARDUINO
 } OBDISP;
 
 #ifdef __cplusplus
@@ -204,6 +208,9 @@ class ONE_BIT_DISPLAY
     void setBitBang(bool bBitBang);
     void setRender(bool bRAMOnly);
     void createVirtualDisplay(int width, int height, uint8_t *buffer);
+#ifdef ARDUINO
+    int I2Cbegin(TwoWire *wire, int iType = OLED_128x64, int iAddr = -1);
+#endif
     int I2Cbegin(int iType=OLED_128x64, int iAddr=-1, int32_t iSpeed=400000);
     void setRotation(int iAngle);
     uint8_t getRotation(void);

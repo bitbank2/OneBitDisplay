@@ -136,6 +136,14 @@ void ONE_BIT_DISPLAY::setContrast(uint8_t ucContrast)
   obdSetContrast(&_obd, ucContrast);
 }
 
+#ifdef ARDUINO
+int ONE_BIT_DISPLAY::I2Cbegin(TwoWire *wire, int iType, int iAddr)
+{
+    _obd.wire = wire; // use a user-provided instance of the Wire library
+    return obdI2CInit(&_obd, iType, iAddr, _obd.flip, _obd.invert, 1, -1, -1, -1, 0);
+} /* I2Cbegin() */
+#endif
+
 int ONE_BIT_DISPLAY::I2Cbegin(int iType, int iAddr, int32_t iSpeed)
 {
   return obdI2CInit(&_obd, iType, iAddr, _obd.flip, _obd.invert, !_obd.bBitBang, _obd.iSDAPin, _obd.iSCLPin, _obd.iRSTPin, iSpeed);

@@ -337,7 +337,16 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
        iLen--; // don't count the 0x40 byte the first time through
        while (iLen >= 31) // max 31 data byes + data introducer
        {
+#ifdef ARDUINO
+        if (pOBD->wire) { // use the Wire library instance
+           pOBD->wire->beginTransmission(pOBD->oled_addr);
+           pOBD->wire->write(pData, 32);
+           pOBD->wire->endTransmission();
+        } else
+#endif
+        {
           I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, pData, 32);
+        }
           iLen -= 31;
           pData += 31;
           pData[0] = 0x40;
@@ -346,7 +355,16 @@ static void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen)
     }
     if (iLen) // if any data remaining
     {
-      I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, pData, iLen);
+#ifdef ARDUINO
+        if (pOBD->wire) { // use the Wire library instance
+           pOBD->wire->beginTransmission(pOBD->oled_addr);
+           pOBD->wire->write(pData, iLen);
+           pOBD->wire->endTransmission();
+        } else
+#endif
+      {
+         I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, pData, iLen);
+      }
     }
   } // I2C
 } /* RawWrite() */
@@ -378,14 +396,32 @@ void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
     u8Temp[0] = 0x40; // data prefix byte
     while (iLen >= 31) { // max 31 data byes + data introducer
         memcpy(&u8Temp[1], pData, 31);
-        I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, u8Temp, 32);
+#ifdef ARDUINO
+        if (pOBD->wire) { // use the Wire library instance
+           pOBD->wire->beginTransmission(pOBD->oled_addr);
+           pOBD->wire->write(u8Temp, 32);
+           pOBD->wire->endTransmission();
+        } else
+#endif
+        {
+           I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, u8Temp, 32);
+        }
         iLen -= 31;
         pData += 31;
     } // while >= 31 bytes to send
     if (iLen) // if any data remaining
     {
         memcpy(&u8Temp[1], pData, iLen);
+#ifdef ARDUINO
+        if (pOBD->wire) { // use the Wire library instance
+           pOBD->wire->beginTransmission(pOBD->oled_addr);
+           pOBD->wire->write(u8Temp, iLen+1);
+           pOBD->wire->endTransmission();
+        } else
+#endif
+      {
         I2CWrite(&pOBD->bbi2c, pOBD->oled_addr, u8Temp, iLen+1);
+      }
     }
   } // I2C
 } /* RawWriteData() */
