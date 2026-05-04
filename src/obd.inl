@@ -32,6 +32,38 @@ void RawWrite(OBDISP *pOBD, unsigned char *pData, int iLen);
 void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen);
 
 #ifndef WIMPY_MCU
+const uint8_t st7305b_init[] PROGMEM = {
+   3, 0xd6, 0x17, 0x02, // NVM load ctrl
+   2, 0xd1, 0x01, // enable charge pump
+   3, 0xc0, 0x11, 0x04, // vgh/vgl voltages
+   5, 0xc1, 0x69, 0x69, 0x69, 0x69, // vshp high power positive
+   5, 0xc2, 0x19, 0x19, 0x19, 0x19, // vslp low power positive
+   5, 0xc4, 0x4b, 0x4b, 0x4b, 0x4b, // vshn high power negative
+   5, 0xc5, 0x19, 0x19, 0x19, 0x19, // vsln low power negative
+   3, 0xd8, 0x80, 0xe9, // oscillator
+   2, 0xb2, 0x02, // frame rate control
+   11, 0xb3, 0xe5, 0xf6, 0x05, 0x46, 0x77, 0x77, 0x77, 0x77, 0x76, 0x45, // gate equ control (high power) update period timing
+   9, 0xb4, 0x05, 0x46, 0x77, 0x77, 0x77, 0x77, 0x76, 0x45, // low power mode
+   4, 0x62, 0x32, 0x03, 0x1f, // gate timing control
+   2, 0xb7, 0x13, // source eq enable
+   2, 0xb0, 0x64, // number of gate lines (100 * 3 = 300)
+   1, 0x11, // sleep out
+   1, 0xff, 200, // 200ms delay
+   2, 0xc9, 0x00, // source voltage select
+   2, 0x36, 0x00, // MADCTL
+   2, 0x3a, 0x11, // format (1-bit)
+   2, 0xb9, 0x20, // monochrome mode
+   2, 0xb8, 0x29, // panel setting, 1-dot inversion, frame inv, interlace
+   1, 0x20, // invert off
+   3, 0x2a, 0x12, 0x2a, // column address setting
+   3, 0x2b, 0x00, 0xc7, // row address setting
+   2, 0x35, 0x00, // TE
+   2, 0xd0, 0xff, // auto power down
+   1, 0x38, // high power mode
+   1, 0x29, // display on
+   0
+}; // st7305b
+
 const uint8_t st7305_init[] PROGMEM = {
     3, 0xd7, 0x17, 0x02, // NVM load ctrl
     2, 0xd1, 0x01, // booster enable
@@ -431,6 +463,12 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
         pOBD->native_height = pOBD->height = 168;
         pOBD->flip = 0;
     }
+    if (iType == LCD_ST7305B)
+    {
+        pOBD->native_width = pOBD->width = 400;
+        pOBD->native_height = pOBD->height = 300;
+        pOBD->flip = 0; 
+    }
 #endif
     if (iType == OLED_80x128)
     {
@@ -584,10 +622,14 @@ void obdSPIInit(OBDISP *pOBD, int iType, int iDC, int iCS, int iReset, int iMOSI
       }
   } // OLED
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
-  if (iType == LCD_ST7302 || iType == LCD_ST7305)
+  if (iType == LCD_ST7302 || iType == LCD_ST7305 || iType == LCD_ST7305B)
   {
-//     uint8_t *s = (uint8_t *)st7302_hpm_init;
-      const uint8_t *s = (iType == LCD_ST7302) ? (uint8_t *)st7302_wenting : (uint8_t *)st7305_init; //st7302_lpm_init;
+      uint8_t *s;
+      if (iType == LCD_ST7305B) {
+           s = (uint8_t *)st7305b_init;
+      } else {
+           s = (iType == LCD_ST7302) ? (uint8_t *)st7302_wenting : (uint8_t *)st7305_init; //st7302_lpm_init;
+      }
     iLen = 1;
 
       while (iLen) {
@@ -988,18 +1030,24 @@ uint8_t ucTemp[4];
     if (pOBD->type == LCD_ST7302) {
         ucTemp[0] = 0x19 + (y/12); // start x (we treat it as y)
         ucTemp[1] = 0x27; // end x
-    } else { // ST7305
+    } else if (pOBD->type == LCD_ST7305) { // ST7305
         ucTemp[0] = 0x17 + (y/12);
         ucTemp[1] = 0x24;
+    } else { // ST7305B
+        ucTemp[0] = 0x12 + (y/12);
+        ucTemp[1] = 0x2a;
     }
     RawWriteData(pOBD, ucTemp, 2);
     obdWriteCommand(pOBD, 0x2b); // Row set
     if (pOBD->type == LCD_ST7302) {
         ucTemp[0] = (x/2); // start y (we treat it as x)
         ucTemp[1] = 0x80; // end y
-    } else { // ST7305
+    } else if (pOBD->type == LCD_ST7305) { // ST7305
         ucTemp[0] = (x/2);
         ucTemp[1] = 0xbf;
+    } else { // ST7305B
+        ucTemp[0] = (x/2);
+        ucTemp[1] = 0xc7;
     }
     RawWriteData(pOBD, ucTemp, 2);
     obdWriteCommand(pOBD, 0x2c); // memory write
@@ -1228,7 +1276,7 @@ int iLines;
 //    }
     
 #if !defined( WIMPY_MCU ) && !defined(__AVR__)
-  if (pOBD->type == LCD_ST7302 || pOBD->type == LCD_ST7305) // special case for ST7302/ST7305
+  if (pOBD->type == LCD_ST7302 || pOBD->type == LCD_ST7305 || pOBD->type == LCD_ST7305B) // special case for ST7302/ST7305
   {
       return ST7302DumpBuffer(pOBD, pBuffer);
   }

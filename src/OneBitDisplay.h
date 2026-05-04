@@ -113,6 +113,7 @@ enum {
 #ifndef __AVR__
   LCD_ST7302,
   LCD_ST7305,
+  LCD_ST7305B,
 #endif
   LCD_COUNT
 };

@@ -102,6 +102,7 @@ if (pOBD->bBitBang)
     } else {
         mySPI->begin();
     }
+    mySPI->beginTransaction(SPISettings(iSpeed, MSBFIRST, SPI_MODE0));
 #elif !defined (WIMPY_MCU) // simple (default pin) SPI
     (void)iMOSI; (void)iCLK; (void)iCS;
     mySPI->begin();
