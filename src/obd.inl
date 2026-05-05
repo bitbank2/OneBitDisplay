@@ -21,6 +21,10 @@
 #define WIMPY_MCU
 #endif
 
+#ifdef ARDUINO
+#pragma GCC optimize("O2")
+#endif
+
 #if defined(_LINUX_) || defined(ARDUINO_ARCH_MCS51)
 #define memcpy_P memcpy
 #endif
@@ -1057,7 +1061,7 @@ uint8_t ucTemp[4];
 //
 static int ST7302DumpBuffer(OBDISP *pOBD, uint8_t *pBuffer)
 {
-uint8_t ucPixels[64];
+uint8_t ucPixels[80];
 int x, y, h, iPitch, count;
 uint8_t ucMask, uc1, *s, *d;
 // bit expansion table to speed up conversion
@@ -1071,6 +1075,7 @@ const uint8_t u8Expand[16] = {
     switch (pOBD->iOrientation) {
         case 0:
         case 180:
+            obdST7302SetPos(pOBD, 0,0);
             h = pOBD->height;
             if (pOBD->type == LCD_ST7302) h += 8;
             for (x = 0; x < pOBD->width; x += 2) { // a pair of columns at a time
@@ -1101,7 +1106,8 @@ const uint8_t u8Expand[16] = {
                         s += iPitch;
                     } // for y
                 } // flipped
-                obdST7302SetPos(pOBD, (pOBD->flip)? 248-x:x,0);
+//                obdST7302SetPos(pOBD, (pOBD->flip)? 248-x:x,0);
+                if (pOBD->native_height & 7) d--; // remove extra byte if not a multiple of 8
                 RawWriteData(pOBD, ucPixels, (int)(d - ucPixels));
             } // for x
             break;
