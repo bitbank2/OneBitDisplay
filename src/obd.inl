@@ -21,6 +21,10 @@
 #define WIMPY_MCU
 #endif
 
+#ifdef ARDUINO_ARCH_ESP32
+#include <esp32-hal-gpio.h>
+#endif
+
 #ifdef ARDUINO
 #pragma GCC optimize("O2")
 #endif
@@ -982,7 +986,11 @@ void obdSetDCMode(OBDISP *pOBD, int iMode)
   if (pOBD->iDCPin == 0xff) // 9-bit SPI
       pOBD->mode = (uint8_t)iMode;
   else // set the GPIO line
+#ifdef ARDUINO_ARCH_ESP32
+      gpio_set_level((gpio_num_t)pOBD->iDCPin, (iMode == MODE_DATA));
+#else
       digitalWrite(pOBD->iDCPin, (iMode == MODE_DATA));
+#endif
 } /* obdSetDCMode() */
 
 static void obdWriteCommand2(OBDISP *pOBD, unsigned char c, unsigned char d)

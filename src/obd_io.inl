@@ -374,22 +374,25 @@ void RawWriteData(OBDISP *pOBD, unsigned char *pData, int iLen)
 #if !defined( WIMPY_MCU )
   if (pOBD->com_mode == COM_SPI) // we're writing to SPI, treat it differently
   {
+#ifdef ARDUINO_ARCH_ESP32
+    if (pOBD->iDCPin != 0xff)
+        gpio_set_level((gpio_num_t)pOBD->iDCPin, 1);
+    if (pOBD->iCSPin != 0xff && pOBD->chip_type != OBD_CHIP_SHARP)
+        gpio_set_level((gpio_num_t)pOBD->iCSPin, 0);
+    mySPI->transferBytes(pData, NULL, iLen);
+    if (pOBD->iCSPin != 0xff && pOBD->chip_type != OBD_CHIP_SHARP)
+        gpio_set_level((gpio_num_t)pOBD->iCSPin, 1);
+#else
     if (pOBD->iDCPin != 0xff)
       digitalWrite(pOBD->iDCPin, HIGH); // data mode
     if (pOBD->iCSPin != 0xff && pOBD->chip_type != OBD_CHIP_SHARP)
       digitalWrite(pOBD->iCSPin, LOW);
-//#ifdef HAL_ESP32_HAL_H_
-//   {
-//   uint8_t ucTemp[1024];
-//        mySPI->transferBytes(pData, ucTemp, iLen);
-//   }
-//#else
     for (int i=0; i<iLen; i++) {
         mySPI->transfer(pData[i]);
     }
-//#endif
     if (pOBD->iCSPin != 0xff && pOBD->chip_type != OBD_CHIP_SHARP)
       digitalWrite(pOBD->iCSPin, HIGH);
+#endif // !ESP32
   }
   else // must be I2C
 #endif // !WIMPY_MCU
