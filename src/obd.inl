@@ -797,9 +797,12 @@ uint8_t u8Len, *s;
     pOBD->can_flip = 1; // assume can flip 180
     if (iType < 0 || iType >= LCD_COUNT)
         return -1; // invalid display type
+#ifndef __LINUX__
   if (sda == scl) { // invalid situation, set to -1
     sda = scl = -1;
   }
+#endif // __LINUX
+
   pOBD->type = iType;
   pOBD->flip = bFlip;
   pOBD->invert = bInvert;
