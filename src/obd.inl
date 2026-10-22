@@ -184,6 +184,9 @@ const unsigned char oled72_initbuf[] PROGMEM ={0x00,0xae,0xa8,0x3f,0xd3,0x00,0x4
 // 128x64 ST7567 LCD in I2C mode (addr 0x3f)
 const unsigned char lcd128x64_initbuf[] PROGMEM = {0x00,0xa2,0xa0,0xc8,0x25,0x81,0x20,0x2c,0x2e,0x2f,0xaf};
 
+// 128x32 ST7567 LCD in I2C mode (addr 0x3f)
+const unsigned char lcd128x32_initbuf[] PROGMEM = {0x00,0xa3,0xa0,0xc8,0x22,0x81,0x2c,0x2c,0x2e,0x2f,0xff,0x72,0xfe,0xd6,0x90,0x9d,0xaf};
+
 const unsigned char st7567_initbuf[] PROGMEM  = {0xa2, // 1/9 bias @ 1/65 duty
     0x40, // set start line to 0
     0xa1, // normal segment direction
@@ -837,6 +840,8 @@ uint8_t u8Len, *s;
        pOBD->oled_addr = 0x3c;
     else if (I2CTest(&pOBD->bbi2c, 0x3d))
        pOBD->oled_addr = 0x3d;
+    else if (I2CTest(&pOBD->bbi2c, 0x3f))
+       pOBD->oled_addr = 0x3f;
     else
        return rc; // no display found!
   }
@@ -906,6 +911,15 @@ uint8_t u8Len, *s;
       rc = LCD_OK;
       memcpy_P(uc, s, u8Len);
   }
+  else if (iType == LCD_128x32_I2C)
+  {
+      obdWriteCommand(pOBD, 0xe2); // Need to be reset after power-on
+      _delay(10);
+      s = (uint8_t *)lcd128x32_initbuf;
+      u8Len = sizeof(lcd128x32_initbuf);
+      rc = LCD_OK;
+      memcpy_P(uc, s, u8Len);
+  }
   else // 132x64, 128x64, 64x48 and 64x32
   {
       s = (uint8_t *)oled64_initbuf;
@@ -934,6 +948,11 @@ uint8_t u8Len, *s;
   {
       pOBD->native_width = pOBD->width = 96;
       pOBD->native_height = pOBD->height = 16;
+  }
+  else if (iType == LCD_128x32_I2C)
+  {
+      pOBD->native_width = pOBD->width = 128;
+      pOBD->native_height = pOBD->height = 32;
   }
   else if (iType == OLED_88x48)
   {
